@@ -1,0 +1,6 @@
+cd src/app
+mkdir core, shared, features
+mkdir core/services, core/guards, core/interceptors
+mkdir features/auth, features/dashboard
+cd ../..
+dir frontend\src\app
