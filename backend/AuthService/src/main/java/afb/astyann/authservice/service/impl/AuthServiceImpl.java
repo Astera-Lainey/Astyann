@@ -94,19 +94,22 @@ public class AuthServiceImpl implements IAuthService {
     // ── Resend Verification Code ────────────────────────────────────────────
 
     @Override
-    public void resendVerificationCode(String email) {
+    public LocalDateTime resendVerificationCode(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        if (user.isVerified()) return;
+        if (user.isVerified()) return null;
 
         String newCode = generateVerificationCode();
+        LocalDateTime expiry = LocalDateTime.now().plusMinutes(CODE_EXPIRY_MINUTES);
         user.setVerificationCode(newCode);
-        user.setVerificationExpiryDate(LocalDateTime.now().plusMinutes(CODE_EXPIRY_MINUTES));
+        user.setVerificationExpiryDate(expiry);
         userRepository.save(user);
 
         emailService.sendVerificationEmail(email, newCode);
         log.info("Verification code resent to {}", email);
+
+        return expiry;
     }
 
     // ── Login ───────────────────────────────────────────────────────────────

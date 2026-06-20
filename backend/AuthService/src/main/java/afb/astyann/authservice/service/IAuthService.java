@@ -4,6 +4,7 @@ import afb.astyann.authservice.dto.AuthResponseDTO;
 import afb.astyann.authservice.dto.RegisterRequestDTO;
 import afb.astyann.authservice.dto.RegisterResponseDTO;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public interface IAuthService {
@@ -14,8 +15,8 @@ public interface IAuthService {
     /** Verify the account using the 6-digit code emailed at registration. */
     void verifyAccount(UUID userId, String code);
 
-    /** Resend the verification code (e.g. if expired or not received). */
-    void resendVerificationCode(String email);
+    /** Resend the verification code (e.g. if expired or not received). Returns the new expiry. */
+    LocalDateTime resendVerificationCode(String email);
 
     /** Authenticate a user and return JWT tokens. */
     AuthResponseDTO login(String email, String password);

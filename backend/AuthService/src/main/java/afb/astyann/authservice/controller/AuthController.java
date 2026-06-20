@@ -8,6 +8,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -31,10 +34,14 @@ public class AuthController {
      * POST /api/v1/auth/verify
      * FR-01: Verify email using the code sent during registration.
      */
-    @PostMapping("/verify")
-    public ResponseEntity<Void> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
+    @PostMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
         authService.verifyAccount(parseUserId(dto.getUserId()), dto.getCode());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Map<String, Boolean>>builder()
+                .status(200)
+                .message("Account verified and activated.")
+                .data(Map.of("isVerified", true))
+                .build());
     }
 
     private UUID parseUserId(String userId) {
@@ -51,9 +58,13 @@ public class AuthController {
      * FR-01 / FR-02: Resend a new verification code.
      */
     @PostMapping("/verify/resend")
-    public ResponseEntity<Void> resendVerification(@RequestParam String email) {
-        authService.resendVerificationCode(email);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<ApiResponse<Map<String, String>>> resendVerification(@RequestParam String email) {
+        LocalDateTime expiry = authService.resendVerificationCode(email);
+        return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
+                .status(200)
+                .message("A new verification code has been sent.")
+                .data(Map.of("verificationExpiryDate", expiry.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z"))
+                .build());
     }
 
     /**
@@ -71,9 +82,13 @@ public class AuthController {
      * FR-04: Logout (client discards JWT token).
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader("Authorization") String authHeader) {
         authService.logout();
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Logged out successfully.")
+                .data(null)
+                .build());
     }
 
     /**
@@ -81,9 +96,13 @@ public class AuthController {
      * FR-03: Initiate password reset — sends a link to the user's email.
      */
     @PostMapping("/reset-password")
-    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
         authService.resetPassword(dto.getEmail());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Password reset email sent.")
+                .data(null)
+                .build());
     }
 
     /**
@@ -91,8 +110,12 @@ public class AuthController {
      * FR-03: Complete password reset with the token from the email.
      */
     @PostMapping("/reset-password/confirm")
-    public ResponseEntity<Void> confirmResetPassword(@Valid @RequestBody ResetPasswordConfirmDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> confirmResetPassword(@Valid @RequestBody ResetPasswordConfirmDTO dto) {
         authService.confirmResetPassword(dto.getToken(), dto.getNewPassword());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Password reset successfully.")
+                .data(null)
+                .build());
     }
 }
