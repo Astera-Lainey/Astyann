@@ -1,0 +1,58 @@
+@use '../_auth-page-shared' as shared;
+
+.auth-page {
+  @include shared.auth-page-base;
+  @include shared.sparkle-positions;
+}
+
+.auth-page__header {
+  @include shared.auth-header;
+}
+
+.auth-page__brand {
+  @include shared.auth-brand;
+}
+
+.auth-page__main {
+  @include shared.auth-main;
+}
+
+.auth-panel {
+  @include shared.auth-panel;
+}
+
+.auth-panel__title {
+  @include shared.auth-panel-title;
+}
+
+.auth-panel__footer-text {
+  @include shared.auth-panel-footer-text;
+}
+
+.auth-panel__footer-link {
+  @include shared.auth-panel-footer-link;
+}
+
+.auth-form {
+  @include shared.auth-form;
+}
+
+.auth-form__submit {
+  @include shared.auth-form-submit;
+}
+
+.auth-form__server-error {
+  @include shared.auth-form-server-error;
+}
+
+.auth-visual {
+  @include shared.auth-visual;
+}
+
+.auth-visual__frame {
+  @include shared.auth-visual-frame;
+}
+
+.auth-visual__image {
+  @include shared.auth-visual-image;
+}

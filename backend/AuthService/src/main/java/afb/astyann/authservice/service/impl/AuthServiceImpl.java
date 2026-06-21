@@ -98,7 +98,9 @@ public class AuthServiceImpl implements IAuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        if (user.isVerified()) return null;
+        if (user.isVerified()) {
+            throw new AccountAlreadyVerifiedException("Account is already verified");
+        }
 
         String newCode = generateVerificationCode();
         LocalDateTime expiry = LocalDateTime.now().plusMinutes(CODE_EXPIRY_MINUTES);

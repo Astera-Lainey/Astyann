@@ -58,8 +58,8 @@ public class AuthController {
      * FR-01 / FR-02: Resend a new verification code.
      */
     @PostMapping("/verify/resend")
-    public ResponseEntity<ApiResponse<Map<String, String>>> resendVerification(@RequestParam String email) {
-        LocalDateTime expiry = authService.resendVerificationCode(email);
+    public ResponseEntity<ApiResponse<Map<String, String>>> resendVerification(@Valid @RequestBody ResendVerificationDTO dto) {
+        LocalDateTime expiry = authService.resendVerificationCode(dto.getEmail());
         return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
                 .status(200)
                 .message("A new verification code has been sent.")

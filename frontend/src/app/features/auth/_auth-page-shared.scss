@@ -1,0 +1,189 @@
+// Shared layout rules for all auth pages (login, signup, forgot-password,
+// reset-password). They all share the same "white canvas, Alata font,
+// split image panel" visual language from login.tsx / signup.tsx.
+//
+// Imported with `@use './auth-page-shared' as *;` by each page's own SCSS
+// file, then extended/overridden as needed per page.
+
+@font-face {
+  font-family: "Alata";
+  font-style: normal;
+  font-weight: 400;
+  src: local("Alata");
+}
+
+$brand-red: #e30411;
+$slate-900: #0f172a;
+$slate-500: #64748b;
+$slate-400: #94a3b8;
+$slate-200: #e2e8f0;
+$blue-600: #2563eb;
+
+@mixin auth-page-base {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: $slate-900;
+  font-family: "Alata", ui-sans-serif, system-ui, sans-serif;
+}
+
+@mixin sparkle-positions {
+  .spark {
+    pointer-events: none;
+    position: absolute;
+    color: $slate-500;
+
+    &--a { left: 10%; top: 14%; }
+    &--b { left: 38%; top: 34%; color: $slate-400; }
+    &--c { left: 26%; bottom: 10%; color: $slate-400; }
+    &--d { left: 8%; bottom: 6%; }
+  }
+}
+
+@mixin auth-header {
+  position: relative;
+  z-index: 10;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 80rem; // max-w-7xl
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.75rem 2rem;
+}
+
+@mixin auth-brand {
+  font-size: 1.25rem;
+  letter-spacing: -0.015em;
+  color: $slate-900;
+  text-decoration: none;
+}
+
+@mixin auth-main {
+  position: relative;
+  z-index: 10;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 80rem;
+  display: grid;
+  align-items: center;
+  gap: 3rem;
+  padding: 2rem 2rem 4rem;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@mixin auth-panel {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 28rem; // max-w-md
+}
+
+@mixin auth-panel-title {
+  font-size: 3rem;
+  letter-spacing: -0.02em;
+  color: $slate-900;
+  margin: 0;
+
+  @media (min-width: 768px) {
+    font-size: 3.75rem;
+  }
+}
+
+@mixin auth-form {
+  margin-top: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@mixin auth-form-reset-link {
+  margin-top: 0.5rem;
+  display: inline-block;
+  font-size: 0.75rem;
+  color: $blue-600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@mixin auth-form-submit {
+  margin-top: 1.5rem;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  background-color: $brand-red;
+  box-shadow: 0 18px 40px -18px rgba(227, 4, 17, 0.7);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s, opacity 0.2s;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+@mixin auth-form-server-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #dc2626;
+}
+
+@mixin auth-panel-footer-text {
+  margin-top: 2rem;
+  font-size: 0.875rem;
+  color: $slate-500;
+}
+
+@mixin auth-panel-footer-link {
+  color: $slate-900;
+  text-decoration: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@mixin auth-visual {
+  position: relative;
+  display: none;
+
+  @media (min-width: 1024px) {
+    display: block;
+  }
+}
+
+@mixin auth-visual-frame {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+@mixin auth-visual-image {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}

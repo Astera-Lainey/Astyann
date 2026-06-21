@@ -1,0 +1,26 @@
+<div class="aurora" [ngClass]="className">
+  <!-- Soft red wash -->
+  <div class="aurora__blob aurora__blob--red"></div>
+  <div class="aurora__blob aurora__blob--burgundy"></div>
+  <div class="aurora__blob aurora__blob--dark"></div>
+
+  <!-- Geometric diamond accents -->
+  <div class="diamond aurora__diamond aurora__diamond--lg"></div>
+  <div class="diamond aurora__diamond aurora__diamond--md"></div>
+  <div class="diamond aurora__diamond aurora__diamond--sm"></div>
+  <div class="diamond-solid aurora__diamond-solid aurora__diamond-solid--a"></div>
+  <div class="diamond-solid aurora__diamond-solid aurora__diamond-solid--b"></div>
+
+  <!-- Concentric arcs (geometric architecture) -->
+  <svg class="aurora__arcs aurora__arcs--bl" width="420" height="420" viewBox="0 0 420 420" fill="none">
+    @for (ring of bottomLeftRings; track ring) {
+      <circle cx="210" cy="210" [attr.r]="ring" stroke="oklch(0.56 0.19 28 / 0.5)" stroke-width="1" fill="none" />
+    }
+  </svg>
+
+  <svg class="aurora__arcs aurora__arcs--tr" width="340" height="340" viewBox="0 0 340 340" fill="none">
+    @for (ring of topRightRings; track ring) {
+      <circle cx="170" cy="170" [attr.r]="ring" stroke="oklch(0.4 0.008 30 / 0.6)" stroke-width="1" fill="none" />
+    }
+  </svg>
+</div>

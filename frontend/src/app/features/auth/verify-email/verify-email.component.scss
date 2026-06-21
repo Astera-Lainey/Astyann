@@ -1,0 +1,183 @@
+@use '../_auth-page-shared' as shared;
+
+$digit-size: 3rem;
+$digit-gap: 0.625rem;
+$brand-red: #e30411;
+$blue-500: #3b82f6;
+$blue-100: #dbeafe;
+
+.auth-page {
+  @include shared.auth-page-base;
+  @include shared.sparkle-positions;
+}
+
+.auth-page__header {
+  @include shared.auth-header;
+}
+
+.auth-page__brand {
+  @include shared.auth-brand;
+}
+
+.auth-page__main {
+  @include shared.auth-main;
+}
+
+.auth-panel {
+  @include shared.auth-panel;
+}
+
+.auth-panel__title {
+  @include shared.auth-panel-title;
+}
+
+.auth-panel__subtitle {
+  margin-top: 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: shared.$slate-500;
+}
+
+.auth-panel__footer-text {
+  @include shared.auth-panel-footer-text;
+}
+
+.auth-panel__footer-link {
+  @include shared.auth-panel-footer-link;
+
+  &--button {
+    display: inline;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      color: shared.$slate-400;
+      cursor: not-allowed;
+      text-decoration: none;
+    }
+  }
+}
+
+.auth-form {
+  @include shared.auth-form;
+}
+
+.auth-form__digits-label {
+  display: block;
+  margin-bottom: 0.125rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: shared.$slate-500;
+}
+
+.auth-form__digits {
+  display: flex;
+  gap: $digit-gap;
+  justify-content: center;
+}
+
+.auth-form__digit {
+  width: $digit-size;
+  height: $digit-size;
+  border: 2px solid shared.$slate-200;
+  border-radius: 50%;
+  background: #ffffff;
+  text-align: center;
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: shared.$slate-900;
+  caret-color: transparent;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+
+  &:focus {
+    border-color: $blue-500;
+    box-shadow: 0 0 0 3px $blue-100;
+    animation: digit-focus-pulse 1.5s ease-in-out infinite;
+  }
+
+  &--filled {
+    border-color: shared.$slate-900;
+    background: #f8fafc;
+    animation: digit-pop 0.25s ease-out;
+  }
+
+  &--error {
+    border-color: #dc2626;
+    animation: digit-shake 0.4s ease-in-out;
+  }
+}
+
+.auth-form__submit {
+  @include shared.auth-form-submit;
+
+  &--standalone {
+    margin-top: 2rem;
+  }
+}
+
+.auth-form__server-error {
+  @include shared.auth-form-server-error;
+}
+
+.auth-form__server-success {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #16a34a;
+}
+
+.auth-visual {
+  @include shared.auth-visual;
+}
+
+.auth-visual__frame {
+  @include shared.auth-visual-frame;
+}
+
+.auth-visual__image {
+  @include shared.auth-visual-image;
+}
+
+@keyframes digit-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes digit-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes digit-focus-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px $blue-100;
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
+  }
+}

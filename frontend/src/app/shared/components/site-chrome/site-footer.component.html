@@ -1,0 +1,26 @@
+<footer class="site-footer">
+  <div class="site-footer__grid">
+    <div>
+      <app-logo />
+      <p class="site-footer__blurb">
+        The AI software engineering workspace. Describe it, design it, deploy it — together.
+      </p>
+    </div>
+
+    @for (col of columns; track col.title) {
+      <div>
+        <div class="site-footer__col-title">{{ col.title }}</div>
+        <ul class="site-footer__col-links">
+          @for (link of col.links; track link) {
+            <li><a href="#" class="site-footer__link">{{ link }}</a></li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+
+  <div class="site-footer__bottom">
+    <span>© 2026 Astyann Labs. All rights reserved.</span>
+    <span class="site-footer__version">v1.0 · forest build</span>
+  </div>
+</footer>

@@ -1,0 +1,21 @@
+<header class="site-nav">
+  <div class="site-nav__bar glass">
+    <app-logo />
+
+    <nav class="site-nav__links">
+      <a href="#features" class="site-nav__link">Features</a>
+      <a routerLink="/app/dashboard" class="site-nav__link">Workspace</a>
+    </nav>
+
+    <div class="site-nav__actions">
+      <app-theme-toggle />
+      <a routerLink="/login" class="site-nav__signin">Sign in</a>
+      <a routerLink="/signup" class="site-nav__cta">
+        Start building
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</header>

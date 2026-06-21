@@ -1,0 +1,45 @@
+.field {
+  display: block;
+}
+
+.field__label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #0f172a; // slate-900
+}
+
+.field__error {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #dc2626; // red-600
+}
+
+// Shared input styling — applied globally to inputs placed inside <app-form-field>
+// via :host-context so the projected <input> picks it up without needing
+// ViewEncapsulation.None.
+:host ::ng-deep input {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid #e2e8f0; // slate-200
+  background-color: #ffffff;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &::placeholder {
+    color: #94a3b8; // slate-400
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #0f172a;
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.1);
+  }
+
+  &.ng-invalid.ng-touched {
+    border-color: #dc2626;
+  }
+}
