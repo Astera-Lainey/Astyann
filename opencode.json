@@ -4,7 +4,7 @@
   "provider": {
     "openrouter": {
       "options": {
-        "apiKey": "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"
+        "apiKey": "${env.OPENROUTER_API_KEY}"
       }
     }
   }
