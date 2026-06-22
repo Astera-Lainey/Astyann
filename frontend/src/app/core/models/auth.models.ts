@@ -51,7 +51,10 @@ export interface VerifyEmailRequest {
 }
 
 export interface VerifyEmailResponseData {
-  isVerified: boolean;
+  accessToken: string;
+  refreshToken: string;
+  userId: string;
+  email: string;
 }
 
 // ---------------------------------------------------------------------
@@ -64,6 +67,7 @@ export interface ResendVerificationRequest {
 
 export interface ResendVerificationResponseData {
   verificationExpiryDate: string;
+  userId?: string;
 }
 
 // ---------------------------------------------------------------------

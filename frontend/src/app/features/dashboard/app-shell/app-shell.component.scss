@@ -1,0 +1,235 @@
+@use '../../auth/_auth-page-shared' as shared;
+
+// AppShell reuses the same Alata + red/white/slate design language as the
+// landing and auth pages (`_auth-page-shared.scss`), per project decision,
+// rather than the separate/unused "Caesar" oklch theme in the global
+// styles.scss. Layout (sidebar/topbar) is new — built from the dashboard
+// screenshot as a static visual reference — but every color/font value
+// below traces back to that shared palette so the authenticated app
+// doesn't introduce a third visual language.
+
+$sidebar-bg: #0f0a0a;
+$sidebar-border: rgba(255, 255, 255, 0.08);
+$sidebar-text: rgba(255, 255, 255, 0.65);
+$sidebar-text-strong: #ffffff;
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  font-family: "Alata", ui-sans-serif, system-ui, sans-serif;
+  background-color: #f7f7f8;
+  color: shared.$slate-900;
+}
+
+// ---------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------
+
+.shell__sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 15.5rem;
+  flex-shrink: 0;
+  background-color: $sidebar-bg;
+  color: $sidebar-text;
+  padding: 1.5rem 1rem;
+}
+
+.shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.5rem 1.5rem;
+  font-size: 1.0625rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: $sidebar-text-strong;
+  text-decoration: none;
+}
+
+.shell__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.shell__nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  color: $sidebar-text;
+  text-decoration: none;
+  transition: background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: $sidebar-text-strong;
+  }
+
+  &--active {
+    background-color: $sidebar-text-strong;
+    color: #0f0a0a;
+    font-weight: 600;
+
+    &:hover {
+      background-color: $sidebar-text-strong;
+      color: #0f0a0a;
+    }
+  }
+
+  &--muted {
+    color: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.shell__section {
+  margin-top: 1.75rem;
+}
+
+.shell__section-label {
+  padding: 0 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.shell__section-empty {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.shell__project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shell__project-link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  color: $sidebar-text;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: $sidebar-text-strong;
+  }
+
+  &--active {
+    background-color: $sidebar-text-strong;
+    color: #0f0a0a;
+    font-weight: 600;
+
+    &:hover {
+      background-color: $sidebar-text-strong;
+      color: #0f0a0a;
+    }
+  }
+}
+
+.shell__sidebar-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid $sidebar-border;
+}
+
+// ---------------------------------------------------------------------
+// Main column (topbar + routed content)
+// ---------------------------------------------------------------------
+
+.shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid shared.$slate-200;
+}
+
+.shell__search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 18rem;
+  max-width: 100%;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid shared.$slate-200;
+  background-color: #fafafa;
+  color: shared.$slate-400;
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    color: shared.$slate-900;
+
+    &::placeholder {
+      color: shared.$slate-400;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+}
+
+.shell__user {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.shell__user-email {
+  font-size: 0.8125rem;
+  color: shared.$slate-500;
+}
+
+.shell__logout {
+  padding: 0.4375rem 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid shared.$slate-200;
+  background-color: #ffffff;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: shared.$slate-900;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background-color: shared.$slate-200;
+    border-color: shared.$slate-400;
+  }
+}
+
+.shell__content {
+  flex: 1;
+  padding: 1.75rem 2rem 3rem;
+}

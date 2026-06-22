@@ -34,7 +34,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountNotVerifiedException.class)
     public ResponseEntity<ErrorResponse> handleNotVerified(AccountNotVerifiedException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(
+                        HttpStatus.FORBIDDEN.value(),
+                        ex.getMessage(),
+                        LocalDateTime.now(),
+                        ex.getUserId()));
     }
 
     @ExceptionHandler(InvalidVerificationCodeException.class)
@@ -69,5 +74,9 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(status.value(), message, LocalDateTime.now()));
     }
 
-    public record ErrorResponse(int status, String message, LocalDateTime timestamp) {}
+    public record ErrorResponse(int status, String message, LocalDateTime timestamp, String userId) {
+        public ErrorResponse(int status, String message, LocalDateTime timestamp) {
+            this(status, message, timestamp, null);
+        }
+    }
 }

@@ -219,6 +219,7 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
       next: () => {
         this.isSubmitting.set(false);
         this.isVerified.set(true);
+        this.router.navigate(['/app/dashboard']);
       },
       error: (error: HttpErrorResponse) => {
         this.isSubmitting.set(false);
@@ -245,15 +246,15 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
     this.isResending.set(true);
 
     this.authService.resendVerificationCode({ email: currentEmail }).subscribe({
-      next: () => {
+      next: (data) => {
         this.isResending.set(false);
         this.resendMessage.set('A new verification code has been sent to your email.');
-        this.startResendCooldown();
-        const first = this.digitInputs.get(0);
-        if (first) {
-          first.nativeElement.focus();
-        }
-      },
+        if (!this.userId() && data.userId) {
+            this.userId.set(data.userId);
+            this.errorMessage.set(null);  // clear the "could not find" error
+          }
+          this.startResendCooldown();
+        },
       error: (error: HttpErrorResponse) => {
         this.isResending.set(false);
         if (error.status === 404) {

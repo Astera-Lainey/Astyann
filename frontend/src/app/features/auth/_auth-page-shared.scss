@@ -187,3 +187,192 @@ $blue-600: #2563eb;
   width: 100%;
   object-fit: cover;
 }
+
+@font-face {
+  font-family: "Alata";
+  font-style: normal;
+  font-weight: 400;
+  src: local("Alata");
+}
+
+$brand-red: #e30411;
+$slate-900: #0f172a;
+$slate-500: #64748b;
+$slate-400: #94a3b8;
+$slate-200: #e2e8f0;
+$blue-600: #2563eb;
+
+@mixin auth-page-base {
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: $slate-900;
+  font-family: "Alata", ui-sans-serif, system-ui, sans-serif;
+}
+
+@mixin sparkle-positions {
+  .spark {
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+    color: $slate-500;
+
+    &--a { left: 10%; top: 14%; }
+    &--b { left: 38%; top: 34%; color: $slate-400; }
+    &--c { left: 26%; bottom: 10%; color: $slate-400; }
+    &--d { left: 8%; bottom: 6%; }
+  }
+}
+
+@mixin auth-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 1.75rem 2rem;
+}
+
+@mixin auth-brand {
+  font-size: 1.25rem;
+  letter-spacing: -0.015em;
+  color: $slate-900;
+  text-decoration: none;
+}
+
+// The outer <main> is now just the left (form) half of the page.
+// The right half is the <section class="auth-visual"> which is
+// a sibling of <main> directly inside .auth-page.
+@mixin auth-main {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 50%;
+  min-height: 100vh;
+  padding: 6rem 3rem 4rem;
+
+  @media (max-width: 1023px) {
+    width: 100%;
+    padding: 5rem 1.5rem 3rem;
+  }
+}
+
+@mixin auth-panel {
+  width: 100%;
+  max-width: 26rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@mixin auth-panel-title {
+  font-size: 2.5rem;
+  letter-spacing: -0.02em;
+  color: $slate-900;
+  margin: 0;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
+}
+
+@mixin auth-form {
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@mixin auth-form-reset-link {
+  margin-top: 0.5rem;
+  display: inline-block;
+  font-size: 0.75rem;
+  color: $blue-600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@mixin auth-form-submit {
+  margin-top: 1.5rem;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  background-color: $brand-red;
+  box-shadow: 0 18px 40px -18px rgba(227, 4, 17, 0.7);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s, opacity 0.2s;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+@mixin auth-form-server-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #dc2626;
+}
+
+@mixin auth-panel-footer-text {
+  margin-top: 2rem;
+  font-size: 0.875rem;
+  color: $slate-500;
+}
+
+@mixin auth-panel-footer-link {
+  color: $slate-900;
+  text-decoration: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// The image panel sits as a sibling of <main>, taking the full right half.
+@mixin auth-visual {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100vh;
+  display: none;
+
+  @media (min-width: 1024px) {
+    display: block;
+  }
+}
+
+@mixin auth-visual-frame {
+  width: 100%;
+  height: 100%;
+}
+
+@mixin auth-visual-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}

@@ -75,7 +75,10 @@ export class AuthService {
   verifyEmail(request: VerifyEmailRequest): Observable<VerifyEmailResponseData> {
     return this.http
       .post<ApiEnvelope<VerifyEmailResponseData>>(`${this.baseUrl}/verify-email`, request)
-      .pipe(map((res) => res.data));
+      .pipe(
+        map((res) => res.data),
+        tap((data) => this.persistSession(data)),
+      );
   }
 
   // ---------------------------------------------------------------------

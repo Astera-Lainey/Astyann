@@ -1,0 +1,103 @@
+<div class="new-project">
+  @if (step() === 'brief') {
+    <div class="new-project__eyebrow">Step 1 · Brief</div>
+    <h1 class="new-project__title">Tell me about your project</h1>
+    <p class="new-project__subtitle">
+      Share an idea and upload a specification document. We'll extract requirements and ask the
+      right follow-up questions.
+    </p>
+
+    <form class="new-project__form" [formGroup]="briefForm" (ngSubmit)="onSubmitBrief()" novalidate>
+      <app-form-field label="Project name" [errorMessage]="titleError">
+        <input type="text" formControlName="title" placeholder="e.g. Orbit CRM" />
+      </app-form-field>
+
+      <app-form-field label="Describe your idea" [errorMessage]="descriptionError">
+        <textarea
+          formControlName="description"
+          rows="5"
+          placeholder="A CRM tailored for boutique agencies. Pipeline forecasting, lightweight contact management, deep email integration…"
+        ></textarea>
+      </app-form-field>
+
+      <div class="new-project__field">
+        <span class="new-project__field-label">Specification document</span>
+
+        @if (!selectedFile()) {
+          <label class="new-project__dropzone">
+            <input
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              (change)="onFileSelected($event)"
+              hidden
+            />
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <div class="new-project__dropzone-text">Click to choose a PDF or Word document</div>
+            <div class="new-project__dropzone-hint">Max 20MB</div>
+          </label>
+        } @else {
+          <div class="new-project__file-row">
+            <div class="new-project__file-info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              {{ selectedFile()!.name }}
+            </div>
+            <button type="button" class="new-project__file-remove" (click)="removeFile()" aria-label="Remove file">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        }
+
+        @if (fileError()) {
+          <span class="new-project__field-error">{{ fileError() }}</span>
+        }
+      </div>
+
+      @if (errorMessage()) {
+        <p class="new-project__server-error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <div class="new-project__actions">
+        <button type="submit" class="new-project__submit" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Analyzing…' : 'Continue to requirements' }}
+        </button>
+      </div>
+    </form>
+  } @else {
+    <div class="new-project__eyebrow">Step 2 · Guided Questions</div>
+    <h1 class="new-project__title">A few quick questions</h1>
+    <p class="new-project__subtitle">
+      These help us tailor the requirements and architecture to your project.
+    </p>
+
+    <form class="new-project__form" (ngSubmit)="onSubmitQuestions()" novalidate>
+      @for (question of guidedQuestions(); track question.gqId) {
+        <app-form-field
+          [label]="question.question"
+          [errorMessage]="questionControls[question.gqId].touched && questionControls[question.gqId].invalid ? 'This question needs an answer.' : null"
+        >
+          <input type="text" [formControl]="questionControls[question.gqId]" />
+        </app-form-field>
+      }
+
+      @if (errorMessage()) {
+        <p class="new-project__server-error" role="alert">{{ errorMessage() }}</p>
+      }
+
+      <div class="new-project__actions">
+        <button type="submit" class="new-project__submit" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Saving…' : 'Continue to requirements' }}
+        </button>
+      </div>
+    </form>
+  }
+</div>

@@ -1,0 +1,85 @@
+<div class="dashboard">
+  <div class="dashboard__breadcrumb">
+    <span class="dashboard__breadcrumb-muted">Pages</span>
+    <span class="dashboard__breadcrumb-sep">/</span>
+    <span class="dashboard__breadcrumb-current">Dashboard</span>
+  </div>
+  <h1 class="dashboard__title">Dashboard</h1>
+
+  <section class="dashboard__banner">
+    <div class="dashboard__banner-content">
+      <h2 class="dashboard__banner-title">Welcome Back!</h2>
+      <p class="dashboard__banner-subtitle">Ready to start creating the next big app?</p>
+      <a routerLink="/app/new" class="dashboard__banner-cta">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        New Project
+      </a>
+    </div>
+  </section>
+
+  @if (loadError()) {
+    <p class="dashboard__error" role="alert">{{ loadError() }}</p>
+  } @else if (isLoading()) {
+    <p class="dashboard__loading">Loading your projects…</p>
+  } @else {
+    <section class="dashboard__stats">
+      <div class="dashboard__stat-card">
+        <div>
+          <div class="dashboard__stat-label">Total Projects</div>
+          <div class="dashboard__stat-value">{{ totalProjects() }}</div>
+        </div>
+        <span class="dashboard__stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+          </svg>
+        </span>
+      </div>
+
+      <div class="dashboard__stat-card">
+        <div>
+          <div class="dashboard__stat-label">Analyzing</div>
+          <div class="dashboard__stat-value">{{ analyzingCount() }}</div>
+        </div>
+        <span class="dashboard__stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+        </span>
+      </div>
+    </section>
+
+    <section class="dashboard__projects">
+      <div class="dashboard__projects-header">
+        <div>
+          <h3 class="dashboard__projects-title">Your Projects</h3>
+          <p class="dashboard__projects-subtitle">{{ totalProjects() }} active workspaces</p>
+        </div>
+      </div>
+
+      @if (projects().length === 0) {
+        <p class="dashboard__projects-empty">
+          You don't have any projects yet.
+          <a routerLink="/app/new">Create your first one</a>.
+        </p>
+      } @else {
+        <ul class="dashboard__project-list">
+          @for (project of projects(); track project.projectId) {
+            <li>
+              <a [routerLink]="['/app/projects', project.projectId, 'requirements']" class="dashboard__project-row">
+                <span class="dashboard__project-avatar">{{ initialFor(project.title) }}</span>
+                <div class="dashboard__project-info">
+                  <div class="dashboard__project-name">{{ project.title }}</div>
+                  <div class="dashboard__project-desc">{{ project.description }}</div>
+                </div>
+                <span class="dashboard__project-status">{{ project.status }}</span>
+                <span class="dashboard__project-updated">{{ project.updatedAt | date: 'mediumDate' }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</div>

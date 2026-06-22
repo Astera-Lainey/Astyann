@@ -4,6 +4,7 @@ import afb.astyann.authservice.domain.User;
 import afb.astyann.authservice.dto.AuthResponseDTO;
 import afb.astyann.authservice.dto.RegisterRequestDTO;
 import afb.astyann.authservice.dto.RegisterResponseDTO;
+import afb.astyann.authservice.dto.ResendVerificationResponseDTO;
 import afb.astyann.authservice.exception.*;
 import afb.astyann.authservice.repository.UserRepository;
 import afb.astyann.authservice.security.JwtUtil;
@@ -67,12 +68,17 @@ public class AuthServiceImpl implements IAuthService {
     // ── Verify Account ──────────────────────────────────────────────────────
 
     @Override
-    public void verifyAccount(UUID userId, String code) {
+    public AuthResponseDTO verifyAccount(UUID userId, String code) {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (user.isVerified()) {
-            return;
+            return AuthResponseDTO.builder()
+                    .accessToken(jwtUtil.generateAccessToken(user))
+                    .refreshToken(jwtUtil.generateRefreshToken(user))
+                    .userId(user.getUserId())
+                    .email(user.getEmail())
+                    .build();
         }
 
         if (user.getVerificationCode() == null || !user.getVerificationCode().equals(code)) {
@@ -89,12 +95,19 @@ public class AuthServiceImpl implements IAuthService {
         user.setVerificationExpiryDate(null);
         userRepository.save(user);
         log.info("Account verified for user: {}", user.getEmail());
+
+        return AuthResponseDTO.builder()
+                .accessToken(jwtUtil.generateAccessToken(user))
+                .refreshToken(jwtUtil.generateRefreshToken(user))
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .build();
     }
 
     // ── Resend Verification Code ────────────────────────────────────────────
 
     @Override
-    public LocalDateTime resendVerificationCode(String email) {
+    public ResendVerificationResponseDTO resendVerificationCode(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
@@ -111,7 +124,10 @@ public class AuthServiceImpl implements IAuthService {
         emailService.sendVerificationEmail(email, newCode);
         log.info("Verification code resent to {}", email);
 
-        return expiry;
+        return ResendVerificationResponseDTO.builder()
+                .userId(user.getUserId())
+                .verificationExpiryDate(expiry)
+                .build();
     }
 
     // ── Login ───────────────────────────────────────────────────────────────
@@ -123,7 +139,8 @@ public class AuthServiceImpl implements IAuthService {
 
         if (!user.isVerified()) {
             throw new AccountNotVerifiedException(
-                    "Account not verified. Please check your email.");
+                    "Account not verified. Please check your email.",
+                    user.getUserId().toString());
         }
 
         if (!passwordEncoder.matches(password, user.getPassword())) {

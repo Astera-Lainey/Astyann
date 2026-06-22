@@ -8,7 +8,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.UUID;
@@ -35,12 +34,12 @@ public class AuthController {
      * FR-01: Verify email using the code sent during registration.
      */
     @PostMapping("/verify-email")
-    public ResponseEntity<ApiResponse<Map<String, Boolean>>> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
-        authService.verifyAccount(parseUserId(dto.getUserId()), dto.getCode());
-        return ResponseEntity.ok(ApiResponse.<Map<String, Boolean>>builder()
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
+        AuthResponseDTO authResponse = authService.verifyAccount(parseUserId(dto.getUserId()), dto.getCode());
+        return ResponseEntity.ok(ApiResponse.<AuthResponseDTO>builder()
                 .status(200)
                 .message("Account verified and activated.")
-                .data(Map.of("isVerified", true))
+                .data(authResponse)
                 .build());
     }
 
@@ -59,11 +58,15 @@ public class AuthController {
      */
     @PostMapping("/verify/resend")
     public ResponseEntity<ApiResponse<Map<String, String>>> resendVerification(@Valid @RequestBody ResendVerificationDTO dto) {
-        LocalDateTime expiry = authService.resendVerificationCode(dto.getEmail());
+        ResendVerificationResponseDTO result = authService.resendVerificationCode(dto.getEmail());
         return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
                 .status(200)
                 .message("A new verification code has been sent.")
-                .data(Map.of("verificationExpiryDate", expiry.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z"))
+                .data(Map.of(
+                        "verificationExpiryDate",
+                        result.getVerificationExpiryDate().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z",
+                        "userId", result.getUserId().toString()
+                ))
                 .build());
     }
 

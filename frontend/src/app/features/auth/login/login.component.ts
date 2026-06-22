@@ -86,7 +86,10 @@ export class LoginComponent {
           // Account exists but hasn't been verified yet (API-AUTH-04: "403
           // Forbidden — account not verified"). Send them to finish
           // verification instead of leaving them stuck on a login error.
-          this.router.navigate(['/verify-email'], { queryParams: { email } });
+          const userId = (error.error as { userId?: string })?.userId ?? '';
+          this.router.navigate(['/verify-email'], {
+            queryParams: { email, ...(userId && { userId }) },
+          });
         } else if (error.status === 401 || error.status === 400) {
           // Generic message regardless of the underlying reason (wrong email
           // vs wrong password) so we never leak which part was incorrect.
