@@ -25,9 +25,14 @@ public class AuthController {
      * FR-01: Register a new user account.
      */
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponseDTO> register(@Valid @RequestBody RegisterRequestDTO dto) {
-        RegisterResponseDTO response = authService.register(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<ApiResponse<RegisterResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO dto) {
+        RegisterResponseDTO data = authService.register(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.<RegisterResponseDTO>builder()
+                        .status(201)
+                        .message("Account created. Verification email sent.")
+                        .data(data)
+                        .build());
     }
 
     /**
