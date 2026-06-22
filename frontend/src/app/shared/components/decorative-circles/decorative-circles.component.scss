@@ -1,0 +1,23 @@
+// Reproduces the Tailwind utility classes applied inline in the React source:
+// "pointer-events-none absolute -top-20 left-1/3 h-[280px] w-[280px] text-slate-400"
+// "pointer-events-none absolute -bottom-32 -left-32 h-[420px] w-[420px] text-slate-400"
+
+.circles {
+  pointer-events: none;
+  position: absolute;
+  color: #94a3b8; // slate-400
+
+  &--tl {
+    top: -5rem; // -top-20
+    left: 33.333%; // left-1/3
+    width: 280px;
+    height: 280px;
+  }
+
+  &--bl {
+    bottom: -8rem; // -bottom-32
+    left: -8rem; // -left-32
+    width: 420px;
+    height: 420px;
+  }
+}

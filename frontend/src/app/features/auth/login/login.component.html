@@ -1,0 +1,51 @@
+<div class="auth-page">
+  <app-decorative-circles position="tl" />
+  <app-decorative-circles position="bl" />
+
+  <app-sparkle-icon class="spark spark--a" [size]="28" />
+  <app-sparkle-icon class="spark spark--b" [size]="22" />
+  <app-sparkle-icon class="spark spark--c" [size]="26" />
+  <app-sparkle-icon class="spark spark--d" [size]="20" />
+
+  <header class="auth-page__header">
+    <a routerLink="/" class="auth-page__brand">Astyann</a>
+  </header>
+
+  <main class="auth-page__main">
+    <section class="auth-panel">
+      <h1 class="auth-panel__title">Log In</h1>
+
+      <form class="auth-form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        <app-form-field label="Email" [errorMessage]="emailError">
+          <input type="email" formControlName="email" placeholder="Enter your email" autocomplete="email" />
+        </app-form-field>
+
+        <div>
+          <app-form-field label="Password" [errorMessage]="passwordError">
+            <input type="password" formControlName="password" placeholder="Enter your password" autocomplete="current-password" />
+          </app-form-field>
+          <a routerLink="/forgot-password" class="auth-form__reset-link">Reset password</a>
+        </div>
+
+        @if (errorMessage()) {
+          <p class="auth-form__server-error" role="alert">{{ errorMessage() }}</p>
+        }
+
+        <button type="submit" class="auth-form__submit" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Signing in…' : 'Get Started' }}
+        </button>
+      </form>
+
+      <p class="auth-panel__footer-text">
+        New to Astyann?
+        <a routerLink="/signup" class="auth-panel__footer-link">Create an account</a>
+      </p>
+    </section>
+
+    <section class="auth-visual">
+      <div class="auth-visual__frame">
+        <img src="/assets/images/login-wave.jpg" alt="Astyann visual" class="auth-visual__image" />
+      </div>
+    </section>
+  </main>
+</div>

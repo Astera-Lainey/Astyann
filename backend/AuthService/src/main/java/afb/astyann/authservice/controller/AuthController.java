@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,19 +24,28 @@ public class AuthController {
      * FR-01: Register a new user account.
      */
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponseDTO> register(@Valid @RequestBody RegisterRequestDTO dto) {
-        RegisterResponseDTO response = authService.register(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<ApiResponse<RegisterResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO dto) {
+        RegisterResponseDTO data = authService.register(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.<RegisterResponseDTO>builder()
+                        .status(201)
+                        .message("Account created. Verification email sent.")
+                        .data(data)
+                        .build());
     }
 
     /**
      * POST /api/v1/auth/verify
      * FR-01: Verify email using the code sent during registration.
      */
-    @PostMapping("/verify")
-    public ResponseEntity<Void> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
-        authService.verifyAccount(parseUserId(dto.getUserId()), dto.getCode());
-        return ResponseEntity.ok().build();
+    @PostMapping("/verify-email")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> verifyAccount(@Valid @RequestBody VerifyAccountDTO dto) {
+        AuthResponseDTO authResponse = authService.verifyAccount(parseUserId(dto.getUserId()), dto.getCode());
+        return ResponseEntity.ok(ApiResponse.<AuthResponseDTO>builder()
+                .status(200)
+                .message("Account verified and activated.")
+                .data(authResponse)
+                .build());
     }
 
     private UUID parseUserId(String userId) {
@@ -51,9 +62,17 @@ public class AuthController {
      * FR-01 / FR-02: Resend a new verification code.
      */
     @PostMapping("/verify/resend")
-    public ResponseEntity<Void> resendVerification(@RequestParam String email) {
-        authService.resendVerificationCode(email);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<ApiResponse<Map<String, String>>> resendVerification(@Valid @RequestBody ResendVerificationDTO dto) {
+        ResendVerificationResponseDTO result = authService.resendVerificationCode(dto.getEmail());
+        return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
+                .status(200)
+                .message("A new verification code has been sent.")
+                .data(Map.of(
+                        "verificationExpiryDate",
+                        result.getVerificationExpiryDate().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z",
+                        "userId", result.getUserId().toString()
+                ))
+                .build());
     }
 
     /**
@@ -61,9 +80,13 @@ public class AuthController {
      * FR-02: Authenticate user and return JWT tokens.
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
-        AuthResponseDTO response = authService.login(dto.getEmail(), dto.getPassword());
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> login(@Valid @RequestBody LoginRequestDTO dto) {
+        AuthResponseDTO data = authService.login(dto.getEmail(), dto.getPassword());
+        return ResponseEntity.ok(ApiResponse.<AuthResponseDTO>builder()
+                .status(200)
+                .message("Login successful.")
+                .data(data)
+                .build());
     }
 
     /**
@@ -71,9 +94,13 @@ public class AuthController {
      * FR-04: Logout (client discards JWT token).
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader("Authorization") String authHeader) {
         authService.logout();
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Logged out successfully.")
+                .data(null)
+                .build());
     }
 
     /**
@@ -81,9 +108,13 @@ public class AuthController {
      * FR-03: Initiate password reset — sends a link to the user's email.
      */
     @PostMapping("/reset-password")
-    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordDTO dto) {
         authService.resetPassword(dto.getEmail());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Password reset email sent.")
+                .data(null)
+                .build());
     }
 
     /**
@@ -91,8 +122,12 @@ public class AuthController {
      * FR-03: Complete password reset with the token from the email.
      */
     @PostMapping("/reset-password/confirm")
-    public ResponseEntity<Void> confirmResetPassword(@Valid @RequestBody ResetPasswordConfirmDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> confirmResetPassword(@Valid @RequestBody ResetPasswordConfirmDTO dto) {
         authService.confirmResetPassword(dto.getToken(), dto.getNewPassword());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .status(200)
+                .message("Password reset successfully.")
+                .data(null)
+                .build());
     }
 }

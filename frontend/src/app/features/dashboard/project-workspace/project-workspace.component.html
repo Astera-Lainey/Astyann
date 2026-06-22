@@ -1,0 +1,46 @@
+<div class="workspace">
+  @if (loadError()) {
+    <p class="workspace__error" role="alert">{{ loadError() }}</p>
+  } @else if (isLoading()) {
+    <p class="workspace__loading">Loading project…</p>
+  } @else if (project(); as project) {
+    <div class="workspace__breadcrumb">
+      <a routerLink="/app/dashboard" class="workspace__breadcrumb-link">Dashboard</a>
+      <span class="workspace__breadcrumb-sep">/</span>
+      <span class="workspace__breadcrumb-current">{{ project.title }}</span>
+      <span class="workspace__breadcrumb-sep">/</span>
+      <span class="workspace__breadcrumb-current">{{ currentSectionLabel }}</span>
+    </div>
+
+    <h1 class="workspace__title">{{ project.title }}</h1>
+    <p class="workspace__description">{{ project.description }}</p>
+
+    <nav class="workspace__tabs">
+      @for (s of sectionOrder; track s) {
+        <a
+          [routerLink]="['/app/projects', project.projectId, s]"
+          routerLinkActive="workspace__tab--active"
+          class="workspace__tab"
+        >
+          {{ sectionLabels[s] }}
+        </a>
+      }
+    </nav>
+
+    <div class="workspace__content">
+      @if (!isKnownSection) {
+        <div class="workspace__placeholder">
+          <h2 class="workspace__placeholder-title">Unknown section</h2>
+          <p class="workspace__placeholder-text">
+            "{{ section() }}" isn't a recognized workspace section.
+          </p>
+        </div>
+      } @else {
+        <div class="workspace__placeholder">
+          <h2 class="workspace__placeholder-title">{{ currentSectionLabel }}</h2>
+          <p class="workspace__placeholder-text">{{ currentSectionLabel }} view coming soon.</p>
+        </div>
+      }
+    </div>
+  }
+</div>

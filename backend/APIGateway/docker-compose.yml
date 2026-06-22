@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Astyann — Local development Docker Compose
+#
+# Starts the API Gateway + Auth Service together.
+# Add other services as you build them by copying the auth-service block.
+#
+# Usage:
+#   docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.9"
+
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: astyann-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: astyann_auth
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - astyann-private
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Auth Service ───────────────────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ../auth-service
+      dockerfile: Dockerfile
+    container_name: astyann-auth-service
+    restart: unless-stopped
+    environment:
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/astyann_auth?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - astyann-private       # NOT exposed to public — only gateway can reach it
+    expose:
+      - "8081"                # internal port only
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: astyann-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"           # THE only publicly exposed port in the stack
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PROJECT_SERVICE_URL: http://project-service:8082
+      REQUIREMENT_SERVICE_URL: http://requirement-service:8083
+      UML_SERVICE_URL: http://uml-service:8084
+      DOCUMENT_SERVICE_URL: http://document-service:8085
+      CODE_GEN_SERVICE_URL: http://code-generation-service:8086
+      VERSION_SERVICE_URL: http://version-management-service:8087
+      DEPLOYMENT_SERVICE_URL: http://deployment-service:8088
+      AI_ORCHESTRATOR_SERVICE_URL: http://ai-orchestrator-service:8089
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+    depends_on:
+      - auth-service
+    networks:
+      - astyann-public        # accepts external traffic
+      - astyann-private       # forwards to internal services
+
+  # Add further services here following the auth-service pattern ──────────────
+  # project-service:
+  #   build: ../project-service
+  #   networks: [astyann-private]
+  #   expose: ["8082"]
+
+volumes:
+  mysql-data:
+
+networks:
+  astyann-public:             # Accessible from outside (gateway only)
+  astyann-private:            # Internal — no direct public exposure

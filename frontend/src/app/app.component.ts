@@ -1,12 +1,12 @@
-import { Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { ToastComponent } from './shared/components/toast/toast.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
-  templateUrl: './app.component.html',
-  styleUrl: './app.component.scss'
+  standalone: true,
+  imports: [RouterOutlet, ToastComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `<router-outlet /><app-toast />`,
 })
-export class AppComponent {
-  title = 'frontend';
-}
+export class AppComponent {}

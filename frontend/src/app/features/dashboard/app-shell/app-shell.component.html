@@ -1,0 +1,101 @@
+<div class="shell">
+  <aside class="shell__sidebar">
+    <a routerLink="/app/dashboard" class="shell__brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+      Astyann
+    </a>
+
+    <nav class="shell__nav">
+      <a routerLink="/app/dashboard" routerLinkActive="shell__nav-link--active" class="shell__nav-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+        Dashboard
+      </a>
+      <a routerLink="/app/new" routerLinkActive="shell__nav-link--active" class="shell__nav-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        New Project
+      </a>
+    </nav>
+
+    <div class="shell__section">
+      <div class="shell__section-label">Projects</div>
+
+      @if (isLoadingProjects()) {
+        <div class="shell__section-empty">Loading…</div>
+      } @else if (projects().length === 0) {
+        <div class="shell__section-empty">No projects yet</div>
+      } @else {
+        <ul class="shell__project-list">
+          @for (project of projects(); track project.projectId) {
+            <li>
+              <a [routerLink]="['/app/projects', project.projectId, 'requirements']" class="shell__project-link">
+                {{ project.title }}
+              </a>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    @if (isInProjectWorkspace()) {
+      <div class="shell__section">
+        <div class="shell__section-label">Workspace</div>
+        <ul class="shell__project-list">
+          @for (item of workspaceSections; track item.section) {
+            <li>
+              <a
+                [routerLink]="['/app/projects', activeProjectIdValue(), item.section]"
+                routerLinkActive="shell__project-link--active"
+                class="shell__project-link"
+              >
+                {{ item.label }}
+              </a>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="shell__sidebar-footer">
+      <a routerLink="/app/settings" class="shell__nav-link shell__nav-link--muted">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        Settings
+      </a>
+    </div>
+  </aside>
+
+  <div class="shell__main">
+    <header class="shell__topbar">
+      <div class="shell__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input type="search" placeholder="Type here…" disabled />
+      </div>
+
+      @if (currentUser(); as user) {
+        <div class="shell__user">
+          <span class="shell__user-email">{{ user.email }}</span>
+          <button type="button" class="shell__logout" (click)="logout()">Sign out</button>
+        </div>
+      }
+    </header>
+
+    <main class="shell__content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

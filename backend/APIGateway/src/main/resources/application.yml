@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: api-gateway
+
+  # ── Spring Cloud Gateway ──────────────────────────────────────────────────
+  cloud:
+    gateway:
+      # Forward the Host header to downstream services
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+      # Global CORS — allows the Angular frontend to talk to the gateway
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "${app.frontend-url:http://localhost:4200}"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+      # Graceful HTTP client settings
+      httpclient:
+        connect-timeout: 5000   # 5s connect timeout
+        response-timeout: 60s   # 60s for long-running AI generation calls
+
+server:
+  port: 8080
+
+# ── JWT — MUST match the Auth Service exactly ─────────────────────────────
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+# ── Downstream Service URLs ───────────────────────────────────────────────
+# Override these with environment variables in production / Docker Compose
+services:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  project-service:
+    url: ${PROJECT_SERVICE_URL:http://localhost:8082}
+  requirement-service:
+    url: ${REQUIREMENT_SERVICE_URL:http://localhost:8083}
+  uml-service:
+    url: ${UML_SERVICE_URL:http://localhost:8084}
+  document-service:
+    url: ${DOCUMENT_SERVICE_URL:http://localhost:8085}
+  code-generation-service:
+    url: ${CODE_GEN_SERVICE_URL:http://localhost:8086}
+  version-management-service:
+    url: ${VERSION_SERVICE_URL:http://localhost:8087}
+  deployment-service:
+    url: ${DEPLOYMENT_SERVICE_URL:http://localhost:8088}
+  ai-orchestrator-service:
+    url: ${AI_ORCHESTRATOR_SERVICE_URL:http://localhost:8089}
+
+# ── Actuator ──────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+
+# ── Application ───────────────────────────────────────────────────────────
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:4200}
+
+# ── Logging ───────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.astyann.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    reactor.netty.http.client: WARN

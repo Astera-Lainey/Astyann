@@ -22,17 +22,10 @@ public class JwtUtil {
     @Value("${jwt.access-expiration-ms}")
     private long accessExpiration;
 
-    @Value("${jwt.refresh-expiration-ms}")
-    private long refreshExpiration;
-
     // ── Token Generation ────────────────────────────────────────────────────
 
     public String generateAccessToken(User user) {
         return buildToken(user, accessExpiration, "access");
-    }
-
-    public String generateRefreshToken(User user) {
-        return buildToken(user, refreshExpiration, "refresh");
     }
 
     private String buildToken(User user, long expiration, String tokenType) {
