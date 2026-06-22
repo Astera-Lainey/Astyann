@@ -77,9 +77,13 @@ public class AuthController {
      * FR-02: Authenticate user and return JWT tokens.
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
-        AuthResponseDTO response = authService.login(dto.getEmail(), dto.getPassword());
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> login(@Valid @RequestBody LoginRequestDTO dto) {
+        AuthResponseDTO data = authService.login(dto.getEmail(), dto.getPassword());
+        return ResponseEntity.ok(ApiResponse.<AuthResponseDTO>builder()
+                .status(200)
+                .message("Login successful.")
+                .data(data)
+                .build());
     }
 
     /**
