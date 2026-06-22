@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 import { DecorativeCirclesComponent } from '../../../shared/components/decorative-circles/decorative-circles.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
@@ -53,6 +54,7 @@ export class SignupComponent {
   constructor(
     private readonly authService: AuthService,
     private readonly router: Router,
+    private readonly toastService: ToastService,
   ) {}
 
   get emailError(): string | null {
@@ -88,6 +90,7 @@ export class SignupComponent {
     this.authService.register({ email, password }).subscribe({
       next: (data) => {
         this.isSubmitting.set(false);
+        this.toastService.show('Account created successfully. Check your email for the verification code.');
         this.router.navigate(['/verify-email'], {
           queryParams: {
             userId: data?.userId ?? '',

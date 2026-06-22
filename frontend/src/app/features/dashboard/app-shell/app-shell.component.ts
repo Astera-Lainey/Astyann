@@ -3,7 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProjectService } from '../../../core/services/project.service';
-import { ProjectSummary } from '../../../core/models/project.models';
+import { Page, ProjectSummary } from '../../../core/models/project.models';
 
 /** Mirrors `WorkspaceSection` in project-workspace.component.ts — kept local to avoid a lazy-chunk cross-import. */
 const WORKSPACE_SECTIONS: { section: string; label: string }[] = [
@@ -50,7 +50,7 @@ export class AppShellComponent implements OnInit {
   readonly projects = signal<ProjectSummary[]>([]);
   readonly isLoadingProjects = signal(true);
 
-  readonly currentUser = this.authService.currentUser;
+  get currentUser() { return this.authService.currentUser; }
 
   /** projectId extracted from the current URL, or null when not inside a project workspace. */
   private readonly activeProjectId = signal<string | null>(null);
@@ -71,7 +71,7 @@ export class AppShellComponent implements OnInit {
     // "view all" style browsing belongs on the dashboard's own project
     // list, not duplicated here.
     this.projectService.list({ size: 6, sort: 'updatedAt,desc' }).subscribe({
-      next: (page) => {
+      next: (page: Page<ProjectSummary>) => {
         this.projects.set(page.content);
         this.isLoadingProjects.set(false);
       },

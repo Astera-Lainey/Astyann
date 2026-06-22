@@ -8,8 +8,6 @@ import {
   ConfirmPasswordResetRequest,
   LoginRequest,
   LoginResponseData,
-  RefreshTokenRequest,
-  RefreshTokenResponseData,
   RegisterRequest,
   RegisterResponseData,
   RequestPasswordResetRequest,
@@ -20,7 +18,6 @@ import {
 } from '../models/auth.models';
 
 const ACCESS_TOKEN_KEY = 'astyann_access_token';
-const REFRESH_TOKEN_KEY = 'astyann_refresh_token';
 const USER_KEY = 'astyann_user';
 
 /**
@@ -75,10 +72,7 @@ export class AuthService {
   verifyEmail(request: VerifyEmailRequest): Observable<VerifyEmailResponseData> {
     return this.http
       .post<ApiEnvelope<VerifyEmailResponseData>>(`${this.baseUrl}/verify-email`, request)
-      .pipe(
-        map((res) => res.data),
-        tap((data) => this.persistSession(data)),
-      );
+      .pipe(map((res) => res.data));
   }
 
   // ---------------------------------------------------------------------
@@ -124,30 +118,6 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------
-  // API-AUTH-06 — POST /auth/refresh-token
-  // ---------------------------------------------------------------------
-
-  /**
-   * Exchanges the stored refresh token for a new access token. Used by
-   * `JwtInterceptor` to transparently recover from a 401 caused by access
-   * token expiry (1 hour validity — Section 2.1) without forcing a full
-   * re-login while the refresh token (7 day validity) is still good.
-   */
-  refreshAccessToken(): Observable<RefreshTokenResponseData> {
-    const refreshToken = this.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('No refresh token available.');
-    }
-    const request: RefreshTokenRequest = { refreshToken };
-    return this.http
-      .post<ApiEnvelope<RefreshTokenResponseData>>(`${this.baseUrl}/refresh-token`, request)
-      .pipe(
-        map((res) => res.data),
-        tap((data) => localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken)),
-      );
-  }
-
-  // ---------------------------------------------------------------------
   // API-AUTH-07 — POST /auth/reset-password (request a reset email)
   // ---------------------------------------------------------------------
 
@@ -180,19 +150,8 @@ export class AuthService {
     return localStorage.getItem(ACCESS_TOKEN_KEY);
   }
 
-  getRefreshToken(): string | null {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
-  }
-
-  /**
-   * Clears the local session only, without calling the backend. Used by
-   * `JwtInterceptor` when a 401 survives the refresh attempt (i.e. the
-   * refresh token itself is invalid/expired) — at that point the server
-   * already considers the session dead, so there's nothing to invalidate.
-   */
   clearSession(): void {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     this.currentUserSignal.set(null);
   }
@@ -203,7 +162,6 @@ export class AuthService {
 
   private persistSession(data: LoginResponseData): void {
     localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
     const user: AuthenticatedUser = { id: data.userId, email: data.email };
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     this.currentUserSignal.set(user);

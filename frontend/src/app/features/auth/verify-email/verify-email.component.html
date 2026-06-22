@@ -16,44 +16,44 @@
       @if (!isVerified()) {
         <h1 class="auth-panel__title">Verify Your Email</h1>
         <p class="auth-panel__subtitle">
-          @if (email()) {
-            Enter the 6-digit code we sent to <strong>{{ email() }}</strong>.
+          @if (email_()) {
+  Enter the 6-digit code we sent to <strong>{{ email_() }}</strong>.
           } @else {
             Enter the 6-digit code we sent to your email address.
           }
         </p>
 
-        <form class="auth-form" (ngSubmit)="onSubmit()" novalidate>
-          <label class="auth-form__digits-label">Verification code</label>
-          <div class="auth-form__digits" (paste)="onDigitPaste($event)">
-            @for (i of indices; track i) {
-              <input
-                #digitInput
-                type="text"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                maxlength="1"
-                [value]="digits()[i]"
-                (input)="onDigitInput(i, $event)"
-                (keydown)="onDigitKeydown(i, $event)"
-                class="auth-form__digit"
-                [class.auth-form__digit--filled]="digits()[i] !== ''"
-                [class.auth-form__digit--error]="!!errorMessage()"
-              />
-            }
-          </div>
+       <form class="auth-form" novalidate>
+  <label class="auth-form__digits-label">Verification code</label>
+  <div class="auth-form__digits" (paste)="onDigitPaste($event)">
+    @for (i of indices; track i) {
+      <input
+        #digitInput
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        maxlength="1"
+        [value]="digits()[i]"
+        (input)="onDigitInput(i, $event)"
+        (keydown)="onDigitKeydown(i, $event)"
+        class="auth-form__digit"
+        [class.auth-form__digit--filled]="digits()[i] !== ''"
+        [class.auth-form__digit--error]="!!errorMessage()"
+      />
+    }
+  </div>
 
-          @if (errorMessage()) {
-            <p class="auth-form__server-error" role="alert">{{ errorMessage() }}</p>
-          }
-          @if (resendMessage()) {
-            <p class="auth-form__server-success" role="status">{{ resendMessage() }}</p>
-          }
+  @if (errorMessage()) {
+    <p class="auth-form__server-error" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (resendMessage()) {
+    <p class="auth-form__server-success" role="status">{{ resendMessage() }}</p>
+  }
 
-          <button type="submit" class="auth-form__submit" [disabled]="isSubmitting()">
-            {{ isSubmitting() ? 'Verifying…' : 'Verify Email' }}
-          </button>
-        </form>
+  <button type="button" class="auth-form__submit" (click)="onSubmit()" [disabled]="isSubmitting()">
+    {{ isSubmitting() ? 'Verifying…' : 'Verify Email' }}
+  </button>
+</form>
 
         <p class="auth-panel__footer-text">
           Didn't get a code?

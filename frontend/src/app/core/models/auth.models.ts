@@ -52,7 +52,6 @@ export interface VerifyEmailRequest {
 
 export interface VerifyEmailResponseData {
   accessToken: string;
-  refreshToken: string;
   userId: string;
   email: string;
 }
@@ -89,7 +88,6 @@ export interface LoginRequest {
  */
 export interface LoginResponseData {
   accessToken: string;
-  refreshToken: string;
   userId: string;
   email: string;
 }
@@ -99,19 +97,6 @@ export interface LoginResponseData {
 // ---------------------------------------------------------------------
 
 // No request body (empty `{}`); response `data` is `null`.
-
-// ---------------------------------------------------------------------
-// API-AUTH-06 — POST /auth/refresh-token
-// ---------------------------------------------------------------------
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
-export interface RefreshTokenResponseData {
-  accessToken: string;
-  expiresIn: number;
-}
 
 // ---------------------------------------------------------------------
 // API-AUTH-07 — POST /auth/reset-password (request a reset email)
@@ -146,18 +131,6 @@ export interface ConfirmPasswordResetRequest {
 export interface AuthenticatedUser {
   id: string;
   email: string;
-}
-
-// ---------------------------------------------------------------------
-// JWT
-// ---------------------------------------------------------------------
-
-export interface DecodedJwt {
-  sub: string;
-  email: string;
-  type: 'access' | 'refresh';
-  iat: number;
-  exp: number;
 }
 
 // ---------------------------------------------------------------------

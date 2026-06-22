@@ -76,7 +76,6 @@ public class AuthServiceImpl implements IAuthService {
         if (user.isVerified()) {
             return AuthResponseDTO.builder()
                     .accessToken(jwtUtil.generateAccessToken(user))
-                    .refreshToken(jwtUtil.generateRefreshToken(user))
                     .userId(user.getUserId())
                     .email(user.getEmail())
                     .build();
@@ -99,7 +98,6 @@ public class AuthServiceImpl implements IAuthService {
 
         return AuthResponseDTO.builder()
                 .accessToken(jwtUtil.generateAccessToken(user))
-                .refreshToken(jwtUtil.generateRefreshToken(user))
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .build();
@@ -155,7 +153,6 @@ public class AuthServiceImpl implements IAuthService {
 
         return AuthResponseDTO.builder()
                 .accessToken(jwtUtil.generateAccessToken(user))
-                .refreshToken(jwtUtil.generateRefreshToken(user))
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .build();

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@a
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ProjectService } from '../../../core/services/project.service';
-import { ProjectSummary } from '../../../core/models/project.models';
+import { Page, ProjectSummary } from '../../../core/models/project.models';
 
 /**
  * Dashboard page — converted from `app.index.tsx`.
@@ -55,7 +55,7 @@ export class DashboardPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.projectService.list({ size: 20, sort: 'updatedAt,desc' }).subscribe({
-      next: (page) => {
+      next: (page: Page<ProjectSummary>) => {
         this.projects.set(page.content);
         this.isLoading.set(false);
       },

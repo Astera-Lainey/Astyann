@@ -3,37 +3,22 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Input,
   OnDestroy,
   OnInit,
   QueryList,
   signal,
   ViewChildren,
 } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 import { DecorativeCirclesComponent } from '../../../shared/components/decorative-circles/decorative-circles.component';
 
 const DIGIT_COUNT = 6;
 
-/**
- * Verify Email page.
- *
- * Lands here right after signup (POST /auth/register — API-AUTH-01 — always
- * creates the account as unverified and sends a code) and is also where
- * LoginComponent redirects a user who tries to log in before verifying
- * (login returns 403 Forbidden for unverified accounts — API-AUTH-04).
- *
- * Submits the 6-digit code to POST /api/v1/auth/verify-email (API-AUTH-02).
- * The `userId` and `email` arrive as query params — `userId` from the
- * register response, `email` as a fallback display value when only the
- * email is known (e.g. coming from the login redirect, which doesn't have
- * a userId on hand). If `userId` is missing, the code can't be verified
- * directly, so the user is prompted to request a fresh code by email
- * instead (POST /auth/verify/resend — API-AUTH-03), which re-issues a
- * `userId` indirectly by sending a new code to that inbox.
- */
 @Component({
   selector: 'app-verify-email-page',
   standalone: true,
@@ -49,6 +34,16 @@ const DIGIT_COUNT = 6;
 export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChildren('digitInput') digitInputs!: QueryList<ElementRef<HTMLInputElement>>;
 
+  @Input() set userId(value: string | null) {
+    this._userId.set(value ?? null);
+  }
+  @Input() set email(value: string | null) {
+    this._email.set(value ?? null);
+  }
+
+  private readonly _userId = signal<string | null>(null);
+  private readonly _email = signal<string | null>(null);
+
   readonly isSubmitting = signal(false);
   readonly isVerified = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -57,26 +52,19 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly resendMessage = signal<string | null>(null);
   readonly resendCooldown = signal(0);
 
-  readonly userId = signal<string | null>(null);
-  readonly email = signal<string | null>(null);
-
   readonly digits = signal<string[]>(Array(DIGIT_COUNT).fill(''));
-
   readonly indices = Array.from({ length: DIGIT_COUNT }, (_, i) => i);
 
   private cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly authService: AuthService,
-    private readonly route: ActivatedRoute,
     private readonly router: Router,
-  ) {}
+    private readonly toastService: ToastService,
+  ) {}   
 
   ngOnInit(): void {
-    this.userId.set(this.route.snapshot.queryParamMap.get('userId'));
-    this.email.set(this.route.snapshot.queryParamMap.get('email'));
-
-    if (!this.userId()) {
+    if (!this._userId()) {
       this.errorMessage.set(
         'We could not find your pending verification. Request a new code below to continue.',
       );
@@ -96,6 +84,10 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  // exposed for template
+  userId_() { return this._userId(); }
+  email_()  { return this._email();  }
+
   get code(): string {
     return this.digits().join('');
   }
@@ -106,14 +98,15 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onDigitInput(index: number, event: Event): void {
     const input = event.target as HTMLInputElement;
-    const value = input.value;
+    const raw = input.value;
+    const last = raw.slice(-1);
 
-    if (!/^\d$/.test(value) && value !== '') {
+    if (!/^\d$/.test(last) && raw !== '') {
       input.value = this.digits()[index];
       return;
     }
 
-    if (value === '') {
+    if (raw === '') {
       this.digits.update(d => {
         const next = [...d];
         next[index] = '';
@@ -124,16 +117,17 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.digits.update(d => {
       const next = [...d];
-      next[index] = value;
+      next[index] = last;
       return next;
     });
 
-    input.value = value;
+    input.value = last;
 
     if (index < DIGIT_COUNT - 1) {
-      const next = this.digitInputs.get(index + 1);
-      if (next) {
-        next.nativeElement.focus();
+      const nextInput = this.digitInputs.get(index + 1);
+      if (nextInput) {
+        nextInput.nativeElement.focus();
+        nextInput.nativeElement.value = '';
       }
     }
   }
@@ -150,6 +144,7 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
         const prev = this.digitInputs.get(index - 1);
         if (prev) {
           prev.nativeElement.focus();
+          prev.nativeElement.value = '';
         }
       } else {
         this.digits.update(d => {
@@ -157,21 +152,17 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
           next[index] = '';
           return next;
         });
+        const current = this.digitInputs.get(index);
+        if (current) current.nativeElement.value = '';
       }
     }
 
     if (event.key === 'ArrowLeft' && index > 0) {
-      const prev = this.digitInputs.get(index - 1);
-      if (prev) {
-        prev.nativeElement.focus();
-      }
+      this.digitInputs.get(index - 1)?.nativeElement.focus();
     }
 
     if (event.key === 'ArrowRight' && index < DIGIT_COUNT - 1) {
-      const next = this.digitInputs.get(index + 1);
-      if (next) {
-        next.nativeElement.focus();
-      }
+      this.digitInputs.get(index + 1)?.nativeElement.focus();
     }
   }
 
@@ -190,16 +181,18 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
       return next;
     });
 
+    // sync DOM values
+    this.digitInputs.forEach((el, i) => {
+      el.nativeElement.value = clean[i] ?? '';
+    });
+
     const focusIndex = Math.min(clean.length, DIGIT_COUNT - 1);
-    const input = this.digitInputs.get(focusIndex);
-    if (input) {
-      input.nativeElement.focus();
-    }
+    this.digitInputs.get(focusIndex)?.nativeElement.focus();
   }
 
   onSubmit(): void {
     this.errorMessage.set(null);
-    const currentUserId = this.userId();
+    const currentUserId = this._userId();
 
     if (!currentUserId) {
       this.errorMessage.set(
@@ -219,7 +212,8 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
       next: () => {
         this.isSubmitting.set(false);
         this.isVerified.set(true);
-        this.router.navigate(['/app/dashboard']);
+        this.toastService.show('Email verified successfully.');
+        this.router.navigate(['/login'], { queryParams: { verified: 'true' } });
       },
       error: (error: HttpErrorResponse) => {
         this.isSubmitting.set(false);
@@ -235,7 +229,7 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   resendCode(): void {
-    const currentEmail = this.email();
+    const currentEmail = this._email();
     if (!currentEmail || this.resendCooldown() > 0) {
       return;
     }
@@ -243,18 +237,20 @@ export class VerifyEmailComponent implements OnInit, OnDestroy, AfterViewInit {
     this.resendMessage.set(null);
     this.errorMessage.set(null);
     this.digits.set(Array(DIGIT_COUNT).fill(''));
+    this.digitInputs?.forEach(el => el.nativeElement.value = '');
     this.isResending.set(true);
 
     this.authService.resendVerificationCode({ email: currentEmail }).subscribe({
       next: (data) => {
         this.isResending.set(false);
         this.resendMessage.set('A new verification code has been sent to your email.');
-        if (!this.userId() && data.userId) {
-            this.userId.set(data.userId);
-            this.errorMessage.set(null);  // clear the "could not find" error
-          }
-          this.startResendCooldown();
-        },
+        if (data?.userId) {
+          this._userId.set(data.userId);
+          this.errorMessage.set(null);
+        }
+        this.startResendCooldown();
+        this.digitInputs.get(0)?.nativeElement.focus();
+      },
       error: (error: HttpErrorResponse) => {
         this.isResending.set(false);
         if (error.status === 404) {

@@ -40,7 +40,7 @@ export const routes: Routes = [
   },
   {
     path: 'verify-email',
-    canActivate: [guestGuard],
+    // canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/verify-email/verify-email.component').then(
         (m) => m.VerifyEmailComponent,
@@ -66,14 +66,20 @@ export const routes: Routes = [
     title: 'Set new password · Astyann',
   },
   {
-    path: 'app/dashboard',
+    path: 'app',
     canActivate: [authGuard],
-    // Placeholder: the authenticated app shell / dashboard is out of scope
-    // for this auth-module migration. Swap in the real dashboard component
-    // once it exists.
     loadComponent: () =>
-      import('./features/landing/landing.component').then((m) => m.LandingComponent),
-    title: 'Dashboard · Astyann',
+      import('./features/dashboard/app-shell/app-shell.component').then((m) => m.AppShellComponent),
+    children: [
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard-page/dashboard-page.component').then(
+            (m) => m.DashboardPageComponent,
+          ),
+        title: 'Dashboard · Astyann',
+      },
+    ],
   },
   {
     path: '**',
