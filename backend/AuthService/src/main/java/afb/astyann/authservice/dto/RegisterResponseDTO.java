@@ -1,5 +1,6 @@
 package afb.astyann.authservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,6 +13,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RegisterResponseDTO {
-    private UUID   userId;
-    private String email;
+    private UUID    userId;
+    private String  email;
+    @JsonProperty("isVerified")
+    private boolean isVerified;
 }

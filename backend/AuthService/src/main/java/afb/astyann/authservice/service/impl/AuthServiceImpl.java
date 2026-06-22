@@ -62,6 +62,7 @@ public class AuthServiceImpl implements IAuthService {
         return RegisterResponseDTO.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
+                .isVerified(user.getIsVerified())
                 .build();
     }
 

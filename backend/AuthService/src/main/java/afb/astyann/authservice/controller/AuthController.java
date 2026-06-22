@@ -24,9 +24,14 @@ public class AuthController {
      * FR-01: Register a new user account.
      */
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponseDTO> register(@Valid @RequestBody RegisterRequestDTO dto) {
-        RegisterResponseDTO response = authService.register(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<ApiResponse<RegisterResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO dto) {
+        RegisterResponseDTO data = authService.register(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.<RegisterResponseDTO>builder()
+                        .status(201)
+                        .message("Account created. Verification email sent.")
+                        .data(data)
+                        .build());
     }
 
     /**
@@ -75,9 +80,13 @@ public class AuthController {
      * FR-02: Authenticate user and return JWT tokens.
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
-        AuthResponseDTO response = authService.login(dto.getEmail(), dto.getPassword());
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> login(@Valid @RequestBody LoginRequestDTO dto) {
+        AuthResponseDTO data = authService.login(dto.getEmail(), dto.getPassword());
+        return ResponseEntity.ok(ApiResponse.<AuthResponseDTO>builder()
+                .status(200)
+                .message("Login successful.")
+                .data(data)
+                .build());
     }
 
     /**
