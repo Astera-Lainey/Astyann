@@ -21,8 +21,8 @@
         </app-form-field>
 
         <div>
-          <app-form-field label="Password" [errorMessage]="passwordError">
-            <input type="password" formControlName="password" placeholder="Enter your password" autocomplete="current-password" />
+          <app-form-field label="Password" [errorMessage]="passwordError" [showPasswordToggle]="true" [passwordVisible]="passwordVisible()" (passwordVisibleChange)="passwordVisible.set($event)">
+            <input [type]="passwordVisible() ? 'text' : 'password'" formControlName="password" placeholder="Enter your password" autocomplete="current-password" />
           </app-form-field>
           <a routerLink="/forgot-password" class="auth-form__reset-link">Reset password</a>
         </div>

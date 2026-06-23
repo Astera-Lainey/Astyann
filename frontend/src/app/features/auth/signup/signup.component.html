@@ -20,8 +20,8 @@
           <input type="email" formControlName="email" placeholder="Enter your email" autocomplete="email" />
         </app-form-field>
 
-        <app-form-field label="Password" [errorMessage]="passwordError">
-          <input type="password" formControlName="password" placeholder="Enter your password" autocomplete="new-password" />
+        <app-form-field label="Password" [errorMessage]="passwordError" [showPasswordToggle]="true" [passwordVisible]="passwordVisible()" (passwordVisibleChange)="passwordVisible.set($event)">
+          <input [type]="passwordVisible() ? 'text' : 'password'" formControlName="password" placeholder="Enter your password" autocomplete="new-password" />
         </app-form-field>
 
         @if (errorMessage()) {

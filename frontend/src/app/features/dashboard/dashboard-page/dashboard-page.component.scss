@@ -42,17 +42,43 @@
 .dashboard__banner {
   position: relative;
   overflow: hidden;
-  border-radius: 0.625rem;
-  padding: 2.5rem;
-  background: radial-gradient(120% 160% at 15% 20%, #ff4d4d 0%, shared.$brand-red 38%, #1a0506 85%);
-  box-shadow: 0 18px 40px -18px rgba(227, 4, 17, 0.5);
+  border-radius: 12px;
+  min-height: 100px;
+
+  background-image: url('/assets/images/dashboard-welcome.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  display: flex;
+  align-items: center;
+
+  padding: 1.5rem;
 }
 
 .dashboard__banner-content {
   max-width: 28rem;
   color: #ffffff;
 }
+.dashboard__banner::before {
+  content: '';
 
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0,0,0,.55) 0%,
+      rgba(0,0,0,.25) 45%,
+      rgba(0,0,0,.15) 100%
+    );
+}
+
+.dashboard__banner-content {
+  position: relative;
+  z-index: 1;
+}
 .dashboard__banner-title {
   margin: 0;
   font-size: 1.875rem;
@@ -62,7 +88,7 @@
 
 .dashboard__banner-subtitle {
   margin: 0.75rem 0 0;
-  font-size: 0.875rem;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.85);
 }
 
@@ -71,8 +97,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border-radius: 0.5rem;
+  padding: 0.95rem 1.5rem;
   background-color: #000000;
   color: #ffffff;
   font-size: 0.75rem;
