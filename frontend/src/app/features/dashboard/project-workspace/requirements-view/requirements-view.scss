@@ -1,0 +1,51 @@
+@use '../../../auth/_auth-page-shared' as shared;
+
+.req { font-family: "Alata", ui-sans-serif, system-ui, sans-serif; color: shared.$slate-900; }
+.req__loading { padding: 3rem 0; font-size: 0.875rem; color: shared.$slate-500; }
+.req__error { margin: 0 0 1rem; font-size: 0.8125rem; color: #dc2626; }
+
+.req__layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; align-items: start; }
+
+.req__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.req__title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+.req__subtitle { margin: 0.25rem 0 0; font-size: 0.8125rem; color: shared.$slate-500; }
+
+.req__approve-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
+  padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; background-color: shared.$brand-red;
+  color: #ffffff; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  &:not(:disabled):hover { opacity: 0.88; }
+}
+.req__approved-badge {
+  display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
+  padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: #dcfce7; color: #16a34a;
+  font-size: 0.8125rem; font-weight: 600;
+}
+
+.req__group { margin-bottom: 1.25rem; border-radius: 0.625rem; border: 1px solid shared.$slate-200; background-color: #ffffff; overflow: hidden; }
+.req__group-header { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 1rem; }
+.req__group-title { font-size: 0.875rem; font-weight: 700; color: shared.$brand-red; }
+.req__group-count { font-size: 0.75rem; color: shared.$slate-400; }
+.req__item-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid shared.$slate-200; }
+.req__item { padding: 0.75rem 1rem; font-size: 0.8125rem; border-bottom: 1px solid shared.$slate-200; line-height: 1.5; &:last-child { border-bottom: none; } }
+
+.req__panel { position: sticky; top: 1rem; border-radius: 0.75rem; border: 1px solid shared.$slate-200; background-color: #ffffff; padding: 1.125rem; display: flex; flex-direction: column; gap: 0.625rem; }
+.req__panel-heading { display: flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; font-weight: 700; }
+.req__panel-desc { margin: 0; font-size: 0.75rem; color: shared.$slate-500; line-height: 1.5; }
+.req__panel-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: shared.$slate-500; }
+.req__panel-textarea {
+  width: 100%; box-sizing: border-box; padding: 0.625rem 0.75rem; border-radius: 0.5rem;
+  border: 1px solid shared.$slate-200; background-color: #fafafa; font-family: inherit;
+  font-size: 0.8125rem; color: shared.$slate-900; line-height: 1.5; resize: vertical; outline: none;
+  &::placeholder { color: shared.$slate-400; }
+  &:focus { border-color: shared.$brand-red; box-shadow: 0 0 0 3px rgba(227, 4, 17, 0.1); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+.req__regenerate-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.375rem; width: 100%;
+  padding: 0.625rem 1rem; border: none; border-radius: 0.5rem; background-color: shared.$slate-200;
+  color: shared.$slate-400; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: not-allowed;
+  &--active { background-color: shared.$brand-red; color: #ffffff; cursor: pointer; &:not(:disabled):hover { opacity: 0.88; } }
+  &:disabled { opacity: 0.7; }
+}

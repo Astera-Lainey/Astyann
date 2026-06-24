@@ -12,13 +12,9 @@
       <span class="workspace__breadcrumb-current">{{ currentSectionLabel }}</span>
     </div>
 
-    <h1 class="workspace__title">{{ project.title }}</h1>
-    <p class="workspace__description">{{ project.description }}</p>
-
     <nav class="workspace__tabs">
       @for (s of sectionOrder; track s) {
-        <a
-          [routerLink]="['/app/projects', project.projectId, s]"
+        <a [routerLink]="['/app/projects', project.projectId, s]"
           routerLinkActive="workspace__tab--active"
           class="workspace__tab"
         >
@@ -31,10 +27,10 @@
       @if (!isKnownSection) {
         <div class="workspace__placeholder">
           <h2 class="workspace__placeholder-title">Unknown section</h2>
-          <p class="workspace__placeholder-text">
-            "{{ section() }}" isn't a recognized workspace section.
-          </p>
+          <p class="workspace__placeholder-text">"{{ section() }}" isn't a recognized workspace section.</p>
         </div>
+      } @else if (section() === 'requirements') {
+        <app-requirements-view [projectId]="project.projectId" />
       } @else {
         <div class="workspace__placeholder">
           <h2 class="workspace__placeholder-title">{{ currentSectionLabel }}</h2>

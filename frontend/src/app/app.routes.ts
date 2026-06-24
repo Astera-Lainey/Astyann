@@ -2,21 +2,6 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { guestGuard } from './core/guards/guest.guard';
 
-/**
- * Application routes.
- *
- * - `/` is the public landing page (index.tsx).
- * - `/login`, `/signup`, `/verify-email`, `/forgot-password`,
- *   `/reset-password` are guarded by `guestGuard` so an already-authenticated
- *   user is redirected straight to the dashboard instead of seeing the auth
- *   forms again.
- * - `/app/**` is guarded by `authGuard`; only a placeholder dashboard route
- *   is wired here since the dashboard itself is out of scope for this
- *   migration, but the guard and route shape are production-ready.
- *
- * All feature components are lazy-loaded via `loadComponent` for optimal
- * initial bundle size — standard Angular 20 standalone routing.
- */
 export const routes: Routes = [
   {
     path: '',
@@ -40,7 +25,6 @@ export const routes: Routes = [
   },
   {
     path: 'verify-email',
-    // canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/verify-email/verify-email.component').then(
         (m) => m.VerifyEmailComponent,
@@ -69,7 +53,9 @@ export const routes: Routes = [
     path: 'app',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/dashboard/app-shell/app-shell.component').then((m) => m.AppShellComponent),
+      import('./features/dashboard/app-shell/app-shell.component').then(
+        (m) => m.AppShellComponent,
+      ),
     children: [
       {
         path: 'dashboard',
@@ -78,6 +64,27 @@ export const routes: Routes = [
             (m) => m.DashboardPageComponent,
           ),
         title: 'Dashboard · Astyann',
+      },
+      {
+        path: 'new',
+        loadComponent: () =>
+          import('./features/dashboard/new-project/new-project.component').then(
+            (m) => m.NewProjectComponent,
+          ),
+        title: 'New project · Astyann',
+      },
+      {
+        path: 'projects/:id/:section',
+        loadComponent: () =>
+          import(
+            './features/dashboard/project-workspace/project-workspace.component'
+          ).then((m) => m.ProjectWorkspaceComponent),
+        title: 'Project · Astyann',
+      },
+      {
+        path: '',
+        redirectTo: 'dashboard',
+        pathMatch: 'full',
       },
     ],
   },

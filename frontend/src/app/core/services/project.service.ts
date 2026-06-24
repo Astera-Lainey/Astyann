@@ -1,9 +1,17 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiEnvelope } from '../models/auth.models';
-import { Page, ProjectSummary } from '../models/project.models';
+import {
+  CreateProjectRequest,
+  CreateProjectResponseData,
+  Page,
+  Project,
+  ProjectSummary,
+  SubmitGuidedQuestionsRequest,
+  SubmitGuidedQuestionsResponseData,
+} from '../models/project.models';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
@@ -11,12 +19,43 @@ export class ProjectService {
 
   constructor(private readonly http: HttpClient) {}
 
-  list(params: {
-    size?: number;
-    sort?: string;
-  }): Observable<Page<ProjectSummary>> {
+  list(query: { page?: number; size?: number; status?: string; sort?: string } = {}): Observable<Page<ProjectSummary>> {
+    let params = new HttpParams();
+    if (query.page !== undefined) params = params.set('page', query.page);
+    if (query.size !== undefined) params = params.set('size', query.size);
+    if (query.status) params = params.set('status', query.status);
+    if (query.sort) params = params.set('sort', query.sort);
+
     return this.http
       .get<ApiEnvelope<Page<ProjectSummary>>>(this.baseUrl, { params })
+      .pipe(map((res) => res.data));
+  }
+
+  create(request: CreateProjectRequest): Observable<CreateProjectResponseData> {
+    const formData = new FormData();
+    formData.append('title', request.title);
+    formData.append('description', request.description);
+    formData.append('specificationFile', request.specificationFile);
+    return this.http
+      .post<ApiEnvelope<CreateProjectResponseData>>(this.baseUrl, formData)
+      .pipe(map((res) => res.data));
+  }
+
+  getById(projectId: string): Observable<Project> {
+    return this.http
+      .get<ApiEnvelope<Project>>(`${this.baseUrl}/${projectId}`)
+      .pipe(map((res) => res.data));
+  }
+
+  submitGuidedQuestions(
+    projectId: string,
+    request: SubmitGuidedQuestionsRequest,
+  ): Observable<SubmitGuidedQuestionsResponseData> {
+    return this.http
+      .put<ApiEnvelope<SubmitGuidedQuestionsResponseData>>(
+        `${this.baseUrl}/${projectId}/guided-questions`,
+        request,
+      )
       .pipe(map((res) => res.data));
   }
 }
