@@ -5,8 +5,10 @@ import afb.astyann.projectservice.service.IProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,12 +23,18 @@ public class ProjectController {
     /**
      * POST /api/v1/projects
      * Create a new project for the authenticated user.
+     * Accepts multipart/form-data: title, description (optional), document (PDF or DOCX).
      */
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ProjectDTO>> createProject(
             @RequestHeader("X-User-Id") String rawUserId,
-            @Valid @RequestBody CreateProjectDTO dto) {
-        ProjectDTO data = projectService.createProject(parseUserId(rawUserId), dto);
+            @RequestPart("title") String title,
+            @RequestPart(value = "description", required = false) String description,
+            @RequestPart("document") MultipartFile document) {
+        CreateProjectDTO dto = new CreateProjectDTO();
+        dto.setTitle(title);
+        dto.setDescription(description);
+        ProjectDTO data = projectService.createProject(parseUserId(rawUserId), dto, document);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.<ProjectDTO>builder()
                         .status(201)
@@ -107,6 +115,38 @@ public class ProjectController {
                         .message("Generation triggered successfully.")
                         .data(null)
                         .build());
+    }
+
+    /**
+     * GET /api/v1/projects/{projectId}/guided-questions
+     * Get the AI-generated guided questions for a project.
+     */
+    @GetMapping("/{projectId}/guided-questions")
+    public ResponseEntity<ApiResponse<List<GuidedQuestionDTO>>> getGuidedQuestions(
+            @PathVariable UUID projectId) {
+        List<GuidedQuestionDTO> data = projectService.getGuidedQuestions(projectId);
+        return ResponseEntity.ok(ApiResponse.<List<GuidedQuestionDTO>>builder()
+                .status(200)
+                .message("Guided questions retrieved successfully.")
+                .data(data)
+                .build());
+    }
+
+    /**
+     * POST /api/v1/projects/{projectId}/guided-questions/answers
+     * Submit answers to guided questions. AI merges them with the document context
+     * to produce the complete project description.
+     */
+    @PostMapping("/{projectId}/guided-questions/answers")
+    public ResponseEntity<ApiResponse<ProjectDTO>> submitGuidedAnswers(
+            @PathVariable UUID projectId,
+            @RequestBody SubmitAnswersDTO dto) {
+        ProjectDTO data = projectService.submitGuidedAnswers(projectId, dto);
+        return ResponseEntity.ok(ApiResponse.<ProjectDTO>builder()
+                .status(200)
+                .message("Answers submitted. Project context updated.")
+                .data(data)
+                .build());
     }
 
     private UUID parseUserId(String rawUserId) {

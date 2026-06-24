@@ -46,6 +46,9 @@ public class Project {
     @Column(name = "doc_url")
     private String docUrl;
 
+    @Column(name = "project_context", columnDefinition = "MEDIUMTEXT")
+    private String projectContext;
+
     @PrePersist
     protected void onCreate() {
         this.creationDate = LocalDateTime.now();
