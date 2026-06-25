@@ -109,10 +109,10 @@ public class PcsfCompletenessAnalyser {
                 if (isListMissing(mod.getCrudOperations())) missing.add("3.3[" + mod.getId() + "]");
                 if (mod.getUseCases() != null) {
                     for (PcsfUseCase uc : mod.getUseCases()) {
-                        if (isMissing(uc.getPreconditions()))        missing.add("3.4[" + uc.getId() + "]");
-                        if (isMissing(uc.getPostconditions()))       missing.add("3.5[" + uc.getId() + "]");
-                        if (isListMissing(uc.getMainScenario()))     missing.add("3.6[" + uc.getId() + "]");
-                        if (isMissing(uc.getAlternativeScenario()))  missing.add("3.7[" + uc.getId() + "]");
+                        if (isMissing(uc.getPreconditions()))    missing.add("3.4[" + uc.getId() + "]");
+                        if (isMissing(uc.getPostconditions()))   missing.add("3.5[" + uc.getId() + "]");
+                        if (isListMissing(uc.getMainScenario())) missing.add("3.6[" + uc.getId() + "]");
+                        // 3.7 alternativeScenario is optional — AI inference fills it when applicable
                     }
                 }
             }

@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -46,7 +47,9 @@ public class QAService {
             throw new IllegalStateException("Failed to parse PCSF for project " + projectId, ex);
         }
 
-        for (SubmitAnswersRequest.AnswerSubmission submission : request.getAnswers()) {
+        List<SubmitAnswersRequest.AnswerSubmission> answers =
+                request.getAnswers() != null ? request.getAnswers() : List.of();
+        for (SubmitAnswersRequest.AnswerSubmission submission : answers) {
             ClarificationQuestion question = questionRepository.findById(submission.getQuestionId())
                     .orElse(null);
             if (question == null) {
