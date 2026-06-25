@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ProjectService } from '../../../core/services/project.service';
 import { Page, ProjectSummary } from '../../../core/models/project.models';
+import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 
 /**
  * Dashboard page — converted from `app.index.tsx`.
@@ -36,7 +37,7 @@ import { Page, ProjectSummary } from '../../../core/models/project.models';
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, SparkleIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dashboard-page.component.html',
   styleUrl: './dashboard-page.component.scss',

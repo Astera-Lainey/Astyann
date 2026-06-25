@@ -2,9 +2,14 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { Router } from '@angular/router';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { finalize } from 'rxjs/operators';
 import { ProjectService } from '../../../core/services/project.service';
-import { GuidedQuestion } from '../../../core/models/project.models';
+import {
+  ClarificationQuestion,
+  GuidedQuestion,
+} from '../../../core/models/project.models';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
+import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const ACCEPTED_FILE_TYPES = [
@@ -15,7 +20,7 @@ const ACCEPTED_FILE_TYPES = [
 @Component({
   selector: 'app-new-project-page',
   standalone: true,
-  imports: [ReactiveFormsModule, FormFieldComponent],
+  imports: [ReactiveFormsModule, FormFieldComponent, SparkleIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './new-project.component.html',
   styleUrl: './new-project.component.scss',
@@ -40,6 +45,129 @@ export class NewProjectComponent {
 
   questionControls: Record<string, FormControl<string>> = {};
 
+  // ── Template download ──
+  readonly isDownloading = signal(false);
+
+  downloadTemplate(): void {
+    this.isDownloading.set(true);
+    this.projectService.downloadTemplate().pipe(
+      finalize(() => this.isDownloading.set(false)),
+    ).subscribe({
+      next: (blob) => {
+        if (blob.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          this.errorMessage.set('The template file is corrupted or has an unexpected format.');
+          return;
+        }
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'AstyannTemplate.docx';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.errorMessage.set('Failed to download template. Please try again.');
+      },
+    });
+  }
+
+  // ── Q&A Modal ──
+  readonly showQuestionsModal = signal(false);
+  readonly submittingAnswers = signal(false);
+  readonly submitError = signal<string | null>(null);
+
+  questions: ClarificationQuestion[] = [];
+  currentIndex = 0;
+  answers = new Map<string, string>();
+
+  get currentQuestion(): ClarificationQuestion {
+    return this.questions[this.currentIndex];
+  }
+
+  get isFirst(): boolean {
+    return this.currentIndex === 0;
+  }
+
+  get isLast(): boolean {
+    return this.currentIndex === this.questions.length - 1;
+  }
+
+  get currentAnswer(): string {
+    return this.answers.get(this.currentQuestion.id) ?? '';
+  }
+
+  get progressPercent(): number {
+    return ((this.currentIndex + 1) / this.questions.length) * 100;
+  }
+
+  setAnswer(value: string): void {
+    this.answers.set(this.currentQuestion.id, value);
+  }
+
+  onInput(event: Event): void {
+    this.setAnswer((event.target as HTMLInputElement).value);
+  }
+
+  onTextareaInput(event: Event): void {
+    this.setAnswer((event.target as HTMLTextAreaElement).value);
+  }
+
+  goBack(): void {
+    if (!this.isFirst) this.currentIndex--;
+  }
+
+  goNext(): void {
+    if (!this.isLast) this.currentIndex++;
+  }
+
+  toggleMultiSelect(option: string): void {
+    const current = this.getMultiSelectOptions();
+    const idx = current.indexOf(option);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else {
+      current.push(option);
+    }
+    this.answers.set(this.currentQuestion.id, current.join(','));
+  }
+
+  getMultiSelectOptions(): string[] {
+    return (this.answers.get(this.currentQuestion.id) ?? '').split(',').filter(Boolean);
+  }
+
+  isMultiSelected(option: string): boolean {
+    return this.getMultiSelectOptions().includes(option);
+  }
+
+  submitAnswers(): void {
+    this.submitError.set(null);
+    this.submittingAnswers.set(true);
+    const currentProjectId = this.projectId();
+    if (!currentProjectId) {
+      this.submitError.set('Something went wrong — please start over.');
+      this.submittingAnswers.set(false);
+      return;
+    }
+    const payload = {
+      answers: Array.from(this.answers.entries()).map(([questionId, answer]) => ({
+        questionId,
+        answer,
+      })),
+    };
+    this.projectService.submitAnswers(currentProjectId, payload).subscribe({
+      next: () => {
+        this.submittingAnswers.set(false);
+        this.showQuestionsModal.set(false);
+        this.router.navigate(['/app/projects', currentProjectId, 'review']);
+      },
+      error: () => {
+        this.submittingAnswers.set(false);
+        this.submitError.set('Something went wrong. Please try again.');
+      },
+    });
+  }
+
+  // ── Getters ──
   get titleError(): string | null {
     const c = this.briefForm.controls.title;
     if (!c.touched || c.valid) return null;
@@ -87,6 +215,12 @@ export class NewProjectComponent {
       next: (data) => {
         this.isSubmitting.set(false);
         this.projectId.set(data.projectId);
+
+        if (data.pcsfStatus === 'DRAFT' && data.pendingQuestionsCount && data.pendingQuestionsCount > 0) {
+          this.openQuestionsModal(data.projectId);
+          return;
+        }
+
         this.guidedQuestions.set(data.guidedQuestions);
         this.questionControls = Object.fromEntries(
           data.guidedQuestions.map((q) => [
@@ -123,6 +257,22 @@ export class NewProjectComponent {
       error: () => {
         this.isSubmitting.set(false);
         this.errorMessage.set('Something went wrong. Please try again later.');
+      },
+    });
+  }
+
+  private openQuestionsModal(projectId: string): void {
+    this.showQuestionsModal.set(true);
+    this.projectService.getQuestions(projectId).subscribe({
+      next: (questions) => {
+        this.questions = questions;
+        this.currentIndex = 0;
+        this.answers = new Map<string, string>();
+        this.submitError.set(null);
+      },
+      error: () => {
+        this.showQuestionsModal.set(false);
+        this.errorMessage.set('Failed to load questions. Please try again.');
       },
     });
   }

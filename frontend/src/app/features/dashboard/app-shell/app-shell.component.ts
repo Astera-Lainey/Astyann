@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
@@ -47,8 +47,30 @@ const PROJECT_URL_PATTERN = /^\/app\/projects\/([^/]+)\/([^/]+)/;
   styleUrl: './app-shell.component.scss',
 })
 export class AppShellComponent implements OnInit {
+  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
   readonly projects = signal<ProjectSummary[]>([]);
   readonly isLoadingProjects = signal(true);
+
+  /** First 6 projects displayed in the sidebar shortcut list. */
+  readonly recentProjects = computed(() => this.projects().slice(0, 6));
+
+  readonly searchQuery = signal('');
+  readonly isSearchOpen = signal(false);
+
+  readonly filteredProjects = computed(() => {
+    const query = this.searchQuery().toLowerCase().trim();
+    if (!query) return [];
+    return this.projects()
+      .filter((p) => p.title.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const aStarts = a.title.toLowerCase().startsWith(query);
+        const bStarts = b.title.toLowerCase().startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return 0;
+      });
+  });
 
   get currentUser() { return this.authService.currentUser; }
 
@@ -66,11 +88,7 @@ export class AppShellComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // A small page size keeps the sidebar shortcut list focused on recent
-    // projects rather than trying to render the user's entire portfolio —
-    // "view all" style browsing belongs on the dashboard's own project
-    // list, not duplicated here.
-    this.projectService.list({ size: 6, sort: 'updatedAt,desc' }).subscribe({
+    this.projectService.list({ size: 50, sort: 'updatedAt,desc' }).subscribe({
       next: (page: Page<ProjectSummary>) => {
         this.projects.set(page.content);
         this.isLoadingProjects.set(false);
@@ -84,6 +102,31 @@ export class AppShellComponent implements OnInit {
     this.router
       .events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => this.updateActiveProjectId(e.urlAfterRedirects));
+  }
+
+  onSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchQuery.set(value);
+    if (value.length > 0) {
+      this.isSearchOpen.set(true);
+    }
+  }
+
+  onSearchFocus(): void {
+    if (this.searchQuery().length > 0) {
+      this.isSearchOpen.set(true);
+    }
+  }
+
+  onSearchBlur(): void {
+    setTimeout(() => this.isSearchOpen.set(false), 200);
+  }
+
+  selectProject(projectId: string): void {
+    this.isSearchOpen.set(false);
+    this.searchQuery.set('');
+    this.searchInput.nativeElement.value = '';
+    this.router.navigate(['/app/projects', projectId, 'requirements']);
   }
 
   logout(): void {

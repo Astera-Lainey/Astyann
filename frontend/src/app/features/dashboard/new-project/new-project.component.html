@@ -1,4 +1,9 @@
 <div class="new-project">
+  <app-sparkle-icon class="spark spark--a" [size]="24" />
+  <app-sparkle-icon class="spark spark--b" [size]="20" />
+  <app-sparkle-icon class="spark spark--c" [size]="22" />
+  <app-sparkle-icon class="spark spark--d" [size]="18" />
+
   @if (step() === 'brief') {
     <div class="new-project__eyebrow">Step 1 · Brief</div>
     <h1 class="new-project__title">Tell me about your project</h1>
@@ -10,11 +15,29 @@
       </app-form-field>
 
       <app-form-field label="Describe your idea" [errorMessage]="descriptionError">
-        <textarea formControlName="description" rows="5" placeholder="A CRM tailored for boutique agencies…"></textarea>
+        <textarea formControlName="description" rows="3" placeholder="A CRM tailored for boutique agencies…"></textarea>
       </app-form-field>
 
       <div class="new-project__field">
-        <span class="new-project__field-label">Specification document</span>
+        <div class="new-project__field-header">
+          <span class="new-project__field-label">Specification document</span>
+          <button
+            type="button"
+            class="new-project__download-template"
+            (click)="downloadTemplate()"
+            [disabled]="isDownloading()"
+          >
+            @if (isDownloading()) {
+              <span class="modal-spinner"></span>
+              Downloading…
+            } @else {
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download specification template
+            }
+          </button>
+        </div>
         @if (!selectedFile()) {
           <label class="new-project__dropzone">
             <input type="file" accept=".pdf,.docx" (change)="onFileSelected($event)" hidden />
@@ -81,3 +104,117 @@
     </form>
   }
 </div>
+
+@if (showQuestionsModal()) {
+  <div class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-header__title">A few questions about your project</span>
+        <span class="modal-header__count">{{ currentIndex + 1 }} / {{ questions.length }}</span>
+      </div>
+      <div class="modal-progress">
+        <div class="modal-progress__bar" [style.width.%]="progressPercent"></div>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-question">{{ currentQuestion.question }}</p>
+
+        @if (currentQuestion.type === 'TEXT') {
+          <input
+            type="text"
+            class="modal-input"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onInput($event)"
+          />
+        } @else if (currentQuestion.type === 'TEXTAREA') {
+          <textarea
+            class="modal-input modal-input--textarea"
+            rows="4"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onTextareaInput($event)"
+          ></textarea>
+        } @else if (currentQuestion.type === 'YES_NO') {
+          <div class="modal-yesno">
+            <button
+              type="button"
+              class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'No'"
+              (click)="setAnswer('No')"
+            >No</button>
+            <button
+              type="button"
+              class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'Yes'"
+              (click)="setAnswer('Yes')"
+            >Yes</button>
+          </div>
+        } @else if (currentQuestion.type === 'SINGLE_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input
+                  type="radio"
+                  class="modal-select-item__input"
+                  name="q_{{ currentQuestion.id }}"
+                  [value]="option"
+                  [checked]="currentAnswer === option"
+                  (change)="setAnswer(option)"
+                />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        } @else if (currentQuestion.type === 'MULTI_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input
+                  type="checkbox"
+                  class="modal-select-item__input"
+                  [checked]="isMultiSelected(option)"
+                  (change)="toggleMultiSelect(option)"
+                />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        }
+
+        @if (currentQuestion.placeholder && currentQuestion.type !== 'TEXT' && currentQuestion.type !== 'TEXTAREA') {
+          <p class="modal-hint">{{ currentQuestion.placeholder }}</p>
+        }
+      </div>
+
+      @if (submitError()) {
+        <p class="modal-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="modal-footer__btn modal-footer__btn--back"
+          [disabled]="isFirst"
+          (click)="goBack()"
+        >← Back</button>
+
+        @if (isLast) {
+          <button
+            type="button"
+            class="modal-footer__btn modal-footer__btn--submit"
+            [disabled]="!currentAnswer || submittingAnswers()"
+            (click)="submitAnswers()"
+          >{{ submittingAnswers() ? 'Submitting…' : 'Submit' }}</button>
+        } @else {
+          <button
+            type="button"
+            class="modal-footer__btn modal-footer__btn--next"
+            [disabled]="!currentAnswer"
+            (click)="goNext()"
+          >Next →</button>
+        }
+      </div>
+    </div>
+  </div>
+}

@@ -43,7 +43,7 @@
         <div class="shell__section-empty">No projects yet</div>
       } @else {
         <ul class="shell__project-list">
-          @for (project of projects(); track project.projectId) {
+          @for (project of recentProjects(); track project.projectId) {
             <li>
               <a [routerLink]="['/app/projects', project.projectId, 'requirements']" class="shell__project-link">
                 {{ project.title }}
@@ -86,12 +86,37 @@
 
   <div class="shell__main">
     <header class="shell__topbar">
-      <div class="shell__search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-        <input type="search" placeholder="Type here…" disabled />
+      <div class="shell__search-wrapper">
+        <div class="shell__search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            #searchInput
+            type="search"
+            placeholder="Search projects…"
+            autocomplete="off"
+            (input)="onSearchInput($event)"
+            (focus)="onSearchFocus()"
+            (blur)="onSearchBlur()"
+          />
+        </div>
+
+        @if (isSearchOpen() && searchQuery()) {
+          <div class="shell__search-dropdown">
+            @if (filteredProjects().length > 0) {
+              @for (project of filteredProjects(); track project.projectId) {
+                <button type="button" class="shell__search-item" (click)="selectProject(project.projectId)">
+                  <span class="shell__search-item-title">{{ project.title }}</span>
+                  <span class="shell__search-item-status">{{ project.status }}</span>
+                </button>
+              }
+            } @else {
+              <div class="shell__search-empty">No projects found</div>
+            }
+          </div>
+        }
       </div>
 
       @if (currentUser(); as user) {

@@ -4,11 +4,14 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiEnvelope } from '../models/auth.models';
 import {
+  ClarificationQuestion,
   CreateProjectRequest,
   CreateProjectResponseData,
   Page,
   Project,
   ProjectSummary,
+  SubmitAnswersRequest,
+  SubmitAnswersResponseData,
   SubmitGuidedQuestionsRequest,
   SubmitGuidedQuestionsResponseData,
 } from '../models/project.models';
@@ -54,6 +57,28 @@ export class ProjectService {
     return this.http
       .put<ApiEnvelope<SubmitGuidedQuestionsResponseData>>(
         `${this.baseUrl}/${projectId}/guided-questions`,
+        request,
+      )
+      .pipe(map((res) => res.data));
+  }
+
+  downloadTemplate(): Observable<Blob> {
+    return this.http.get('/assets/AstyannTemplate.docx', { responseType: 'blob' });
+  }
+
+  getQuestions(projectId: string): Observable<ClarificationQuestion[]> {
+    return this.http
+      .get<ApiEnvelope<ClarificationQuestion[]>>(`${this.baseUrl}/${projectId}/questions`)
+      .pipe(map((res) => res.data));
+  }
+
+  submitAnswers(
+    projectId: string,
+    request: SubmitAnswersRequest,
+  ): Observable<SubmitAnswersResponseData> {
+    return this.http
+      .post<ApiEnvelope<SubmitAnswersResponseData>>(
+        `${this.baseUrl}/${projectId}/questions/answers`,
         request,
       )
       .pipe(map((res) => res.data));

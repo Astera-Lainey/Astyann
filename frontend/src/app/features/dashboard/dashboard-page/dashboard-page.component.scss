@@ -1,8 +1,23 @@
 @use '../../auth/_auth-page-shared' as shared;
 
 .dashboard {
+  position: relative;
   font-family: "Alata", ui-sans-serif, system-ui, sans-serif;
   color: shared.$slate-900;
+}
+
+.spark {
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+  color: shared.$slate-400;
+
+  &--1 { right: 4%; top: 6%; }
+  &--2 { right: 22%; top: 2%; color: shared.$slate-400; }
+  &--3 { left: 20%; top: 18%; }
+  &--4 { right: 12%; top: 32%; color: shared.$slate-400; }
+  &--5 { left: 30%; bottom: 4%; }
+  &--6 { right: 8%; bottom: 8%; color: shared.$slate-400; }
 }
 
 .dashboard__breadcrumb {
