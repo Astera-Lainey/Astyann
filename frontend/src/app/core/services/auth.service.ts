@@ -138,7 +138,7 @@ export class AuthService {
 
   confirmPasswordReset(request: ConfirmPasswordResetRequest): Observable<void> {
     return this.http
-      .post<ApiEnvelope<null>>(`${this.baseUrl}/password-reset/confirm`, request)
+      .post<ApiEnvelope<null>>(`${this.baseUrl}/reset-password/confirm`, request)
       .pipe(map(() => undefined));
   }
 
