@@ -1,6 +1,7 @@
 package afb.astyann.aiorchestrator.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -35,7 +36,7 @@ public class DocumentParserService {
     }
 
     private String extractFromPdf(byte[] bytes) throws Exception {
-        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(bytes))) {
+        try (PDDocument document = Loader.loadPDF(bytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
             String text = stripper.getText(document);
             log.debug("PDF extracted: {} characters", text.length());

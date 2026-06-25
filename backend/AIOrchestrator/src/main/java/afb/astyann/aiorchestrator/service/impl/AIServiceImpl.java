@@ -6,6 +6,7 @@ import afb.astyann.aiorchestrator.domain.AIRequest;
 import afb.astyann.aiorchestrator.domain.AIResponse;
 import afb.astyann.aiorchestrator.domain.AITaskType;
 import afb.astyann.aiorchestrator.dto.*;
+import afb.astyann.aiorchestrator.provider.OllamaProvider;
 import afb.astyann.aiorchestrator.provider.ProviderConfig;
 import afb.astyann.aiorchestrator.service.AIProviderRouter;
 import afb.astyann.aiorchestrator.service.DocumentParserService;
@@ -43,6 +44,7 @@ public class AIServiceImpl implements IAIService {
     private final RAGServiceClient        ragClient;
     private final MetaModelServiceClient  metaModelClient;
     private final AIProviderRouter        providerRouter;
+    private final OllamaProvider          ollamaProvider;
     private final DocumentParserService   documentParserService;
     private final ObjectMapper            objectMapper;
 
@@ -132,7 +134,7 @@ public class AIServiceImpl implements IAIService {
         AIResponse response = route(projectId, AITaskType.ANALYZE_REQUIREMENTS, prompt,
                 ProviderConfig.builder().systemPrompt(ANALYSIS_SYSTEM_PROMPT).maxTokens(2048).build());
 
-        return parseAnalysisResponse(projectId, response.getContent());
+        return parseAnalysisResponse(projectId, response.getContent(), documentText);
     }
 
     // ── Merge Document + Answers ──────────────────────────────────────────────
@@ -167,7 +169,20 @@ public class AIServiceImpl implements IAIService {
         AIResponse response = route(request.getProjectId(), AITaskType.ANALYZE_REQUIREMENTS, prompt,
                 ProviderConfig.builder().systemPrompt(MERGE_SYSTEM_PROMPT).maxTokens(2048).build());
 
-        return parseAnalysisResponse(request.getProjectId(), response.getContent());
+        return parseAnalysisResponse(request.getProjectId(), response.getContent(), null);
+    }
+
+    // ── Direct Inference ──────────────────────────────────────────────────────
+
+    @Override
+    public String infer(String model, String systemPrompt, String userPrompt) {
+        log.debug("Direct inference model={}", model);
+        ProviderConfig config = ProviderConfig.builder()
+                .systemPrompt(systemPrompt)
+                .maxTokens(4096)
+                .modelOverride(model)
+                .build();
+        return ollamaProvider.complete(userPrompt, config);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -207,9 +222,9 @@ public class AIServiceImpl implements IAIService {
         return template.replace("{prompt}", userPrompt).replace("{context}", context);
     }
 
-    private ProjectAnalysisResponseDTO parseAnalysisResponse(UUID projectId, String llmContent) {
+    private ProjectAnalysisResponseDTO parseAnalysisResponse(UUID projectId, String llmContent,
+                                                               String documentText) {
         try {
-            // Strip markdown code fences if the LLM wraps JSON in them
             String json = llmContent
                     .replaceAll("(?s)```json\\s*", "")
                     .replaceAll("(?s)```\\s*", "")
@@ -230,6 +245,7 @@ public class AIServiceImpl implements IAIService {
                     .sufficient(sufficient)
                     .extractedContext(extractedContext)
                     .guidedQuestions(questions)
+                    .documentText(documentText)
                     .build();
 
         } catch (Exception ex) {
@@ -242,6 +258,7 @@ public class AIServiceImpl implements IAIService {
                             "What are the main goals of this project?",
                             "Who are the target users?",
                             "What are the most important features?"))
+                    .documentText(documentText)
                     .build();
         }
     }

@@ -17,4 +17,5 @@ public class ProjectAnalysisResponseDTO {
     private boolean sufficient;
     private String extractedContext;
     private List<String> guidedQuestions;
+    private String documentText;
 }

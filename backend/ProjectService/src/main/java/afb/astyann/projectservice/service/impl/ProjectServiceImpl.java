@@ -8,6 +8,8 @@ import afb.astyann.projectservice.domain.ProjectStatus;
 import afb.astyann.projectservice.dto.*;
 import afb.astyann.projectservice.exception.InvalidFileFormatException;
 import afb.astyann.projectservice.exception.ProjectNotFoundException;
+import afb.astyann.projectservice.pcsf.service.DocumentExtractionService;
+import afb.astyann.projectservice.pcsf.service.PcsfInitialiserService;
 import afb.astyann.projectservice.repository.GuidedQuestionRepository;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import afb.astyann.projectservice.service.IProjectService;
@@ -51,6 +53,8 @@ public class ProjectServiceImpl implements IProjectService {
     private final UMLServiceClient            umlClient;
     private final CodeGenServiceClient        codeGenClient;
     private final DeploymentServiceClient     deploymentClient;
+    private final PcsfInitialiserService      pcsfInitialiserService;
+    private final DocumentExtractionService   documentExtractionService;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -71,30 +75,35 @@ public class ProjectServiceImpl implements IProjectService {
         Project saved = projectRepository.save(project);
         log.debug("Project saved: id={}", saved.getProjectId());
 
-        // Call AI service to analyze the document
+        // Stage 1: initialise blank PCSF with hardcoded values and derived names
+        pcsfInitialiserService.initialise(saved);
+
+        // Call AI service to parse the document and get extracted text
         ProjectAnalysisResponseDTO analysis = callClient("ai-analyze",
                 () -> aiServiceClient.analyzeProjectInformation(saved.getProjectId(), document));
 
         if (analysis != null) {
+            // Persist the AI-generated summary as legacy project context
             saved.setProjectContext(analysis.getExtractedContext());
-            if (analysis.isSufficient()) {
-                saved.setStatus(ProjectStatus.COMPLETED);
-            }
-            // Save any guided questions the AI generated
-            if (analysis.getGuidedQuestions() != null) {
-                analysis.getGuidedQuestions().forEach(q ->
-                        guidedQuestionRepository.save(GuidedQuestion.builder()
-                                .projectId(saved.getProjectId())
-                                .question(q)
-                                .build()));
-            }
             projectRepository.save(saved);
+
+            // Stage 2: run PCSF extraction and completeness analysis
+            // (triggers question generation or AI inference depending on completeness)
+            documentExtractionService.extract(saved, analysis.getDocumentText());
+        } else {
+            log.warn("AI analysis returned null for project={} — running completeness without extraction",
+                    saved.getProjectId());
+            // Re-fetch to get the PCSF JSON that initialiser saved
+            Project refreshed = projectRepository.findByProjectId(saved.getProjectId())
+                    .orElse(saved);
+            documentExtractionService.extract(refreshed, null);
         }
 
-        return toDTO(saved);
+        // Re-fetch to return the latest saved state
+        return toDTO(projectRepository.findByProjectId(saved.getProjectId()).orElse(saved));
     }
 
-    // ── Guided Questions ──────────────────────────────────────────────────────
+    // ── Guided Questions (legacy Sprint 2 — kept for backward compatibility) ──
 
     @Override
     @Transactional(readOnly = true)
@@ -116,7 +125,6 @@ public class ProjectServiceImpl implements IProjectService {
 
         List<GuidedQuestion> questions = guidedQuestionRepository.findByProjectId(projectId);
 
-        // Save answers to the GuidedQuestion entities
         if (dto.getAnswers() != null) {
             dto.getAnswers().forEach(item -> questions.stream()
                     .filter(q -> q.getGqId().equals(item.getGqId()))
@@ -127,7 +135,6 @@ public class ProjectServiceImpl implements IProjectService {
                     }));
         }
 
-        // Build Q&A list to send to AI service for merging
         List<AIServiceClient.MergeRequestBody.AnswerItem> answerItems = questions.stream()
                 .filter(q -> q.getAnswer() != null)
                 .map(q -> new AIServiceClient.MergeRequestBody.AnswerItem(q.getQuestion(), q.getAnswer()))
@@ -190,7 +197,7 @@ public class ProjectServiceImpl implements IProjectService {
         return toDTO(findOrThrow(projectId));
     }
 
-    // ── Trigger Generation ───────────────────────────────────────────────────
+    // ── Trigger Generation ────────────────────────────────────────────────────
 
     @Override
     public void triggerGeneration(UUID projectId, GenerationType type) {

@@ -13,4 +13,5 @@ public class ProviderConfig {
     @Builder.Default
     private double topP = 1.0;
     private String systemPrompt;
+    private String modelOverride;
 }

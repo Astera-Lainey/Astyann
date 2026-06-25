@@ -6,6 +6,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +28,10 @@ public class OllamaProvider implements AIProvider {
 
     @Override
     public String complete(String prompt, ProviderConfig config) {
-        log.debug("Calling Ollama model={}", modelName);
+        String effectiveModel = (config.getModelOverride() != null && !config.getModelOverride().isBlank())
+                ? config.getModelOverride()
+                : modelName;
+        log.debug("Calling Ollama model={}", effectiveModel);
 
         List<Message> messages = new ArrayList<>();
         if (config.getSystemPrompt() != null && !config.getSystemPrompt().isBlank()) {
@@ -35,7 +39,11 @@ public class OllamaProvider implements AIProvider {
         }
         messages.add(new UserMessage(prompt));
 
-        return chatModel.call(new Prompt(messages))
+        Prompt p = effectiveModel.equals(modelName)
+                ? new Prompt(messages)
+                : new Prompt(messages, OllamaChatOptions.builder().model(effectiveModel).build());
+
+        return chatModel.call(p)
                 .getResult()
                 .getOutput()
                 .getText();

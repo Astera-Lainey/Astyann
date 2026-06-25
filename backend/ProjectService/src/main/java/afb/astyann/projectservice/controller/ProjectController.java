@@ -150,6 +150,20 @@ public class ProjectController {
     }
 
     private UUID parseUserId(String rawUserId) {
-        return UUID.fromString(rawUserId);
+        if (rawUserId == null || rawUserId.isBlank()) {
+            throw new IllegalArgumentException("X-User-Id header is missing");
+        }
+        String s = rawUserId.trim();
+        // Strip 0x prefix if present
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        // Insert dashes if raw 32-char hex (no dashes)
+        if (s.length() == 32 && !s.contains("-")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-"
+                    + s.substring(12, 16) + "-" + s.substring(16, 20) + "-"
+                    + s.substring(20);
+        }
+        return UUID.fromString(s);
     }
 }

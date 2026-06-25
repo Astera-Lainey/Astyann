@@ -49,6 +49,19 @@ public class Project {
     @Column(name = "project_context", columnDefinition = "MEDIUMTEXT")
     private String projectContext;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pcsf_status", nullable = false)
+    @Builder.Default
+    private PcsfStatus pcsfStatus = PcsfStatus.DRAFT;
+
+    @Lob
+    @Column(name = "pcsf_json", columnDefinition = "LONGTEXT")
+    private String pcsfJson;
+
+    @Column(name = "pending_questions_count")
+    @Builder.Default
+    private Integer pendingQuestionsCount = 0;
+
     @PrePersist
     protected void onCreate() {
         this.creationDate = LocalDateTime.now();
