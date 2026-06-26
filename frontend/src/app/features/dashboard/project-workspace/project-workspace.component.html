@@ -1,3 +1,88 @@
+@if (showQuestionsModal() && questions.length > 0) {
+  <div class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-header__title">A few questions about your project</span>
+        <span class="modal-header__count">{{ currentIndex + 1 }} / {{ questions.length }}</span>
+      </div>
+      <div class="modal-progress">
+        <div class="modal-progress__bar" [style.width.%]="progressPercent"></div>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-question">{{ currentQuestion.question }}</p>
+
+        @if (currentQuestion.type === 'TEXT') {
+          <input type="text" class="modal-input"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onInput($event)" />
+        } @else if (currentQuestion.type === 'TEXTAREA') {
+          <textarea class="modal-input modal-input--textarea" rows="4"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onTextareaInput($event)"></textarea>
+        } @else if (currentQuestion.type === 'YES_NO') {
+          <div class="modal-yesno">
+            <button type="button" class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'No'"
+              (click)="setAnswer('No')">No</button>
+            <button type="button" class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'Yes'"
+              (click)="setAnswer('Yes')">Yes</button>
+          </div>
+        } @else if (currentQuestion.type === 'SINGLE_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input type="radio" class="modal-select-item__input"
+                  name="q_{{ currentQuestion.id }}"
+                  [value]="option"
+                  [checked]="currentAnswer === option"
+                  (change)="setAnswer(option)" />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        } @else if (currentQuestion.type === 'MULTI_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input type="checkbox" class="modal-select-item__input"
+                  [checked]="isMultiSelected(option)"
+                  (change)="toggleMultiSelect(option)" />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        }
+
+        @if (currentQuestion.placeholder && currentQuestion.type !== 'TEXT' && currentQuestion.type !== 'TEXTAREA') {
+          <p class="modal-hint">{{ currentQuestion.placeholder }}</p>
+        }
+      </div>
+
+      @if (submitError()) {
+        <p class="modal-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="modal-footer">
+        <button type="button" class="modal-footer__btn modal-footer__btn--back"
+          [disabled]="isFirst" (click)="goBack()">← Back</button>
+
+        @if (isLast) {
+          <button type="button" class="modal-footer__btn modal-footer__btn--submit"
+            [disabled]="!currentAnswer || submittingAnswers()"
+            (click)="submitAnswers()">{{ submittingAnswers() ? 'Submitting…' : 'Submit' }}</button>
+        } @else {
+          <button type="button" class="modal-footer__btn modal-footer__btn--next"
+            [disabled]="!currentAnswer" (click)="goNext()">Next →</button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
 <div class="workspace">
   @if (loadError()) {
     <p class="workspace__error" role="alert">{{ loadError() }}</p>

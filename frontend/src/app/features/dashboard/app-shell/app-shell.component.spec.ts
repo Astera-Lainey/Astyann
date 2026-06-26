@@ -22,21 +22,15 @@ describe('AppShellComponent', () => {
     return { component, fixture };
   }
 
-  it('loads a short, recently-updated project list for the sidebar shortcuts', async () => {
+  const searchUrl = `${environment.apiBaseUrl}/projects/search`;
+  const emptyFlush = { status: 200, message: 'OK', data: [] };
+
+  it('loads the project list for the sidebar via GET /projects/search', async () => {
     await setup();
     const httpMock = TestBed.inject(HttpTestingController);
 
-    const req = httpMock.expectOne(
-      (r) =>
-        r.url === `${environment.apiBaseUrl}/projects` &&
-        r.params.get('size') === '6' &&
-        r.params.get('sort') === 'updatedAt,desc',
-    );
-    req.flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 6 },
-    });
+    const req = httpMock.expectOne((r) => r.url === searchUrl && r.method === 'GET');
+    req.flush(emptyFlush);
   });
 
   it('calls AuthService.logout() and navigates to /login', async () => {
@@ -45,11 +39,7 @@ describe('AppShellComponent', () => {
     const router = TestBed.inject(Router);
     const navigateSpy = spyOn(router, 'navigate');
 
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 6 },
-    });
+    httpMock.expectOne(searchUrl).flush(emptyFlush);
 
     component.logout();
 
@@ -62,11 +52,7 @@ describe('AppShellComponent', () => {
   it('does not show the workspace section when not viewing a project', async () => {
     const { component } = await setup();
     const httpMock = TestBed.inject(HttpTestingController);
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 6 },
-    });
+    httpMock.expectOne(searchUrl).flush(emptyFlush);
 
     expect(component.isInProjectWorkspace()).toBe(false);
   });
@@ -86,11 +72,7 @@ describe('AppShellComponent', () => {
     fixture.detectChanges();
 
     const httpMock = TestBed.inject(HttpTestingController);
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 6 },
-    });
+    httpMock.expectOne(searchUrl).flush(emptyFlush);
 
     const router = TestBed.inject(Router);
     await router.navigateByUrl('/app/projects/p1/requirements');

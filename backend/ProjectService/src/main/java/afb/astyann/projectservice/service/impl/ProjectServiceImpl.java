@@ -13,6 +13,7 @@ import afb.astyann.projectservice.pcsf.service.PcsfInitialiserService;
 import afb.astyann.projectservice.repository.GuidedQuestionRepository;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import afb.astyann.projectservice.service.IProjectService;
+import afb.astyann.projectservice.service.ProjectBackgroundService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +56,7 @@ public class ProjectServiceImpl implements IProjectService {
     private final DeploymentServiceClient     deploymentClient;
     private final PcsfInitialiserService      pcsfInitialiserService;
     private final DocumentExtractionService   documentExtractionService;
+    private final ProjectBackgroundService    projectBackgroundService;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -63,7 +65,18 @@ public class ProjectServiceImpl implements IProjectService {
         log.info("Creating project for user={} title={}", userId, dto.getTitle());
 
         validateDocument(document);
+
+        // Store document to disk first, then read the bytes back.
+        // The original MultipartFile InputStream is consumed by transferTo(), so
+        // we read from the saved file to pass safe bytes to the background thread.
         String docPath = storeDocument(document);
+
+        byte[] docBytes;
+        try {
+            docBytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(docPath));
+        } catch (java.io.IOException ex) {
+            throw new RuntimeException("Could not read stored document", ex);
+        }
 
         Project project = Project.builder()
                 .userId(userId)
@@ -75,32 +88,20 @@ public class ProjectServiceImpl implements IProjectService {
         Project saved = projectRepository.save(project);
         log.debug("Project saved: id={}", saved.getProjectId());
 
-        // Stage 1: initialise blank PCSF with hardcoded values and derived names
+        // Initialise blank PCSF with hardcoded values and derived names.
         pcsfInitialiserService.initialise(saved);
 
-        // Call AI service to parse the document and get extracted text
-        ProjectAnalysisResponseDTO analysis = callClient("ai-analyze",
-                () -> aiServiceClient.analyzeProjectInformation(saved.getProjectId(), document));
+        // Fire AI processing in the background.
+        // This returns immediately — it does NOT block the HTTP response.
+        projectBackgroundService.processDocumentAsync(
+                saved.getProjectId(),
+                docBytes,
+                document.getOriginalFilename(),
+                document.getContentType());
 
-        if (analysis != null) {
-            // Persist the AI-generated summary as legacy project context
-            saved.setProjectContext(analysis.getExtractedContext());
-            projectRepository.save(saved);
-
-            // Stage 2: run PCSF extraction and completeness analysis
-            // (triggers question generation or AI inference depending on completeness)
-            documentExtractionService.extract(saved, analysis.getDocumentText());
-        } else {
-            log.warn("AI analysis returned null for project={} — running completeness without extraction",
-                    saved.getProjectId());
-            // Re-fetch to get the PCSF JSON that initialiser saved
-            Project refreshed = projectRepository.findByProjectId(saved.getProjectId())
-                    .orElse(saved);
-            documentExtractionService.extract(refreshed, null);
-        }
-
-        // Re-fetch to return the latest saved state
-        return toDTO(projectRepository.findByProjectId(saved.getProjectId()).orElse(saved));
+        // Return 201 immediately. Angular will poll the status endpoint
+        // to know when background processing finishes.
+        return toDTO(saved);
     }
 
     // ── Guided Questions (legacy Sprint 2 — kept for backward compatibility) ──

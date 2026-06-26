@@ -4,6 +4,7 @@ import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angu
 import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs/operators';
 import { ProjectService } from '../../../core/services/project.service';
+import { ToastService } from '../../../core/services/toast.service';
 import {
   ClarificationQuestion,
   GuidedQuestion,
@@ -29,6 +30,7 @@ export class NewProjectComponent {
   private readonly fb = inject(FormBuilder);
   private readonly projectService = inject(ProjectService);
   private readonly router = inject(Router);
+  private readonly toastService = inject(ToastService);
 
   readonly step = signal<'brief' | 'questions'>('brief');
   readonly isSubmitting = signal(false);
@@ -71,7 +73,7 @@ export class NewProjectComponent {
     });
   }
 
-  // ── Q&A Modal ──
+  // ── Q&A Modal (PCSF clarification questions) ──
   readonly showQuestionsModal = signal(false);
   readonly submittingAnswers = signal(false);
   readonly submitError = signal<string | null>(null);
@@ -211,28 +213,16 @@ export class NewProjectComponent {
     if (!this.selectedFile()) { this.fileError.set('Please attach a specification document to continue.'); return; }
     this.isSubmitting.set(true);
     const { title, description } = this.briefForm.getRawValue();
+
     this.projectService.create({ title, description, specificationFile: this.selectedFile()! }).subscribe({
-      next: (data) => {
+      next: (project) => {
         this.isSubmitting.set(false);
-        this.projectId.set(data.projectId);
-
-        if (data.pcsfStatus === 'DRAFT' && data.pendingQuestionsCount && data.pendingQuestionsCount > 0) {
-          this.openQuestionsModal(data.projectId);
-          return;
-        }
-
-        this.guidedQuestions.set(data.guidedQuestions);
-        this.questionControls = Object.fromEntries(
-          data.guidedQuestions.map((q) => [
-            q.gqId,
-            new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-          ]),
-        );
-        this.step.set('questions');
+        this.toastService.show('Your document is being analysed. This may take a few minutes.');
+        this.router.navigate(['/app/projects', project.projectId, 'requirements']);
       },
       error: (error: HttpErrorResponse) => {
         this.isSubmitting.set(false);
-        if (error.status === 422) {
+        if (error.status === 400) {
           this.errorMessage.set('We could not read that document. Please check the file and try again.');
         } else {
           this.errorMessage.set('Something went wrong. Please try again later.');
@@ -273,6 +263,29 @@ export class NewProjectComponent {
       error: () => {
         this.showQuestionsModal.set(false);
         this.errorMessage.set('Failed to load questions. Please try again.');
+      },
+    });
+  }
+
+  private loadGuidedQuestions(projectId: string): void {
+    this.projectService.getGuidedQuestions(projectId).subscribe({
+      next: (questions) => {
+        if (questions.length > 0) {
+          this.guidedQuestions.set(questions);
+          this.questionControls = Object.fromEntries(
+            questions.map((q) => [
+              q.gqId,
+              new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+            ]),
+          );
+          this.step.set('questions');
+        } else {
+          this.router.navigate(['/app/projects', projectId, 'requirements']);
+        }
+      },
+      error: () => {
+        // No guided questions available — navigate directly to workspace.
+        this.router.navigate(['/app/projects', projectId, 'requirements']);
       },
     });
   }

@@ -31,13 +31,12 @@ describe('ProjectWorkspaceComponent', () => {
 
   const mockProject = {
     projectId: 'p1',
+    userId: 'u1',
     title: 'Treasury Ledger',
     description: 'Core banking treasury system.',
     status: 'ANALYZING',
-    createdAt: '2026-06-01T00:00:00Z',
-    updatedAt: '2026-06-20T00:00:00Z',
-    docPath: '/storage/p1/spec.pdf',
-    docUrl: 'https://cdn.astyann.com/p1/spec.pdf',
+    creationDate: '2026-06-01T00:00:00',
+    updatedDate: '2026-06-20T00:00:00',
   };
 
   it('requests GET /projects/{id} using the id route param', async () => {

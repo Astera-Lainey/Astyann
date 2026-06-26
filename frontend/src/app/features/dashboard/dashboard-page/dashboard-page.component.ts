@@ -2,37 +2,18 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@a
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ProjectService } from '../../../core/services/project.service';
-import { Page, ProjectSummary } from '../../../core/models/project.models';
+import { ProjectSummary } from '../../../core/models/project.models';
 import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 
 /**
  * Dashboard page — converted from `app.index.tsx`.
  *
- * Renders inside `AppShellComponent`'s `<router-outlet>`. Loads the real
- * project list via `ProjectService.list()` (GET /projects, API-PROJ-02) and
+ * Renders inside `AppShellComponent`'s `<router-outlet>`. Loads the authenticated
+ * user's project list via `ProjectService.search()` (GET /projects/search) and
  * derives the stat cards from it.
  *
- * Scope notes (per project decision, since the contract only ever
- * documents `status: "ANALYZING"` on a Project and has no global
- * cross-project activity endpoint):
- *  - The "Deployed / In Progress / Validating" stat buckets from the
- *    original mockup are NOT reproduced, since those status values aren't
- *    confirmed anywhere in the API Contract. Instead this shows "Total
- *    Projects" (always derivable) and a generic "Analyzing" bucket (the
- *    one status value the contract does confirm). Extend
- *    `core/models/project.models.ts`'s `ProjectStatus` and this component
- *    together once the backend's full status enum is confirmed.
- *  - Project list cards show only contract-confirmed fields (title,
- *    description, status, updatedAt) — no version badge, no colored
- *    thumbnail status (a neutral initial-letter avatar is used purely as a
- *    frontend visual aid, not backend data).
- *  - The "Recent Activity" panel from the mockup is omitted entirely — the
- *    API Contract has no endpoint for a cross-project activity feed
- *    (`GET /projects/{projectId}/versions`, API-VER-01, is scoped to a
- *    single project).
- *  - The welcome banner's "Developer" name is static copy, same as in the
- *    original mockup — the contract's `LoginResponseData` has no display
- *    name field to personalize it with (only `userId`/`email`).
+ * Project status values: ANALYZING | GENERATING | COMPLETED (mirrors backend enum).
+ * Date fields use `creationDate` / `updatedDate` (mirrors backend ProjectDTO).
  */
 @Component({
   selector: 'app-dashboard-page',
@@ -55,9 +36,9 @@ export class DashboardPageComponent implements OnInit {
   constructor(private readonly projectService: ProjectService) {}
 
   ngOnInit(): void {
-    this.projectService.list({ size: 20, sort: 'updatedAt,desc' }).subscribe({
-      next: (page: Page<ProjectSummary>) => {
-        this.projects.set(page.content);
+    this.projectService.search().subscribe({
+      next: (projects: ProjectSummary[]) => {
+        this.projects.set(projects);
         this.isLoading.set(false);
       },
       error: () => {

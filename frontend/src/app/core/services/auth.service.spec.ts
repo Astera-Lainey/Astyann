@@ -10,7 +10,7 @@ describe('AuthService', () => {
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), AuthService],
     });
@@ -20,21 +20,21 @@ describe('AuthService', () => {
 
   afterEach(() => {
     httpMock.verify();
-    localStorage.clear();
+    sessionStorage.clear();
   });
 
-  it('starts unauthenticated when no session is stored', () => {
+  it('starts unauthenticated before login', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(service.currentUser()).toBeNull();
+    expect(service.getAccessToken()).toBeNull();
   });
 
-  it('persists the session and flips isAuthenticated() to true on successful login', () => {
+  it('sets auth state and exposes the token after a successful login', () => {
     const mockEnvelope: ApiEnvelope<LoginResponseData> = {
       status: 200,
       message: 'Login successful.',
       data: {
         accessToken: 'fake-access-token',
-        refreshToken: 'fake-refresh-token',
         userId: 'u1',
         email: 'dev@astyann.com',
       },
@@ -49,19 +49,13 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(true);
     expect(service.currentUser()?.email).toBe('dev@astyann.com');
     expect(service.getAccessToken()).toBe('fake-access-token');
-    expect(service.getRefreshToken()).toBe('fake-refresh-token');
   });
 
-  it('clears the session on logout', () => {
+  it('clears auth state on logout', () => {
     const mockEnvelope: ApiEnvelope<LoginResponseData> = {
       status: 200,
       message: 'Login successful.',
-      data: {
-        accessToken: 'fake-access-token',
-        refreshToken: 'fake-refresh-token',
-        userId: 'u1',
-        email: 'dev@astyann.com',
-      },
+      data: { accessToken: 'fake-access-token', userId: 'u1', email: 'dev@astyann.com' },
     };
 
     service.login({ email: 'dev@astyann.com', password: 'Sup3rSecret!' }).subscribe();
@@ -71,7 +65,26 @@ describe('AuthService', () => {
     service.logout().subscribe();
     httpMock
       .expectOne(`${environment.apiBaseUrl}/auth/logout`)
-      .flush({ status: 200, message: 'Logged out successfully.', data: null });
+      .flush({ status: 200, message: 'Logged out.', data: null });
+
+    expect(service.isAuthenticated()).toBe(false);
+    expect(service.getAccessToken()).toBeNull();
+  });
+
+  it('clears auth state even when the logout call fails', () => {
+    const mockEnvelope: ApiEnvelope<LoginResponseData> = {
+      status: 200,
+      message: 'Login successful.',
+      data: { accessToken: 'fake-access-token', userId: 'u1', email: 'dev@astyann.com' },
+    };
+
+    service.login({ email: 'dev@astyann.com', password: 'Sup3rSecret!' }).subscribe();
+    httpMock.expectOne(`${environment.apiBaseUrl}/auth/login`).flush(mockEnvelope);
+
+    service.logout().subscribe();
+    httpMock
+      .expectOne(`${environment.apiBaseUrl}/auth/logout`)
+      .flush('Server error', { status: 500, statusText: 'Internal Server Error' });
 
     expect(service.isAuthenticated()).toBe(false);
     expect(service.getAccessToken()).toBeNull();
@@ -92,22 +105,23 @@ describe('AuthService', () => {
     });
   });
 
-  it('exchanges a refresh token for a new access token', () => {
-    localStorage.setItem('astyann_refresh_token', 'fake-refresh-token');
+  it('requests a password reset email against /auth/reset-password', () => {
+    service.requestPasswordReset({ email: 'dev@astyann.com' }).subscribe();
 
-    service.refreshAccessToken().subscribe((data) => {
-      expect(data.accessToken).toBe('new-access-token');
-    });
-
-    const req = httpMock.expectOne(`${environment.apiBaseUrl}/auth/refresh-token`);
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/auth/reset-password`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ refreshToken: 'fake-refresh-token' });
-    req.flush({
-      status: 200,
-      message: 'Token renewed.',
-      data: { accessToken: 'new-access-token', expiresIn: 3600 },
-    });
+    expect(req.request.body).toEqual({ email: 'dev@astyann.com' });
+    req.flush({ status: 200, message: 'If that email exists a reset link was sent.', data: null });
+  });
 
-    expect(service.getAccessToken()).toBe('new-access-token');
+  it('confirms a password reset against /auth/reset-password/confirm', () => {
+    service
+      .confirmPasswordReset({ token: 'tok-abc', newPassword: 'NewP@ss1!' })
+      .subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/auth/reset-password/confirm`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ token: 'tok-abc', newPassword: 'NewP@ss1!' });
+    req.flush({ status: 200, message: 'Password reset successfully.', data: null });
   });
 });

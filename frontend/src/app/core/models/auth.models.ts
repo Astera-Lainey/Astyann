@@ -121,13 +121,10 @@ export interface ConfirmPasswordResetRequest {
 // `data` is `null` on success.
 
 // ---------------------------------------------------------------------
-// Session / local auth state
+// In-memory auth state
 // ---------------------------------------------------------------------
 
-/**
- * What the frontend actually persists locally after a successful login.
- * Built from `LoginResponseData` — see `AuthService.persistSession`.
- */
+/** Subset of LoginResponseData held in AuthService signals after login. */
 export interface AuthenticatedUser {
   id: string;
   email: string;

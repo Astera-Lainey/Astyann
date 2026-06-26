@@ -4,5 +4,6 @@ public enum PcsfStatus {
     DRAFT,
     INFERRING,
     UNDER_REVIEW,
-    VALIDATED
+    VALIDATED,
+    FAILED
 }

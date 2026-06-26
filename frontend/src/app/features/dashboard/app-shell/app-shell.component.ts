@@ -3,7 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProjectService } from '../../../core/services/project.service';
-import { Page, ProjectSummary } from '../../../core/models/project.models';
+import { ProjectSummary } from '../../../core/models/project.models';
 
 /** Mirrors `WorkspaceSection` in project-workspace.component.ts — kept local to avoid a lazy-chunk cross-import. */
 const WORKSPACE_SECTIONS: { section: string; label: string }[] = [
@@ -88,9 +88,9 @@ export class AppShellComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.projectService.list({ size: 50, sort: 'updatedAt,desc' }).subscribe({
-      next: (page: Page<ProjectSummary>) => {
-        this.projects.set(page.content);
+    this.projectService.search().subscribe({
+      next: (projects: ProjectSummary[]) => {
+        this.projects.set(projects);
         this.isLoadingProjects.set(false);
       },
       error: () => {
