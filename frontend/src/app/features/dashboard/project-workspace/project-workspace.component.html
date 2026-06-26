@@ -1,82 +1,87 @@
 @if (showQuestionsModal() && questions.length > 0) {
-  <div class="modal-overlay">
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-dialog">
-      <div class="modal-header">
-        <span class="modal-header__title">A few questions about your project</span>
-        <span class="modal-header__count">{{ currentIndex + 1 }} / {{ questions.length }}</span>
-      </div>
-      <div class="modal-progress">
-        <div class="modal-progress__bar" [style.width.%]="progressPercent"></div>
+      <div class="modal__step">Step {{ currentIndex + 1 }} <span class="modal__step-of">of</span> {{ questions.length }}</div>
+
+      <div class="modal__progress" role="progressbar"
+        [attr.aria-valuenow]="progressPercent" aria-valuemin="0" aria-valuemax="100">
+        <div class="modal__progress-bar" [style.width.%]="progressPercent"></div>
       </div>
 
-      <div class="modal-body">
-        <p class="modal-question">{{ currentQuestion.question }}</p>
+      <div class="modal__body">
+        <p id="modal-title" class="modal__question">{{ currentQuestion.question }}</p>
 
         @if (currentQuestion.type === 'TEXT') {
-          <input type="text" class="modal-input"
+          <input type="text" class="modal__input"
             [placeholder]="currentQuestion.placeholder ?? ''"
             [value]="currentAnswer"
             (input)="onInput($event)" />
         } @else if (currentQuestion.type === 'TEXTAREA') {
-          <textarea class="modal-input modal-input--textarea" rows="4"
+          <textarea class="modal__input modal__input--textarea" rows="5"
             [placeholder]="currentQuestion.placeholder ?? ''"
             [value]="currentAnswer"
             (input)="onTextareaInput($event)"></textarea>
         } @else if (currentQuestion.type === 'YES_NO') {
-          <div class="modal-yesno">
-            <button type="button" class="modal-yesno__btn"
-              [class.modal-yesno__btn--active]="currentAnswer === 'No'"
+          <div class="modal__yesno">
+            <button type="button" class="modal__yesno-btn"
+              [class.modal__yesno-btn--active]="currentAnswer === 'No'"
               (click)="setAnswer('No')">No</button>
-            <button type="button" class="modal-yesno__btn"
-              [class.modal-yesno__btn--active]="currentAnswer === 'Yes'"
+            <button type="button" class="modal__yesno-btn"
+              [class.modal__yesno-btn--active]="currentAnswer === 'Yes'"
               (click)="setAnswer('Yes')">Yes</button>
           </div>
         } @else if (currentQuestion.type === 'SINGLE_SELECT') {
-          <div class="modal-select-group">
+          <div class="modal__select-group">
             @for (option of currentQuestion.options; track option) {
-              <label class="modal-select-item">
-                <input type="radio" class="modal-select-item__input"
+              <label class="modal__select-item">
+                <input type="radio" class="modal__select-item__input"
                   name="q_{{ currentQuestion.id }}"
                   [value]="option"
                   [checked]="currentAnswer === option"
                   (change)="setAnswer(option)" />
-                <span class="modal-select-item__label">{{ option }}</span>
+                <span class="modal__select-item__label">{{ option }}</span>
               </label>
             }
           </div>
         } @else if (currentQuestion.type === 'MULTI_SELECT') {
-          <div class="modal-select-group">
+          <div class="modal__select-group">
             @for (option of currentQuestion.options; track option) {
-              <label class="modal-select-item">
-                <input type="checkbox" class="modal-select-item__input"
+              <label class="modal__select-item">
+                <input type="checkbox" class="modal__select-item__input"
                   [checked]="isMultiSelected(option)"
                   (change)="toggleMultiSelect(option)" />
-                <span class="modal-select-item__label">{{ option }}</span>
+                <span class="modal__select-item__label">{{ option }}</span>
               </label>
             }
           </div>
         }
 
         @if (currentQuestion.placeholder && currentQuestion.type !== 'TEXT' && currentQuestion.type !== 'TEXTAREA') {
-          <p class="modal-hint">{{ currentQuestion.placeholder }}</p>
+          <p class="modal__hint">{{ currentQuestion.placeholder }}</p>
+        }
+
+        @if (submitError()) {
+          <p class="modal__error" role="alert">{{ submitError() }}</p>
         }
       </div>
 
-      @if (submitError()) {
-        <p class="modal-error" role="alert">{{ submitError() }}</p>
-      }
-
-      <div class="modal-footer">
-        <button type="button" class="modal-footer__btn modal-footer__btn--back"
-          [disabled]="isFirst" (click)="goBack()">← Back</button>
+      <div class="modal__actions">
+        <button type="button" class="modal__btn modal__btn--secondary"
+          [disabled]="isFirst" (click)="goBack()">Back</button>
 
         @if (isLast) {
-          <button type="button" class="modal-footer__btn modal-footer__btn--submit"
+          <button type="button" class="modal__btn modal__btn--primary"
             [disabled]="!currentAnswer || submittingAnswers()"
-            (click)="submitAnswers()">{{ submittingAnswers() ? 'Submitting…' : 'Submit' }}</button>
+            (click)="submitAnswers()">
+            @if (submittingAnswers()) {
+              <span class="modal__btn-spinner"></span> Submitting…
+            } @else {
+              Submit
+            }
+          </button>
         } @else {
-          <button type="button" class="modal-footer__btn modal-footer__btn--next"
-            [disabled]="!currentAnswer" (click)="goNext()">Next →</button>
+          <button type="button" class="modal__btn modal__btn--primary"
+            [disabled]="!currentAnswer" (click)="goNext()">Continue</button>
         }
       </div>
     </div>
@@ -94,17 +99,24 @@
       <span class="workspace__breadcrumb-sep">/</span>
       <span class="workspace__breadcrumb-current">{{ project.title }}</span>
       <span class="workspace__breadcrumb-sep">/</span>
-      <span class="workspace__breadcrumb-current">{{ currentSectionLabel }}</span>
+      <span class="workspace__breadcrumb-current">{{ breadcrumbSectionLabel }}</span>
     </div>
 
     <nav class="workspace__tabs">
       @for (s of sectionOrder; track s) {
-        <a [routerLink]="['/app/projects', project.projectId, s]"
-          routerLinkActive="workspace__tab--active"
-          class="workspace__tab"
-        >
-          {{ sectionLabels[s] }}
-        </a>
+        @if (s === 'requirements') {
+          <a [routerLink]="['/app/projects', project.projectId, s]"
+            class="workspace__tab"
+            [class.workspace__tab--active]="section() === 'review'">
+            {{ sectionLabels[s] }}
+          </a>
+        } @else {
+          <a [routerLink]="['/app/projects', project.projectId, s]"
+            routerLinkActive="workspace__tab--active"
+            class="workspace__tab">
+            {{ sectionLabels[s] }}
+          </a>
+        }
       }
     </nav>
 
@@ -124,6 +136,7 @@
           </div>
         } @else {
           <div class="workspace__placeholder">
+            <div class="workspace__spinner"></div>
             <p class="workspace__placeholder-text">
               @if (pcsfStatus() === 'INFERRING') {
                 Running AI analysis on your project…

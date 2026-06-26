@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { Router } from '@angular/router';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { finalize } from 'rxjs/operators';
 import { ProjectService } from '../../../core/services/project.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
@@ -48,29 +47,11 @@ export class NewProjectComponent {
   questionControls: Record<string, FormControl<string>> = {};
 
   // ── Template download ──
-  readonly isDownloading = signal(false);
-
   downloadTemplate(): void {
-    this.isDownloading.set(true);
-    this.projectService.downloadTemplate().pipe(
-      finalize(() => this.isDownloading.set(false)),
-    ).subscribe({
-      next: (blob) => {
-        if (blob.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          this.errorMessage.set('The template file is corrupted or has an unexpected format.');
-          return;
-        }
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'AstyannTemplate.docx';
-        a.click();
-        window.URL.revokeObjectURL(url);
-      },
-      error: () => {
-        this.errorMessage.set('Failed to download template. Please try again.');
-      },
-    });
+    const a = document.createElement('a');
+    a.href = '/assets/AstyannTemplate.docx';
+    a.download = 'AstyannTemplate.docx';
+    a.click();
   }
 
   // ── Q&A Modal (PCSF clarification questions) ──

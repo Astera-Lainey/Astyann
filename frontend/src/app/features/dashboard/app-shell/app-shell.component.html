@@ -60,13 +60,29 @@
         <ul class="shell__project-list">
           @for (item of workspaceSections; track item.section) {
             <li>
-              <a
-                [routerLink]="['/app/projects', activeProjectIdValue(), item.section]"
-                routerLinkActive="shell__project-link--active"
-                class="shell__project-link"
-              >
-                {{ item.label }}
-              </a>
+              @if (item.section === 'requirements') {
+                <a
+                  [routerLink]="['/app/projects', activeProjectIdValue(), item.section]"
+                  class="shell__workspace-link"
+                  [class.shell__workspace-link--active]="activeSection() === 'review'"
+                >
+                  <span class="shell__icon-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="item.icon" /></svg>
+                  </span>
+                  {{ item.label }}
+                </a>
+              } @else {
+                <a
+                  [routerLink]="['/app/projects', activeProjectIdValue(), item.section]"
+                  routerLinkActive="shell__workspace-link--active"
+                  class="shell__workspace-link"
+                >
+                  <span class="shell__icon-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="item.icon" /></svg>
+                  </span>
+                  {{ item.label }}
+                </a>
+              }
             </li>
           }
         </ul>
@@ -107,7 +123,7 @@
           <div class="shell__search-dropdown">
             @if (filteredProjects().length > 0) {
               @for (project of filteredProjects(); track project.projectId) {
-                <button type="button" class="shell__search-item" (click)="selectProject(project.projectId)">
+                <button type="button" class="shell__search-item" (mousedown)="selectProject(project.projectId)">
                   <span class="shell__search-item-title">{{ project.title }}</span>
                   <span class="shell__search-item-status">{{ project.status }}</span>
                 </button>
