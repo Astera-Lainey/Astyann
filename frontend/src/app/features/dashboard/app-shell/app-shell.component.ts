@@ -101,6 +101,10 @@ export class AppShellComponent implements OnInit {
       },
     });
 
+    this.projectService.projectDeleted$.subscribe((deletedId) => {
+      this.projects.update((list) => list.filter((p) => p.projectId !== deletedId));
+    });
+
     this.updateActiveProjectId(this.router.url);
     this.router
       .events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))

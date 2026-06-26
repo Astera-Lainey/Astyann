@@ -123,7 +123,7 @@
           <div class="shell__search-dropdown">
             @if (filteredProjects().length > 0) {
               @for (project of filteredProjects(); track project.projectId) {
-                <button type="button" class="shell__search-item" (click)="selectProject(project.projectId)">
+                <button type="button" class="shell__search-item" (mousedown)="selectProject(project.projectId)">
                   <span class="shell__search-item-title">{{ project.title }}</span>
                   <span class="shell__search-item-status">{{ project.status }}</span>
                 </button>

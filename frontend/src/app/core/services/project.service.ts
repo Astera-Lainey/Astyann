@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, Subject, map, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiEnvelope } from '../models/auth.models';
 import {
@@ -21,6 +21,9 @@ import {
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
   private readonly baseUrl = `${environment.apiBaseUrl}/projects`;
+
+  private readonly _projectDeleted = new Subject<string>();
+  readonly projectDeleted$ = this._projectDeleted.asObservable();
 
   constructor(private readonly http: HttpClient) {}
 
@@ -79,7 +82,12 @@ export class ProjectService {
    * Returns 204 No Content.
    */
   delete(projectId: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${projectId}`).pipe(map(() => undefined));
+    return this.http
+      .delete<void>(`${this.baseUrl}/${projectId}`)
+      .pipe(
+        map(() => undefined),
+        tap(() => this._projectDeleted.next(projectId)),
+      );
   }
 
   /**
