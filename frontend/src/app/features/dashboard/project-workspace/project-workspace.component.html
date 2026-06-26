@@ -1,11 +1,18 @@
 @if (showQuestionsModal() && questions.length > 0) {
-  <div class="modal-overlay">
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-dialog">
+      <div class="modal-dialog__gem"></div>
+
       <div class="modal-header">
-        <span class="modal-header__title">A few questions about your project</span>
-        <span class="modal-header__count">{{ currentIndex + 1 }} / {{ questions.length }}</span>
+        <div class="modal-header__info">
+          <span class="modal-header__eyebrow">Step {{ currentIndex + 1 }} of {{ questions.length }}</span>
+          <span id="modal-title" class="modal-header__title">A few questions about your project</span>
+        </div>
+        <span class="modal-header__badge">{{ currentIndex + 1 }}&thinsp;/&thinsp;{{ questions.length }}</span>
       </div>
-      <div class="modal-progress">
+
+      <div class="modal-progress" role="progressbar"
+        [attr.aria-valuenow]="progressPercent" aria-valuemin="0" aria-valuemax="100">
         <div class="modal-progress__bar" [style.width.%]="progressPercent"></div>
       </div>
 
@@ -18,7 +25,7 @@
             [value]="currentAnswer"
             (input)="onInput($event)" />
         } @else if (currentQuestion.type === 'TEXTAREA') {
-          <textarea class="modal-input modal-input--textarea" rows="4"
+          <textarea class="modal-input modal-input--textarea" rows="5"
             [placeholder]="currentQuestion.placeholder ?? ''"
             [value]="currentAnswer"
             (input)="onTextareaInput($event)"></textarea>
@@ -73,10 +80,16 @@
         @if (isLast) {
           <button type="button" class="modal-footer__btn modal-footer__btn--submit"
             [disabled]="!currentAnswer || submittingAnswers()"
-            (click)="submitAnswers()">{{ submittingAnswers() ? 'Submitting…' : 'Submit' }}</button>
+            (click)="submitAnswers()">
+            @if (submittingAnswers()) {
+              <span class="modal-btn-spinner"></span> Submitting…
+            } @else {
+              Submit answers
+            }
+          </button>
         } @else {
           <button type="button" class="modal-footer__btn modal-footer__btn--next"
-            [disabled]="!currentAnswer" (click)="goNext()">Next →</button>
+            [disabled]="!currentAnswer" (click)="goNext()">Continue →</button>
         }
       </div>
     </div>
@@ -124,6 +137,7 @@
           </div>
         } @else {
           <div class="workspace__placeholder">
+            <div class="workspace__spinner"></div>
             <p class="workspace__placeholder-text">
               @if (pcsfStatus() === 'INFERRING') {
                 Running AI analysis on your project…
