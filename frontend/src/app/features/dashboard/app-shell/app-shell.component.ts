@@ -52,8 +52,13 @@ export class AppShellComponent implements OnInit {
   readonly projects = signal<ProjectSummary[]>([]);
   readonly isLoadingProjects = signal(true);
 
-  /** First 6 projects displayed in the sidebar shortcut list. */
-  readonly recentProjects = computed(() => this.projects().slice(0, 6));
+  /** Last 5 created projects displayed in the sidebar shortcut list. */
+  readonly recentProjects = computed(() =>
+    this.projects()
+      .slice()
+      .sort((a, b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime())
+      .slice(0, 5),
+  );
 
   readonly searchQuery = signal('');
   readonly isSearchOpen = signal(false);

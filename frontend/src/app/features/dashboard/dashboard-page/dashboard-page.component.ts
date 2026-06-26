@@ -26,6 +26,10 @@ export class DashboardPageComponent implements OnInit {
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
 
+  readonly sortedProjects = computed(() =>
+    this.projects().slice().sort((a, b) => a.title.localeCompare(b.title)),
+  );
+
   readonly totalProjects = computed(() => this.projects().length);
   readonly analyzingCount = computed(
     () => this.projects().filter((p) => p.status === 'ANALYZING').length,

@@ -156,7 +156,7 @@
         </p>
       } @else {
         <ul class="dashboard__project-list">
-          @for (project of projects(); track project.projectId) {
+          @for (project of sortedProjects(); track project.projectId) {
             <li class="dashboard__project-item">
               <a [routerLink]="['/app/projects', project.projectId, 'requirements']"
                 class="dashboard__project-row">
