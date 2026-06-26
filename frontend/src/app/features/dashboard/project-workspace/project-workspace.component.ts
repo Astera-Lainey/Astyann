@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { Router, ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Subscription, interval, switchMap, takeWhile } from 'rxjs';
+import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
 import { ProjectService } from '../../../core/services/project.service';
-import { Project, ClarificationQuestion } from '../../../core/models/project.models';
+import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../../../core/models/project.models';
 import { ToastService } from '../../../core/services/toast.service';
 import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
 
@@ -13,7 +13,8 @@ export type WorkspaceSection =
   | 'documents'
   | 'code'
   | 'versions'
-  | 'deploy';
+  | 'deploy'
+  | 'review';
 
 const SECTION_LABELS: Record<WorkspaceSection, string> = {
   requirements: 'Requirements',
@@ -22,6 +23,7 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
   code: 'Code',
   versions: 'Version History',
   deploy: 'Deployment',
+  review: 'Review',
 };
 
 @Component({
@@ -42,6 +44,9 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   readonly sectionOrder: WorkspaceSection[] = [
     'requirements', 'design', 'documents', 'code', 'versions', 'deploy',
   ];
+
+  readonly pcsfStatus = signal<string>('DRAFT');
+  readonly pendingQuestionsCount = signal(0);
 
   private projectId: string | null = null;
   private statusPollSub: Subscription | null = null;
@@ -109,15 +114,20 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     const terminalStatuses = ['UNDER_REVIEW', 'VALIDATED', 'FAILED'];
 
     this.statusPollSub?.unsubscribe();
-    this.statusPollSub = interval(5000)
+    this.statusPollSub = timer(0, 5000)
       .pipe(
         switchMap(() => this.projectService.getPcsfStatus(pid)),
         takeWhile((response) => !terminalStatuses.includes(response.pcsfStatus), true),
       )
       .subscribe({
         next: (response) => {
-          if (response.pcsfStatus === 'UNDER_REVIEW') {
+          this.pcsfStatus.set(response.pcsfStatus);
+          this.pendingQuestionsCount.set(response.pendingQuestionsCount);
+
+          if (response.pendingQuestionsCount > 0 && !this.showQuestionsModal()) {
             this.openQuestionsModal();
+          } else if (response.pcsfStatus === 'UNDER_REVIEW' && this.section() !== 'review') {
+            this.router.navigate(['/app/projects', pid, 'review']);
           } else if (response.pcsfStatus === 'FAILED') {
             this.toastService.show(
               'Could not analyse your document. Please try again.',
@@ -199,10 +209,16 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
       })),
     };
     this.projectService.submitAnswers(pid, payload).subscribe({
-      next: () => {
+      next: (response: SubmitAnswersResponseData) => {
         this.submittingAnswers.set(false);
-        this.showQuestionsModal.set(false);
-        this.router.navigate(['/app/projects', pid, 'requirements']);
+        this.pcsfStatus.set(response.pcsfStatus);
+        this.pendingQuestionsCount.set(response.pendingQuestionsCount);
+
+        if (response.pendingQuestionsCount > 0) {
+          this.openQuestionsModal();
+        } else {
+          this.showQuestionsModal.set(false);
+        }
       },
       error: () => {
         this.submittingAnswers.set(false);

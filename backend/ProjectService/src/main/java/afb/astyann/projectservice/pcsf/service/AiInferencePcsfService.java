@@ -267,7 +267,7 @@ public class AiInferencePcsfService {
                 """.formatted(contextSummary, entitySummary, actorSummary, useCaseSummary);
 
         try {
-            String content = infer("llama3.1:8b",
+            String content = infer("qwen2.5:7b",
                     "You are a senior Java architect. Return ONLY valid JSON.", prompt);
             JsonNode root = objectMapper.readTree(cleanJson(content));
 
