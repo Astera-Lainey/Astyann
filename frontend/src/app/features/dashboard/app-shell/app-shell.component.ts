@@ -6,13 +6,13 @@ import { ProjectService } from '../../../core/services/project.service';
 import { ProjectSummary } from '../../../core/models/project.models';
 
 /** Mirrors `WorkspaceSection` in project-workspace.component.ts — kept local to avoid a lazy-chunk cross-import. */
-const WORKSPACE_SECTIONS: { section: string; label: string }[] = [
-  { section: 'requirements', label: 'Requirements' },
-  { section: 'design', label: 'System Design' },
-  { section: 'documents', label: 'Documentation' },
-  { section: 'code', label: 'Code' },
-  { section: 'deploy', label: 'Deployment' },
-  { section: 'versions', label: 'Version History' },
+const WORKSPACE_SECTIONS: { section: string; label: string; icon: string }[] = [
+  { section: 'requirements', label: 'Requirements',    icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m-6 9l2 2 4-4' },
+  { section: 'design',       label: 'System Design',   icon: 'M12 2L2 7l10 5 10-5-10-5M2 17l10 5 10-5M2 12l10 5 10-5' },
+  { section: 'documents',    label: 'Documentation',   icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
+  { section: 'code',         label: 'Code',            icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
+  { section: 'deploy',       label: 'Deployment',      icon: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12' },
+  { section: 'versions',     label: 'Version History', icon: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2' },
 ];
 
 const PROJECT_URL_PATTERN = /^\/app\/projects\/([^/]+)\/([^/]+)/;
@@ -77,6 +77,9 @@ export class AppShellComponent implements OnInit {
   /** projectId extracted from the current URL, or null when not inside a project workspace. */
   private readonly activeProjectId = signal<string | null>(null);
 
+  /** section extracted from the current URL (e.g. "requirements", "review"). */
+  readonly activeSection = signal<string | null>(null);
+
   readonly workspaceSections = WORKSPACE_SECTIONS;
   readonly isInProjectWorkspace = computed(() => this.activeProjectId() !== null);
   readonly activeProjectIdValue = this.activeProjectId.asReadonly();
@@ -138,5 +141,6 @@ export class AppShellComponent implements OnInit {
   private updateActiveProjectId(url: string): void {
     const match = PROJECT_URL_PATTERN.exec(url);
     this.activeProjectId.set(match ? match[1] : null);
+    this.activeSection.set(match ? match[2] : null);
   }
 }

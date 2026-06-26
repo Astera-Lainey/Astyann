@@ -102,6 +102,14 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     return section ? SECTION_LABELS[section] : '';
   }
 
+  get breadcrumbSectionLabel(): string {
+    const section = this.section();
+    const status = this.pcsfStatus();
+    if (section === 'requirements' && status !== 'VALIDATED') return 'Questions';
+    if (section === 'review') return 'Requirements';
+    return section ? SECTION_LABELS[section] : '';
+  }
+
   get isKnownSection(): boolean {
     return this.section() !== null && this.section()! in SECTION_LABELS;
   }

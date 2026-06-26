@@ -1,3 +1,84 @@
+<!-- ── Edit modal ──────────────────────────────────────────────────────────── -->
+@if (editingProject(); as project) {
+  <div class="dm-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title"
+    (click)="closeEditModal()">
+    <div class="dm-dialog" (click)="$event.stopPropagation()">
+      <div class="dm-dialog__header">
+        <span id="edit-modal-title" class="dm-dialog__title">Edit Project</span>
+        <button type="button" class="dm-dialog__close" aria-label="Close" (click)="closeEditModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="dm-dialog__body">
+        <label class="dm-field">
+          <span class="dm-field__label">Project name <span aria-hidden="true">*</span></span>
+          <input type="text" class="dm-field__input" [(ngModel)]="editTitle"
+            placeholder="Enter project name" [disabled]="isSaving()" />
+        </label>
+        <label class="dm-field">
+          <span class="dm-field__label">Description</span>
+          <textarea class="dm-field__input dm-field__input--textarea" [(ngModel)]="editDescription"
+            rows="3" placeholder="Short description (optional)" [disabled]="isSaving()"></textarea>
+        </label>
+        @if (editError()) {
+          <p class="dm-dialog__error" role="alert">{{ editError() }}</p>
+        }
+      </div>
+
+      <div class="dm-dialog__footer">
+        <button type="button" class="dm-btn dm-btn--ghost" [disabled]="isSaving()"
+          (click)="closeEditModal()">Cancel</button>
+        <button type="button" class="dm-btn dm-btn--primary" [disabled]="isSaving()"
+          (click)="saveEdit()">
+          @if (isSaving()) { Saving… } @else { Save changes }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation modal ─────────────────────────────────────────── -->
+@if (deletingProject(); as project) {
+  <div class="dm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title"
+    (click)="closeDeleteConfirm()">
+    <div class="dm-dialog dm-dialog--narrow" (click)="$event.stopPropagation()">
+      <div class="dm-dialog__header">
+        <span id="delete-modal-title" class="dm-dialog__title">Delete Project</span>
+        <button type="button" class="dm-dialog__close" aria-label="Close" (click)="closeDeleteConfirm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="dm-dialog__body">
+        <p class="dm-dialog__confirm-text">
+          Are you sure you want to delete <strong>{{ project.title }}</strong>?
+          This action cannot be undone.
+        </p>
+        @if (deleteError()) {
+          <p class="dm-dialog__error" role="alert">{{ deleteError() }}</p>
+        }
+      </div>
+
+      <div class="dm-dialog__footer">
+        <button type="button" class="dm-btn dm-btn--ghost" [disabled]="isDeleting()"
+          (click)="closeDeleteConfirm()">Cancel</button>
+        <button type="button" class="dm-btn dm-btn--danger" [disabled]="isDeleting()"
+          (click)="confirmDelete()">
+          @if (isDeleting()) { Deleting… } @else { Delete }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Dashboard ──────────────────────────────────────────────────────────── -->
 <div class="dashboard">
   <app-sparkle-icon class="spark spark--1" [size]="26" />
   <app-sparkle-icon class="spark spark--2" [size]="20" />
@@ -18,7 +99,8 @@
       <h2 class="dashboard__banner-title">Welcome Back!</h2>
       <p class="dashboard__banner-subtitle">Ready to start creating the next big app?</p>
       <a routerLink="/app/new" class="dashboard__banner-cta">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 5v14M5 12h14" />
         </svg>
         New Project
@@ -38,7 +120,8 @@
           <div class="dashboard__stat-value">{{ totalProjects() }}</div>
         </div>
         <span class="dashboard__stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
           </svg>
         </span>
@@ -50,7 +133,8 @@
           <div class="dashboard__stat-value">{{ analyzingCount() }}</div>
         </div>
         <span class="dashboard__stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
           </svg>
         </span>
@@ -73,16 +157,66 @@
       } @else {
         <ul class="dashboard__project-list">
           @for (project of projects(); track project.projectId) {
-            <li>
-              <a [routerLink]="['/app/projects', project.projectId, 'requirements']" class="dashboard__project-row">
+            <li class="dashboard__project-item">
+              <a [routerLink]="['/app/projects', project.projectId, 'requirements']"
+                class="dashboard__project-row">
                 <span class="dashboard__project-avatar">{{ initialFor(project.title) }}</span>
                 <div class="dashboard__project-info">
                   <div class="dashboard__project-name">{{ project.title }}</div>
                   <div class="dashboard__project-desc">{{ project.description }}</div>
                 </div>
                 <span class="dashboard__project-status">{{ project.status }}</span>
-                <span class="dashboard__project-updated">{{ project.updatedDate | date: 'mediumDate' }}</span>
+                <span class="dashboard__project-updated">
+                  {{ project.updatedDate | date: 'mediumDate' }}
+                </span>
               </a>
+
+              <!-- Three-dot actions menu -->
+              <div class="dashboard__project-actions">
+                <button
+                  type="button"
+                  class="dashboard__project-menu-btn"
+                  aria-label="Project actions"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="openMenuId() === project.projectId"
+                  (click)="toggleMenu(project.projectId, $event)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5"  r="1.5"/>
+                    <circle cx="12" cy="12" r="1.5"/>
+                    <circle cx="12" cy="19" r="1.5"/>
+                  </svg>
+                </button>
+
+                @if (openMenuId() === project.projectId) {
+                  <div class="dashboard__project-menu" role="menu">
+                    <button type="button" class="dashboard__project-menu-item" role="menuitem"
+                      (click)="openEditModal(project, $event)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                      Edit Project
+                    </button>
+                    <div class="dashboard__project-menu-divider"></div>
+                    <button type="button"
+                      class="dashboard__project-menu-item dashboard__project-menu-item--danger"
+                      role="menuitem" (click)="openDeleteConfirm(project, $event)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        <path d="M10 11v6M14 11v6"/>
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                      </svg>
+                      Delete Project
+                    </button>
+                  </div>
+                }
+              </div>
             </li>
           }
         </ul>

@@ -157,6 +157,10 @@
   to   { opacity: 1; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -166,141 +170,60 @@
   justify-content: center;
   padding: 1rem;
   background: oklch(0.14 0.012 25 / 0.72);
-  backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: blur(1px) saturate(130%);
   animation: overlay-in 0.18s ease both;
 }
 
 .modal-dialog {
   position: relative;
   width: 100%;
-  max-width: 600px;
+  max-width: 560px;
   max-height: 92vh;
   display: flex;
   flex-direction: column;
-  background: var(--card, #ffffff);
-  border-radius: var(--radius-2xl, 1.5rem);
-  border: 1px solid var(--glass-border, oklch(1 0 0 / 0.75));
-  box-shadow:
-    var(--shadow-pop,
-      0 30px 80px -24px oklch(0.32 0.13 15 / 0.28),
-      0 12px 24px -8px oklch(0.2 0.02 25 / 0.16));
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 30px 80px -24px oklch(0.2 0.02 25 / 0.28), 0 12px 24px -8px oklch(0.2 0.02 25 / 0.16);
   overflow: hidden;
   animation: modal-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-// Decorative diamond gem — top-right of dialog
-.modal-dialog__gem {
-  position: absolute;
-  top: 1.375rem;
-  right: 5.5rem;
-  width: 5px;
-  height: 5px;
-  background: var(--jade, oklch(0.56 0.19 28));
-  transform: rotate(45deg);
-  opacity: 0.45;
-  pointer-events: none;
-  z-index: 2;
-}
+// ── Step indicator ────────────────────────────────────────────────────────────
 
-// ── Header ────────────────────────────────────────────────────────────────────
-
-.modal-header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.375rem 1.75rem 1.125rem;
-  background: linear-gradient(
-    135deg,
-    var(--primary, oklch(0.32 0.13 15)) 0%,
-    oklch(0.21 0.1 14) 100%
-  );
-
-  // top shimmer line
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.22), transparent);
-  }
-}
-
-.modal-header__info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.modal-header__eyebrow {
-  font-size: 0.625rem;
+.modal__step {
+  padding: 1.5rem 2rem 0;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: oklch(1 0 0 / 0.48);
+  color: shared.$slate-400;
 }
 
-.modal-header__title {
-  display: block;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #ffffff;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.modal-header__badge {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.625rem;
-  background: oklch(1 0 0 / 0.1);
-  border: 1px solid oklch(1 0 0 / 0.14);
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: oklch(1 0 0 / 0.8);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+.modal__step-of {
+  font-weight: 400;
+  text-transform: lowercase;
 }
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 
-.modal-progress {
-  height: 3px;
-  background: var(--primary, oklch(0.32 0.13 15));
-  opacity: 0.25;
+.modal__progress {
+  margin: 0.625rem 2rem 0;
+  height: 2px;
+  background: shared.$slate-200;
   position: relative;
-
-  // real bar sits on top
-  &__bar {
-    position: absolute;
-    inset: 0 auto 0 0;
-    background: linear-gradient(
-      90deg,
-      var(--jade, oklch(0.56 0.19 28)),
-      var(--jade-glow, oklch(0.62 0.21 28))
-    );
-    transition: width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 4; // override parent opacity
-  }
 }
 
-// override the opacity trick cleanly
-.modal-progress {
-  opacity: 1;
-  background: var(--border, oklch(0.84 0.005 30 / 30%));
+.modal__progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: shared.$brand-red;
+  transition: width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 // ── Body ──────────────────────────────────────────────────────────────────────
 
-.modal-body {
-  padding: 1.75rem 1.75rem 1.25rem;
+.modal__body {
+  padding: 1.5rem 2rem 0;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -308,39 +231,39 @@
   flex: 1;
 }
 
-.modal-question {
+.modal__question {
   margin: 0;
   font-size: 1.0625rem;
   font-weight: 600;
-  color: var(--card-foreground, oklch(0.18 0.012 25));
+  color: shared.$slate-900;
   line-height: 1.55;
   letter-spacing: -0.01em;
 }
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 
-.modal-input {
+.modal__input {
   box-sizing: border-box;
   width: 100%;
-  border-radius: var(--radius-md, 1rem);
-  border: 1px solid var(--border, oklch(0.84 0.005 30 / 70%));
-  background: var(--input, oklch(0.94 0.004 60));
+  border-radius: 0.5rem;
+  border: 1px solid shared.$slate-200;
+  background: #fafafa;
   padding: 0.75rem 1rem;
-  font-family: var(--font-sans, inherit);
+  font-family: inherit;
   font-size: 0.875rem;
-  color: var(--card-foreground, oklch(0.18 0.012 25));
+  color: shared.$slate-900;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 
-  &::placeholder { color: var(--muted-foreground, oklch(0.45 0.008 30)); }
+  &::placeholder { color: shared.$slate-400; }
 
   &:focus {
-    border-color: var(--ring, oklch(0.56 0.19 28));
-    box-shadow: 0 0 0 3px oklch(0.56 0.19 28 / 0.14);
+    border-color: shared.$brand-red;
+    box-shadow: 0 0 0 3px rgba(227, 4, 17, 0.1);
   }
 }
 
-.modal-input--textarea {
+.modal__input--textarea {
   resize: vertical;
   min-height: 7rem;
   line-height: 1.6;
@@ -348,98 +271,97 @@
 
 // ── YES/NO ────────────────────────────────────────────────────────────────────
 
-.modal-yesno {
+.modal__yesno {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
 
-.modal-yesno__btn {
+.modal__yesno-btn {
   padding: 1.125rem 0.5rem;
-  border: 1.5px solid var(--border, oklch(0.84 0.005 30 / 70%));
-  border-radius: var(--radius-md, 1rem);
-  background: var(--input, oklch(0.94 0.004 60));
-  color: var(--muted-foreground, oklch(0.45 0.008 30));
-  font-family: var(--font-sans, inherit);
+  border: 1.5px solid shared.$slate-200;
+  border-radius: 0.5rem;
+  background: #fafafa;
+  color: shared.$slate-500;
+  font-family: inherit;
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
 
-  &:hover:not(.modal-yesno__btn--active) {
-    border-color: var(--ring, oklch(0.56 0.19 28));
-    background: oklch(0.56 0.19 28 / 0.05);
-    color: var(--card-foreground, oklch(0.18 0.012 25));
+  &:hover:not(.modal__yesno-btn--active) {
+    border-color: shared.$brand-red;
+    background: rgba(227, 4, 17, 0.04);
+    color: shared.$slate-900;
   }
 
   &--active {
-    border-color: var(--jade, oklch(0.56 0.19 28));
-    background: var(--jade, oklch(0.56 0.19 28));
-    color: var(--accent-foreground, oklch(0.98 0.003 60));
-    box-shadow: 0 6px 20px -6px oklch(0.56 0.19 28 / 0.5);
+    border-color: shared.$brand-red;
+    background: shared.$brand-red;
+    color: #ffffff;
+    box-shadow: 0 6px 20px -6px rgba(227, 4, 17, 0.5);
   }
 }
 
 // ── Select (single / multi) ───────────────────────────────────────────────────
 
-.modal-select-group {
+.modal__select-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.modal-select-item {
+.modal__select-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border: 1.5px solid var(--border, oklch(0.84 0.005 30 / 70%));
-  border-radius: var(--radius-md, 1rem);
-  background: var(--input, oklch(0.94 0.004 60));
+  border: 1.5px solid shared.$slate-200;
+  border-radius: 0.5rem;
+  background: #fafafa;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
 
   &:hover {
-    border-color: var(--ring, oklch(0.56 0.19 28));
-    background: oklch(0.56 0.19 28 / 0.04);
+    border-color: shared.$brand-red;
+    background: rgba(227, 4, 17, 0.03);
   }
 
   &:has(input:checked) {
-    border-color: var(--jade, oklch(0.56 0.19 28));
-    background: oklch(0.56 0.19 28 / 0.07);
+    border-color: shared.$brand-red;
+    background: rgba(227, 4, 17, 0.06);
   }
 }
 
-.modal-select-item__input {
-  accent-color: var(--jade, oklch(0.56 0.19 28));
+.modal__select-item__input {
+  accent-color: shared.$brand-red;
   width: 1.0625rem;
   height: 1.0625rem;
   flex-shrink: 0;
   cursor: pointer;
 }
 
-.modal-select-item__label {
+.modal__select-item__label {
   font-size: 0.875rem;
-  color: var(--card-foreground, oklch(0.18 0.012 25));
+  color: shared.$slate-900;
   line-height: 1.4;
 }
 
 // ── Hint / error ──────────────────────────────────────────────────────────────
 
-.modal-hint {
+.modal__hint {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--muted-foreground, oklch(0.45 0.008 30));
+  color: shared.$slate-500;
   font-style: italic;
   line-height: 1.5;
-  padding: 0 0.25rem;
 }
 
-.modal-error {
-  margin: 0 1.75rem 0.5rem;
+.modal__error {
+  margin: 0;
   font-size: 0.8125rem;
-  color: var(--destructive, oklch(0.55 0.2 25));
+  color: #dc2626;
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -451,76 +373,70 @@
   }
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
+// ── Actions (centered buttons) ────────────────────────────────────────────────
 
-.modal-footer {
+.modal__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.75rem;
-  border-top: 1px solid var(--border, oklch(0.84 0.005 30 / 50%));
-  background: oklch(0.975 0.003 60 / 0.6);
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid shared.$slate-200;
+  background: #fafafa;
 }
 
-.modal-footer__btn {
+.modal__btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4375rem;
-  padding: 0.6875rem 1.375rem;
-  border-radius: var(--radius-md, 1rem);
-  border: 1.5px solid transparent;
-  font-family: var(--font-sans, inherit);
+  gap: 0.375rem;
+  padding: 0.5625rem 1.125rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: background-color 0.15s, filter 0.15s, transform 0.15s;
   letter-spacing: 0.01em;
 
   &:disabled {
-    opacity: 0.35;
+    opacity: 0.45;
     cursor: not-allowed;
     transform: none !important;
-    box-shadow: none !important;
   }
 }
 
-.modal-footer__btn--back {
-  border-color: var(--border, oklch(0.84 0.005 30 / 70%));
-  background: var(--card, #ffffff);
-  color: var(--muted-foreground, oklch(0.45 0.008 30));
+.modal__btn--primary {
+  background: #000000;
+  color: #ffffff;
 
   &:hover:not(:disabled) {
-    background: var(--secondary, oklch(0.92 0.004 60));
-    color: var(--card-foreground, oklch(0.18 0.012 25));
-  }
-}
-
-.modal-footer__btn--next,
-.modal-footer__btn--submit {
-  background: var(--primary, oklch(0.32 0.13 15));
-  color: var(--primary-foreground, oklch(0.98 0.003 60));
-  box-shadow: 0 4px 16px -4px oklch(0.32 0.13 15 / 0.38);
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.12);
+    filter: brightness(1.18);
     transform: translateY(-1px);
-    box-shadow: 0 10px 28px -8px oklch(0.32 0.13 15 / 0.5);
   }
+}
 
-  &:active:not(:disabled) {
-    transform: translateY(0);
+.modal__btn--secondary {
+  background: #ffffff;
+  border-color: shared.$slate-200;
+  color: shared.$slate-500;
+
+  &:hover:not(:disabled) {
+    background: shared.$slate-200;
+    color: shared.$slate-900;
   }
 }
 
 // ── Submit spinner ────────────────────────────────────────────────────────────
 
-.modal-btn-spinner {
+.modal__btn-spinner {
   display: inline-block;
   width: 0.875rem;
   height: 0.875rem;
-  border: 1.5px solid oklch(1 0 0 / 0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
   border-top-color: #ffffff;
   border-radius: 50%;
   animation: spin 0.65s linear infinite;
   flex-shrink: 0;
+  margin-right: 0.375rem;
 }

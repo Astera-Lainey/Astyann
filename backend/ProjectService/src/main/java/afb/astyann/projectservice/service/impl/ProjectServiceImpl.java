@@ -10,6 +10,7 @@ import afb.astyann.projectservice.exception.InvalidFileFormatException;
 import afb.astyann.projectservice.exception.ProjectNotFoundException;
 import afb.astyann.projectservice.pcsf.service.DocumentExtractionService;
 import afb.astyann.projectservice.pcsf.service.PcsfInitialiserService;
+import afb.astyann.projectservice.repository.ClarificationQuestionRepository;
 import afb.astyann.projectservice.repository.GuidedQuestionRepository;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import afb.astyann.projectservice.service.IProjectService;
@@ -46,8 +47,9 @@ public class ProjectServiceImpl implements IProjectService {
     @Value("${app.upload-dir:uploads/documents}")
     private String uploadDir;
 
-    private final ProjectRepository           projectRepository;
-    private final GuidedQuestionRepository    guidedQuestionRepository;
+    private final ProjectRepository                projectRepository;
+    private final GuidedQuestionRepository         guidedQuestionRepository;
+    private final ClarificationQuestionRepository  clarificationQuestionRepository;
     private final AIServiceClient             aiServiceClient;
     private final RequirementsServiceClient   requirementsClient;
     private final DocumentServiceClient       documentClient;
@@ -173,7 +175,8 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     public void deleteProject(UUID projectId) {
         log.info("Deleting project id={}", projectId);
-        findOrThrow(projectId);
+        Project project = findOrThrow(projectId);
+        clarificationQuestionRepository.deleteByProject(project);
         guidedQuestionRepository.deleteByProjectId(projectId);
         projectRepository.deleteByProjectId(projectId);
     }
