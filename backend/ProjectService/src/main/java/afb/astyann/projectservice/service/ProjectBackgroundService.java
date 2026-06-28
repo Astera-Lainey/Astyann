@@ -1,11 +1,11 @@
 package afb.astyann.projectservice.service;
 
 import afb.astyann.projectservice.client.AIServiceClient;
-import afb.astyann.projectservice.domain.PcsfStatus;
+import afb.astyann.projectservice.client.RequirementsServiceClient;
 import afb.astyann.projectservice.domain.Project;
 import afb.astyann.projectservice.domain.ProjectStatus;
 import afb.astyann.projectservice.dto.ProjectAnalysisResponseDTO;
-import afb.astyann.projectservice.pcsf.service.DocumentExtractionService;
+import afb.astyann.projectservice.dto.RequirementInitRequest;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import afb.astyann.projectservice.util.ByteArrayMultipartFile;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +22,8 @@ import java.util.UUID;
 public class ProjectBackgroundService {
 
     private final AIServiceClient           aiServiceClient;
-    private final DocumentExtractionService documentExtractionService;
     private final ProjectRepository         projectRepository;
+    private final RequirementsServiceClient requirementsServiceClient;
 
     @Async("pcsfExecutor")
     public void processDocumentAsync(UUID projectId,
@@ -33,27 +33,35 @@ public class ProjectBackgroundService {
         log.info("Background processing started for project={}", projectId);
         try {
             Project project = projectRepository.findByProjectId(projectId)
-                    .orElseThrow(() ->
-                            new RuntimeException("Project not found: " + projectId));
+                    .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
 
             MultipartFile syntheticFile = new ByteArrayMultipartFile(
                     docBytes, originalFilename, contentType);
 
             ProjectAnalysisResponseDTO analysis = null;
             try {
-                analysis = aiServiceClient.analyzeProjectInformation(
-                        projectId, syntheticFile);
+                analysis = aiServiceClient.analyzeProjectInformation(projectId, syntheticFile);
             } catch (Exception ex) {
-                log.warn("AI analysis call failed for project={}: {}",
-                        projectId, ex.getMessage());
+                log.warn("AI analysis call failed for project={}: {}", projectId, ex.getMessage());
             }
 
-            if (analysis != null) {
-                project.setProjectContext(analysis.getExtractedContext());
-                projectRepository.save(project);
-                documentExtractionService.extract(project, analysis.getDocumentText());
-            } else {
-                documentExtractionService.extract(project, null);
+            String extractedContext = analysis != null ? analysis.getExtractedContext() : null;
+            String documentText     = analysis != null ? analysis.getDocumentText()     : null;
+
+            project.setProjectContext(extractedContext);
+            projectRepository.save(project);
+
+            try {
+                requirementsServiceClient.initializePipeline(projectId,
+                        new RequirementInitRequest(
+                                projectId,
+                                project.getTitle(),
+                                project.getDescription(),
+                                extractedContext,
+                                documentText));
+                log.info("Requirements pipeline initialized for project={}", projectId);
+            } catch (Exception ex) {
+                log.warn("RequirementService unavailable for project={}: {}", projectId, ex.getMessage());
             }
 
             log.info("Background processing completed for project={}", projectId);
@@ -62,7 +70,6 @@ public class ProjectBackgroundService {
             log.error("Background processing failed for project={}", projectId, ex);
             projectRepository.findByProjectId(projectId).ifPresent(p -> {
                 p.setStatus(ProjectStatus.FAILED);
-                p.setPcsfStatus(PcsfStatus.FAILED);
                 projectRepository.save(p);
             });
         }

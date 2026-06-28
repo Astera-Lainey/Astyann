@@ -1,0 +1,121 @@
+@startuml
+title Astyann - Requirement Management Service Design Class Diagram
+
+skinparam classAttributeIconSize 0
+
+enum RequirementType {
+    FUNCTIONAL
+    NON_FUNCTIONAL
+}
+
+enum RequirementStatus {
+    GENERATED
+    PENDING_REVIEW
+    APPROVED
+    REJECTED
+}
+
+class RequirementSet {
+    - Long id
+    - Long projectId
+    - Integer versionNumber
+    - RequirementStatus status
+    - LocalDateTime createdAt
+    - LocalDateTime approvedAt
+
+    + approve()
+    + reject()
+    + createNewVersion()
+}
+
+class Requirement {
+    - Long id
+    - String code
+    - String title
+    - String description
+    - RequirementType type
+
+    + updateDescription()
+}
+
+class RequirementChangeRequest {
+    - Long id
+    - String instructions
+    - LocalDateTime createdAt
+
+    + submit()
+}
+
+class RequirementGenerationService {
+    + generateRequirements(projectId: Long): RequirementSetResponse
+    + regenerateRequirements(setId: Long, instructions: String): RequirementSetResponse
+    + approveRequirements(setId: Long): void
+    + getRequirements(setId: Long): RequirementSetResponse
+}
+
+class AIGenerationService {
+    + generateRequirements(context: String): List<Requirement>
+    + regenerateRequirements(
+        requirements: String,
+        instructions: String
+      ): List<Requirement>
+}
+
+class RagIndexingService {
+    + initializeIndex(projectId: Long): void
+    + indexRequirements(setId: Long): void
+}
+
+class GenerateRequirementsRequest {
+    + Long projectId
+}
+
+class RequirementSetResponse {
+    + Long id
+    + Integer versionNumber
+    + RequirementStatus status
+    + List<RequirementDto> requirements
+}
+
+class RequirementDto {
+    + String code
+    + String title
+    + String description
+    + RequirementType type
+}
+
+class RequirementMapper {
+    + toDto(requirement: Requirement): RequirementDto
+    + toResponse(set: RequirementSet): RequirementSetResponse
+}
+
+interface RequirementSetRepository {
+    + save(set: RequirementSet): RequirementSet
+    + findById(id: Long): Optional<RequirementSet>
+    + findByProjectId(projectId: Long): List<RequirementSet>
+}
+
+interface RequirementRepository {
+    + save(requirement: Requirement): Requirement
+    + findByRequirementSetId(id: Long): List<Requirement>
+}
+
+interface RequirementChangeRequestRepository {
+    + save(request: RequirementChangeRequest): RequirementChangeRequest
+}
+
+RequirementSet "1" *-- "*" Requirement
+RequirementSet "1" *-- "*" RequirementChangeRequest
+
+RequirementGenerationService --> AIGenerationService
+RequirementGenerationService --> RagIndexingService
+
+RequirementGenerationService --> RequirementSetRepository
+RequirementGenerationService --> RequirementRepository
+RequirementGenerationService --> RequirementChangeRequestRepository
+
+RequirementGenerationService --> RequirementMapper
+RequirementMapper --> RequirementDto
+RequirementMapper --> RequirementSetResponse
+
+@enduml
