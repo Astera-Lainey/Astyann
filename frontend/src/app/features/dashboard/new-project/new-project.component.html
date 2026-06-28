@@ -1,11 +1,13 @@
 <div class="new-project">
+  <app-sparkle-icon class="spark spark--a" [size]="24" />
+  <app-sparkle-icon class="spark spark--b" [size]="20" />
+  <app-sparkle-icon class="spark spark--c" [size]="22" />
+  <app-sparkle-icon class="spark spark--d" [size]="18" />
+
   @if (step() === 'brief') {
     <div class="new-project__eyebrow">Step 1 · Brief</div>
     <h1 class="new-project__title">Tell me about your project</h1>
-    <p class="new-project__subtitle">
-      Share an idea and upload a specification document. We'll extract requirements and ask the
-      right follow-up questions.
-    </p>
+    <p class="new-project__subtitle">Share an idea and upload a specification document.</p>
 
     <form class="new-project__form" [formGroup]="briefForm" (ngSubmit)="onSubmitBrief()" novalidate>
       <app-form-field label="Project name" [errorMessage]="titleError">
@@ -13,28 +15,28 @@
       </app-form-field>
 
       <app-form-field label="Describe your idea" [errorMessage]="descriptionError">
-        <textarea
-          formControlName="description"
-          rows="5"
-          placeholder="A CRM tailored for boutique agencies. Pipeline forecasting, lightweight contact management, deep email integration…"
-        ></textarea>
+        <textarea formControlName="description" rows="3" placeholder="A CRM tailored for boutique agencies…"></textarea>
       </app-form-field>
 
       <div class="new-project__field">
-        <span class="new-project__field-label">Specification document</span>
-
+        <div class="new-project__field-header">
+          <span class="new-project__field-label">Specification document</span>
+          <button
+            type="button"
+            class="new-project__download-template"
+            (click)="downloadTemplate()"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download specification template
+          </button>
+        </div>
         @if (!selectedFile()) {
           <label class="new-project__dropzone">
-            <input
-              type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              (change)="onFileSelected($event)"
-              hidden
-            />
+            <input type="file" accept=".pdf,.docx" (change)="onFileSelected($event)" hidden />
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
             </svg>
             <div class="new-project__dropzone-text">Click to choose a PDF or Word document</div>
             <div class="new-project__dropzone-hint">Max 20MB</div>
@@ -43,20 +45,17 @@
           <div class="new-project__file-row">
             <div class="new-project__file-info">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
               </svg>
               {{ selectedFile()!.name }}
             </div>
-            <button type="button" class="new-project__file-remove" (click)="removeFile()" aria-label="Remove file">
+            <button type="button" class="new-project__file-remove" (click)="removeFile()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
         }
-
         @if (fileError()) {
           <span class="new-project__field-error">{{ fileError() }}</span>
         }
@@ -75,9 +74,7 @@
   } @else {
     <div class="new-project__eyebrow">Step 2 · Guided Questions</div>
     <h1 class="new-project__title">A few quick questions</h1>
-    <p class="new-project__subtitle">
-      These help us tailor the requirements and architecture to your project.
-    </p>
+    <p class="new-project__subtitle">These help us tailor the requirements to your project.</p>
 
     <form class="new-project__form" (ngSubmit)="onSubmitQuestions()" novalidate>
       @for (question of guidedQuestions(); track question.gqId) {
@@ -101,3 +98,117 @@
     </form>
   }
 </div>
+
+@if (showQuestionsModal()) {
+  <div class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-header__title">A few questions about your project</span>
+        <span class="modal-header__count">{{ currentIndex + 1 }} / {{ questions.length }}</span>
+      </div>
+      <div class="modal-progress">
+        <div class="modal-progress__bar" [style.width.%]="progressPercent"></div>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-question">{{ currentQuestion.question }}</p>
+
+        @if (currentQuestion.type === 'TEXT') {
+          <input
+            type="text"
+            class="modal-input"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onInput($event)"
+          />
+        } @else if (currentQuestion.type === 'TEXTAREA') {
+          <textarea
+            class="modal-input modal-input--textarea"
+            rows="4"
+            [placeholder]="currentQuestion.placeholder ?? ''"
+            [value]="currentAnswer"
+            (input)="onTextareaInput($event)"
+          ></textarea>
+        } @else if (currentQuestion.type === 'YES_NO') {
+          <div class="modal-yesno">
+            <button
+              type="button"
+              class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'No'"
+              (click)="setAnswer('No')"
+            >No</button>
+            <button
+              type="button"
+              class="modal-yesno__btn"
+              [class.modal-yesno__btn--active]="currentAnswer === 'Yes'"
+              (click)="setAnswer('Yes')"
+            >Yes</button>
+          </div>
+        } @else if (currentQuestion.type === 'SINGLE_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input
+                  type="radio"
+                  class="modal-select-item__input"
+                  name="q_{{ currentQuestion.id }}"
+                  [value]="option"
+                  [checked]="currentAnswer === option"
+                  (change)="setAnswer(option)"
+                />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        } @else if (currentQuestion.type === 'MULTI_SELECT') {
+          <div class="modal-select-group">
+            @for (option of currentQuestion.options; track option) {
+              <label class="modal-select-item">
+                <input
+                  type="checkbox"
+                  class="modal-select-item__input"
+                  [checked]="isMultiSelected(option)"
+                  (change)="toggleMultiSelect(option)"
+                />
+                <span class="modal-select-item__label">{{ option }}</span>
+              </label>
+            }
+          </div>
+        }
+
+        @if (currentQuestion.placeholder && currentQuestion.type !== 'TEXT' && currentQuestion.type !== 'TEXTAREA') {
+          <p class="modal-hint">{{ currentQuestion.placeholder }}</p>
+        }
+      </div>
+
+      @if (submitError()) {
+        <p class="modal-error" role="alert">{{ submitError() }}</p>
+      }
+
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="modal-footer__btn modal-footer__btn--back"
+          [disabled]="isFirst"
+          (click)="goBack()"
+        >← Back</button>
+
+        @if (isLast) {
+          <button
+            type="button"
+            class="modal-footer__btn modal-footer__btn--submit"
+            [disabled]="!currentAnswer || submittingAnswers()"
+            (click)="submitAnswers()"
+          >{{ submittingAnswers() ? 'Submitting…' : 'Submit' }}</button>
+        } @else {
+          <button
+            type="button"
+            class="modal-footer__btn modal-footer__btn--next"
+            [disabled]="!currentAnswer"
+            (click)="goNext()"
+          >Next →</button>
+        }
+      </div>
+    </div>
+  </div>
+}

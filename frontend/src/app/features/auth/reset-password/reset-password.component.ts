@@ -38,6 +38,8 @@ export class ResetPasswordComponent implements OnInit {
   readonly isSubmitted = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly token = signal<string | null>(null);
+  readonly passwordVisible = signal(false);
+  readonly confirmPasswordVisible = signal(false);
 
   readonly form = this.fb.nonNullable.group(
     {

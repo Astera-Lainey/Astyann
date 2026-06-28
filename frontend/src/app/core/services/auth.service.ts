@@ -1,7 +1,7 @@
-import { HttpClient } from '@angular/common/http'; //gives us access to all backend requests
+import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, signal } from '@angular/core';
 import { Observable, catchError, map, of, tap } from 'rxjs';
-import { environment } from '../../../environments/environment'; //bakcend link
+import { environment } from '../../../environments/environment';
 import {
   ApiEnvelope,
   AuthenticatedUser,
@@ -17,69 +17,43 @@ import {
   VerifyEmailResponseData,
 } from '../models/auth.models';
 
-const ACCESS_TOKEN_KEY = 'astyann_access_token';
-const USER_KEY = 'astyann_user';
+const TOKEN_KEY = 'ast_at';
+const USER_KEY = 'ast_user';
 
-/**
- * Single source of truth for authentication state and all auth-related
- * HTTP interactions with the backend, per Section IV ("Authentication and
- * Account Management", API-AUTH-01 through API-AUTH-08) of the API Contract.
- *
- * Every endpoint in this module returns the platform-wide envelope
- * `{ status, message, data }` (Section 2.4) — this service unwraps `.data`
- * so callers (components) work with plain typed payloads.
- *
- * Responsibilities (SRP):
- *  - Persisting / restoring the session from storage
- *  - Exposing reactive auth state via Signals
- *  - Talking to the auth endpoints
- *
- * Token attachment to outgoing requests, and silent refresh-on-401, are
- * handled separately by `JwtInterceptor` — this service only stores and
- * exposes the tokens it needs for that.
- */
+function readUserFromSession(): AuthenticatedUser | null {
+  const raw = sessionStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as AuthenticatedUser; } catch { return null; }
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly baseUrl = `${environment.apiBaseUrl}/auth`;
 
-  /** Internal writable signal holding the current user, or null if logged out. so that page refreshes dont log the user out */
-  private readonly currentUserSignal = signal<AuthenticatedUser | null>(this.readUserFromStorage());
+  private readonly _accessToken = signal<string | null>(
+    sessionStorage.getItem(TOKEN_KEY),
+  );
+  private readonly currentUserSignal = signal<AuthenticatedUser | null>(
+    readUserFromSession(),
+  );
 
-  /** Public read-only view of the current authenticated user. */
   readonly currentUser = this.currentUserSignal.asReadonly();
-
-  /** Derived signal: true when a user is logged in. */
-  readonly isAuthenticated = computed(() => this.currentUserSignal() !== null);
+  readonly isAuthenticated = computed(() => this._accessToken() !== null);
 
   constructor(private readonly http: HttpClient) {}
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-01 — POST /auth/register
-  // ---------------------------------------------------------------------
-
-  /** Creates an unverified account and triggers a verification email. */
   register(request: RegisterRequest): Observable<RegisterResponseData> {
     return this.http
       .post<ApiEnvelope<RegisterResponseData>>(`${this.baseUrl}/register`, request)
       .pipe(map((res) => res.data));
   }
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-02 — POST /auth/verify-email
-  // ---------------------------------------------------------------------
-
-  /** Activates the account using the 6-digit code emailed to the user. */
   verifyEmail(request: VerifyEmailRequest): Observable<VerifyEmailResponseData> {
     return this.http
       .post<ApiEnvelope<VerifyEmailResponseData>>(`${this.baseUrl}/verify-email`, request)
       .pipe(map((res) => res.data));
   }
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-03 — POST /auth/verify/resend
-  // ---------------------------------------------------------------------
-
-  /** Requests a new verification code, invalidating any previously issued one. */
   resendVerificationCode(
     request: ResendVerificationRequest,
   ): Observable<ResendVerificationResponseData> {
@@ -88,53 +62,37 @@ export class AuthService {
       .pipe(map((res) => res.data));
   }
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-04 — POST /auth/login
-  // ---------------------------------------------------------------------
-
   login(request: LoginRequest): Observable<LoginResponseData> {
     return this.http.post<ApiEnvelope<LoginResponseData>>(`${this.baseUrl}/login`, request).pipe(
       map((res) => res.data),
-      tap((data) => this.persistSession(data)),
+      tap((data) => {
+        const user: AuthenticatedUser = { id: data.userId, email: data.email };
+        sessionStorage.setItem(TOKEN_KEY, data.accessToken);
+        sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+        this._accessToken.set(data.accessToken);
+        this.currentUserSignal.set(user);
+      }),
     );
   }
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-05 — POST /auth/logout (JWT required)
-  // ---------------------------------------------------------------------
-
-  /**
-   * Invalidates the current access token server-side, then always clears
-   * the local session regardless of outcome (a failed logout call — e.g.
-   * the token was already expired — shouldn't leave the user stuck
-   * "logged in" on a session the server has already abandoned).
-   */
   logout(): Observable<void> {
     return this.http.post<ApiEnvelope<null>>(`${this.baseUrl}/logout`, {}).pipe(
       map(() => undefined),
       catchError(() => of(undefined)),
-      tap(() => this.clearSession()),
+      tap(() => {
+        sessionStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(USER_KEY);
+        this._accessToken.set(null);
+        this.currentUserSignal.set(null);
+      }),
     );
   }
 
-  // ---------------------------------------------------------------------
-  // API-AUTH-07 — POST /auth/reset-password (request a reset email)
-  // ---------------------------------------------------------------------
-
-  /**
-   * Requests a password reset email. Always resolves with 200 OK — the
-   * backend deliberately never reveals whether the address is registered,
-   * to prevent account enumeration (contract, API-AUTH-07).
-   */
   requestPasswordReset(request: RequestPasswordResetRequest): Observable<void> {
     return this.http
       .post<ApiEnvelope<null>>(`${this.baseUrl}/reset-password`, request)
       .pipe(map(() => undefined));
   }
-
-  // ---------------------------------------------------------------------
-  // API-AUTH-08 — POST /auth/password-reset/confirm
-  // ---------------------------------------------------------------------
 
   confirmPasswordReset(request: ConfirmPasswordResetRequest): Observable<void> {
     return this.http
@@ -142,40 +100,7 @@ export class AuthService {
       .pipe(map(() => undefined));
   }
 
-  // ---------------------------------------------------------------------
-  // Token / session accessors
-  // ---------------------------------------------------------------------
-
   getAccessToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
-  }
-
-  clearSession(): void {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    this.currentUserSignal.set(null);
-  }
-
-  // ---------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------
-
-  private persistSession(data: LoginResponseData): void {
-    localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-    const user: AuthenticatedUser = { id: data.userId, email: data.email };
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-    this.currentUserSignal.set(user);
-  }
-
-  private readUserFromStorage(): AuthenticatedUser | null {
-    const raw = localStorage.getItem(USER_KEY);
-    if (!raw) {
-      return null;
-    }
-    try {
-      return JSON.parse(raw) as AuthenticatedUser;
-    } catch {
-      return null;
-    }
+    return this._accessToken();
   }
 }

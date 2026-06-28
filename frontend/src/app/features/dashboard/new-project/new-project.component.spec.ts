@@ -24,6 +24,37 @@ describe('NewProjectComponent', () => {
     return file;
   }
 
+  const baseUrl = environment.apiBaseUrl;
+
+  // Minimal ProjectDTO response from POST /projects
+  const createdProjectFlush = {
+    status: 201,
+    message: 'Project created successfully.',
+    data: {
+      projectId: 'p1',
+      userId: 'u1',
+      title: 'Orbit CRM',
+      description: 'A CRM for boutique agencies.',
+      status: 'ANALYZING',
+      creationDate: '2026-06-12T08:00:00',
+      updatedDate: null,
+    },
+  };
+
+  // PCSF status: no pending questions → fall through to guided-questions
+  const pcsfStatusNoQuestionsFlush = {
+    status: 200,
+    message: 'Status retrieved.',
+    data: { pcsfStatus: 'DRAFT', completenessScore: 0, pendingQuestionsCount: 0 },
+  };
+
+  // PCSF status: has pending clarification questions → open PCSF modal
+  const pcsfStatusWithQuestionsFlush = {
+    status: 200,
+    message: 'Status retrieved.',
+    data: { pcsfStatus: 'DRAFT', completenessScore: 0, pendingQuestionsCount: 2 },
+  };
+
   it('rejects an unsupported file type', async () => {
     const { component } = await setup();
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
@@ -64,11 +95,11 @@ describe('NewProjectComponent', () => {
 
     component.onSubmitBrief();
 
-    httpMock.expectNone(`${environment.apiBaseUrl}/projects`);
+    httpMock.expectNone(`${baseUrl}/projects`);
     expect(component.fileError()).toBe('Please attach a specification document to continue.');
   });
 
-  it('submits the brief, then renders guided questions on success', async () => {
+  it('sends document as "document" form field (not "specificationFile")', async () => {
     const { component } = await setup();
     const httpMock = TestBed.inject(HttpTestingController);
 
@@ -76,18 +107,31 @@ describe('NewProjectComponent', () => {
     component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
     component.onSubmitBrief();
 
-    const req = httpMock.expectOne(`${environment.apiBaseUrl}/projects`);
+    const req = httpMock.expectOne(`${baseUrl}/projects`);
     expect(req.request.method).toBe('POST');
-    req.flush({
-      status: 201,
-      message: 'Project created.',
-      data: {
-        projectId: 'p1',
-        title: 'Orbit CRM',
-        status: 'ANALYZING',
-        createdAt: '2026-06-12T08:00:00Z',
-        guidedQuestions: [{ gqId: 'gq-001', question: 'Which database engine should be used?' }],
-      },
+    const formData: FormData = req.request.body;
+    expect(formData.get('document')).toBeTruthy();
+    expect(formData.get('specificationFile')).toBeNull();
+
+    req.flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusNoQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions`).flush({ status: 200, message: 'OK', data: [] });
+  });
+
+  it('shows guided questions (step 2) when PCSF has no pending questions and legacy questions exist', async () => {
+    const { component } = await setup();
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    component.briefForm.setValue({ title: 'Orbit CRM', description: 'A CRM for boutique agencies.' });
+    component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
+    component.onSubmitBrief();
+
+    httpMock.expectOne(`${baseUrl}/projects`).flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusNoQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions`).flush({
+      status: 200,
+      message: 'OK',
+      data: [{ gqId: 'gq-001', question: 'Which database engine should be used?', answer: null }],
     });
 
     expect(component.step()).toBe('questions');
@@ -95,7 +139,22 @@ describe('NewProjectComponent', () => {
     expect(component.questionControls['gq-001']).toBeTruthy();
   });
 
-  it('submits guided question answers and navigates to the project workspace', async () => {
+  it('opens the PCSF modal when pcsfStatus is DRAFT with pending questions', async () => {
+    const { component } = await setup();
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    component.briefForm.setValue({ title: 'Orbit CRM', description: 'A CRM for boutique agencies.' });
+    component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
+    component.onSubmitBrief();
+
+    httpMock.expectOne(`${baseUrl}/projects`).flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusWithQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/questions`).flush({ status: 200, message: 'OK', data: [] });
+
+    expect(component.showQuestionsModal()).toBe(true);
+  });
+
+  it('navigates to requirements when no guided questions exist after creation', async () => {
     const { component } = await setup();
     const httpMock = TestBed.inject(HttpTestingController);
     const router = TestBed.inject(Router);
@@ -104,25 +163,39 @@ describe('NewProjectComponent', () => {
     component.briefForm.setValue({ title: 'Orbit CRM', description: 'A CRM for boutique agencies.' });
     component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
     component.onSubmitBrief();
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 201,
-      message: 'Project created.',
-      data: {
-        projectId: 'p1',
-        title: 'Orbit CRM',
-        status: 'ANALYZING',
-        createdAt: '2026-06-12T08:00:00Z',
-        guidedQuestions: [{ gqId: 'gq-001', question: 'Which database engine should be used?' }],
-      },
+
+    httpMock.expectOne(`${baseUrl}/projects`).flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusNoQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions`).flush({ status: 200, message: 'OK', data: [] });
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/app/projects', 'p1', 'requirements']);
+  });
+
+  it('submits guided question answers via POST to /guided-questions/answers and navigates', async () => {
+    const { component } = await setup();
+    const httpMock = TestBed.inject(HttpTestingController);
+    const router = TestBed.inject(Router);
+    const navigateSpy = spyOn(router, 'navigate');
+
+    component.briefForm.setValue({ title: 'Orbit CRM', description: 'A CRM for boutique agencies.' });
+    component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
+    component.onSubmitBrief();
+
+    httpMock.expectOne(`${baseUrl}/projects`).flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusNoQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions`).flush({
+      status: 200,
+      message: 'OK',
+      data: [{ gqId: 'gq-001', question: 'Which database engine should be used?', answer: null }],
     });
 
     component.questionControls['gq-001'].setValue('PostgreSQL');
     component.onSubmitQuestions();
 
-    const req = httpMock.expectOne(`${environment.apiBaseUrl}/projects/p1/guided-questions`);
-    expect(req.request.method).toBe('PUT');
+    const req = httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions/answers`);
+    expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ answers: [{ gqId: 'gq-001', answer: 'PostgreSQL' }] });
-    req.flush({ status: 200, message: 'Answers saved.', data: { projectId: 'p1', status: 'ANALYZING' } });
+    req.flush({ status: 200, message: 'Answers submitted.', data: { projectId: 'p1', status: 'ANALYZING' } });
 
     expect(navigateSpy).toHaveBeenCalledWith(['/app/projects', 'p1', 'requirements']);
   });
@@ -134,21 +207,18 @@ describe('NewProjectComponent', () => {
     component.briefForm.setValue({ title: 'Orbit CRM', description: 'A CRM for boutique agencies.' });
     component.onFileSelected({ target: { files: [pdfFile()], value: '' } } as unknown as Event);
     component.onSubmitBrief();
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 201,
-      message: 'Project created.',
-      data: {
-        projectId: 'p1',
-        title: 'Orbit CRM',
-        status: 'ANALYZING',
-        createdAt: '2026-06-12T08:00:00Z',
-        guidedQuestions: [{ gqId: 'gq-001', question: 'Which database engine should be used?' }],
-      },
+
+    httpMock.expectOne(`${baseUrl}/projects`).flush(createdProjectFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/pcsf/status`).flush(pcsfStatusNoQuestionsFlush);
+    httpMock.expectOne(`${baseUrl}/projects/p1/guided-questions`).flush({
+      status: 200,
+      message: 'OK',
+      data: [{ gqId: 'gq-001', question: 'Which database engine should be used?', answer: null }],
     });
 
     component.onSubmitQuestions();
 
-    httpMock.expectNone(`${environment.apiBaseUrl}/projects/p1/guided-questions`);
+    httpMock.expectNone(`${baseUrl}/projects/p1/guided-questions/answers`);
     expect(component.questionControls['gq-001'].touched).toBe(true);
   });
 });

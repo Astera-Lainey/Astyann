@@ -1,42 +1,22 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  HostListener,
+  OnInit,
+  computed,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ProjectService } from '../../../core/services/project.service';
-import { Page, ProjectSummary } from '../../../core/models/project.models';
+import { ProjectSummary } from '../../../core/models/project.models';
+import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 
-/**
- * Dashboard page — converted from `app.index.tsx`.
- *
- * Renders inside `AppShellComponent`'s `<router-outlet>`. Loads the real
- * project list via `ProjectService.list()` (GET /projects, API-PROJ-02) and
- * derives the stat cards from it.
- *
- * Scope notes (per project decision, since the contract only ever
- * documents `status: "ANALYZING"` on a Project and has no global
- * cross-project activity endpoint):
- *  - The "Deployed / In Progress / Validating" stat buckets from the
- *    original mockup are NOT reproduced, since those status values aren't
- *    confirmed anywhere in the API Contract. Instead this shows "Total
- *    Projects" (always derivable) and a generic "Analyzing" bucket (the
- *    one status value the contract does confirm). Extend
- *    `core/models/project.models.ts`'s `ProjectStatus` and this component
- *    together once the backend's full status enum is confirmed.
- *  - Project list cards show only contract-confirmed fields (title,
- *    description, status, updatedAt) — no version badge, no colored
- *    thumbnail status (a neutral initial-letter avatar is used purely as a
- *    frontend visual aid, not backend data).
- *  - The "Recent Activity" panel from the mockup is omitted entirely — the
- *    API Contract has no endpoint for a cross-project activity feed
- *    (`GET /projects/{projectId}/versions`, API-VER-01, is scoped to a
- *    single project).
- *  - The welcome banner's "Developer" name is static copy, same as in the
- *    original mockup — the contract's `LoginResponseData` has no display
- *    name field to personalize it with (only `userId`/`email`).
- */
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, SparkleIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dashboard-page.component.html',
   styleUrl: './dashboard-page.component.scss',
@@ -46,17 +26,130 @@ export class DashboardPageComponent implements OnInit {
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
 
+  readonly sortedProjects = computed(() =>
+    this.projects().slice().sort((a, b) => a.title.localeCompare(b.title)),
+  );
+
   readonly totalProjects = computed(() => this.projects().length);
   readonly analyzingCount = computed(
     () => this.projects().filter((p) => p.status === 'ANALYZING').length,
   );
 
+  // ── Three-dot menu ──────────────────────────────────────────────────────────
+
+  readonly openMenuId = signal<string | null>(null);
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.openMenuId.set(null);
+  }
+
+  toggleMenu(projectId: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openMenuId.set(this.openMenuId() === projectId ? null : projectId);
+  }
+
+  // ── Edit modal ──────────────────────────────────────────────────────────────
+
+  readonly editingProject = signal<ProjectSummary | null>(null);
+  readonly isSaving = signal(false);
+  readonly editError = signal<string | null>(null);
+  editTitle = '';
+  editDescription = '';
+
+  openEditModal(project: ProjectSummary, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openMenuId.set(null);
+    this.editTitle = project.title;
+    this.editDescription = project.description ?? '';
+    this.editError.set(null);
+    this.editingProject.set(project);
+  }
+
+  closeEditModal(): void {
+    if (this.isSaving()) return;
+    this.editingProject.set(null);
+    this.editError.set(null);
+  }
+
+  saveEdit(): void {
+    const project = this.editingProject();
+    if (!project) return;
+    const title = this.editTitle.trim();
+    if (!title) {
+      this.editError.set('Project name is required.');
+      return;
+    }
+    this.isSaving.set(true);
+    this.editError.set(null);
+    this.projectService
+      .update(project.projectId, { title, description: this.editDescription.trim() })
+      .subscribe({
+        next: (updated) => {
+          this.projects.update((list) =>
+            list.map((p) =>
+              p.projectId === updated.projectId
+                ? { ...p, title: updated.title, description: updated.description }
+                : p,
+            ),
+          );
+          this.isSaving.set(false);
+          this.editingProject.set(null);
+        },
+        error: () => {
+          this.isSaving.set(false);
+          this.editError.set('Could not save changes. Please try again.');
+        },
+      });
+  }
+
+  // ── Delete confirmation ─────────────────────────────────────────────────────
+
+  readonly deletingProject = signal<ProjectSummary | null>(null);
+  readonly isDeleting = signal(false);
+  readonly deleteError = signal<string | null>(null);
+
+  openDeleteConfirm(project: ProjectSummary, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openMenuId.set(null);
+    this.deleteError.set(null);
+    this.deletingProject.set(project);
+  }
+
+  closeDeleteConfirm(): void {
+    if (this.isDeleting()) return;
+    this.deletingProject.set(null);
+    this.deleteError.set(null);
+  }
+
+  confirmDelete(): void {
+    const project = this.deletingProject();
+    if (!project) return;
+    this.isDeleting.set(true);
+    this.deleteError.set(null);
+    this.projectService.delete(project.projectId).subscribe({
+      next: () => {
+        this.projects.update((list) =>
+          list.filter((p) => p.projectId !== project.projectId),
+        );
+        this.isDeleting.set(false);
+        this.deletingProject.set(null);
+      },
+      error: () => {
+        this.isDeleting.set(false);
+        this.deleteError.set('Could not delete this project. Please try again.');
+      },
+    });
+  }
+
+  // ── Data loading ────────────────────────────────────────────────────────────
+
   constructor(private readonly projectService: ProjectService) {}
 
   ngOnInit(): void {
-    this.projectService.list({ size: 20, sort: 'updatedAt,desc' }).subscribe({
-      next: (page: Page<ProjectSummary>) => {
-        this.projects.set(page.content);
+    this.projectService.search().subscribe({
+      next: (projects: ProjectSummary[]) => {
+        this.projects.set(projects);
         this.isLoading.set(false);
       },
       error: () => {
@@ -66,7 +159,6 @@ export class DashboardPageComponent implements OnInit {
     });
   }
 
-  /** Stable, deterministic avatar initial for a project — purely cosmetic, not backend data. */
   initialFor(title: string): string {
     return title.charAt(0).toUpperCase();
   }

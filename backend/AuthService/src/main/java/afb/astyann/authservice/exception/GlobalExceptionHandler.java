@@ -71,12 +71,8 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String message) {
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(status.value(), message, LocalDateTime.now()));
+                .body(new ErrorResponse(status.value(), message, LocalDateTime.now(), null));
     }
 
-    public record ErrorResponse(int status, String message, LocalDateTime timestamp, String userId) {
-        public ErrorResponse(int status, String message, LocalDateTime timestamp) {
-            this(status, message, timestamp, null);
-        }
-    }
+    public record ErrorResponse(int status, String message, LocalDateTime timestamp, String userId) {}
 }

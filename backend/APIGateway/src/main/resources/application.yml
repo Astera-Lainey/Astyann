@@ -36,7 +36,7 @@ server:
 
 # ── JWT — MUST match the Auth Service exactly ─────────────────────────────
 jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  secret: ${JWT_SECRET:8n3hn46GgLZa4NvXevGPDP3MrllFwTzBFO7Pp3rSMwat+jPrQFlJERVZVguJlC58hgEIWmZHCqAR4EZ+vzm0Uw==}
 
 # ── Downstream Service URLs ───────────────────────────────────────────────
 # Override these with environment variables in production / Docker Compose

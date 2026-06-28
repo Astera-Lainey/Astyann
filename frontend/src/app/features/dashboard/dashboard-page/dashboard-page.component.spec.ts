@@ -18,51 +18,43 @@ describe('DashboardPageComponent', () => {
     return { component, fixture };
   }
 
-  it('requests GET /projects on init', async () => {
+  const searchUrl = `${environment.apiBaseUrl}/projects/search`;
+
+  it('requests GET /projects/search on init', async () => {
     await setup();
     const httpMock = TestBed.inject(HttpTestingController);
 
-    const req = httpMock.expectOne(
-      (r) => r.url === `${environment.apiBaseUrl}/projects` && r.method === 'GET',
-    );
-    req.flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 20 },
-    });
+    const req = httpMock.expectOne((r) => r.url === searchUrl && r.method === 'GET');
+    req.flush({ status: 200, message: 'OK', data: [] });
   });
 
   it('derives totalProjects and analyzingCount from the loaded list', async () => {
     const { component } = await setup();
     const httpMock = TestBed.inject(HttpTestingController);
 
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
+    httpMock.expectOne(searchUrl).flush({
       status: 200,
       message: 'OK',
-      data: {
-        content: [
-          {
-            projectId: 'p1',
-            title: 'Treasury Ledger',
-            description: 'Core banking treasury system.',
-            status: 'ANALYZING',
-            createdAt: '2026-06-01T00:00:00Z',
-            updatedAt: '2026-06-20T00:00:00Z',
-          },
-          {
-            projectId: 'p2',
-            title: 'Ledger Flow',
-            description: 'General ledger engine.',
-            status: 'ANALYZING',
-            createdAt: '2026-06-02T00:00:00Z',
-            updatedAt: '2026-06-19T00:00:00Z',
-          },
-        ],
-        totalElements: 2,
-        totalPages: 1,
-        currentPage: 0,
-        pageSize: 20,
-      },
+      data: [
+        {
+          projectId: 'p1',
+          userId: 'u1',
+          title: 'Treasury Ledger',
+          description: 'Core banking treasury system.',
+          status: 'ANALYZING',
+          creationDate: '2026-06-01T00:00:00',
+          updatedDate: '2026-06-20T00:00:00',
+        },
+        {
+          projectId: 'p2',
+          userId: 'u1',
+          title: 'Ledger Flow',
+          description: 'General ledger engine.',
+          status: 'ANALYZING',
+          creationDate: '2026-06-02T00:00:00',
+          updatedDate: '2026-06-19T00:00:00',
+        },
+      ],
     });
 
     expect(component.totalProjects()).toBe(2);
@@ -75,7 +67,7 @@ describe('DashboardPageComponent', () => {
     const httpMock = TestBed.inject(HttpTestingController);
 
     httpMock
-      .expectOne(`${environment.apiBaseUrl}/projects`)
+      .expectOne(searchUrl)
       .flush({ status: 500, message: 'Internal error.', data: null }, { status: 500, statusText: 'Server Error' });
 
     expect(component.loadError()).toBe('Could not load your projects. Please try again later.');
@@ -85,11 +77,7 @@ describe('DashboardPageComponent', () => {
   it('derives a stable uppercase initial for a project avatar', async () => {
     const { component } = await setup();
     const httpMock = TestBed.inject(HttpTestingController);
-    httpMock.expectOne(`${environment.apiBaseUrl}/projects`).flush({
-      status: 200,
-      message: 'OK',
-      data: { content: [], totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 20 },
-    });
+    httpMock.expectOne(searchUrl).flush({ status: 200, message: 'OK', data: [] });
 
     expect(component.initialFor('treasury ledger')).toBe('T');
   });

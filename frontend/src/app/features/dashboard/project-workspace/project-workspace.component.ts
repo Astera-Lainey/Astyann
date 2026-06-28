@@ -1,18 +1,20 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Router, ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { switchMap } from 'rxjs';
+import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
 import { ProjectService } from '../../../core/services/project.service';
-import { Project } from '../../../core/models/project.models';
+import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../../../core/models/project.models';
+import { ToastService } from '../../../core/services/toast.service';
+import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
 
-/** The 6 workspace sections, matching the React source's switch cases exactly. */
 export type WorkspaceSection =
   | 'requirements'
   | 'design'
   | 'documents'
   | 'code'
   | 'versions'
-  | 'deploy';
+  | 'deploy'
+  | 'review';
 
 const SECTION_LABELS: Record<WorkspaceSection, string> = {
   requirements: 'Requirements',
@@ -21,34 +23,18 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
   code: 'Code',
   versions: 'Version History',
   deploy: 'Deployment',
+  review: 'Review',
 };
 
-/**
- * Project Workspace shell — converted from `app.projects.$id.$section.tsx`.
- *
- * Loads the project via `GET /projects/{projectId}` (API-PROJ-03) for the
- * header/breadcrumb, then switches on the `:section` route param to render
- * one of 6 placeholder views. The originals (`RequirementsView`,
- * `SystemDesignView`, `DocumentsView`, `CodeView`, `VersionsView`,
- * `DeployView`) were referenced by the React source but never provided —
- * each is out of scope here and shown as "coming soon" until built in a
- * future batch, per project decision.
- *
- * Route params are observed reactively (`paramMap`, not a one-time
- * snapshot) because navigating between sections of the *same* project
- * re-uses this component rather than destroying/recreating it — Angular's
- * router does this by default when only params change on an otherwise
- * identical route. A snapshot would miss those in-place updates.
- */
 @Component({
   selector: 'app-project-workspace-page',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, RequirementsViewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-workspace.component.html',
   styleUrl: './project-workspace.component.scss',
 })
-export class ProjectWorkspaceComponent implements OnInit {
+export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   readonly project = signal<Project | null>(null);
   readonly section = signal<WorkspaceSection | null>(null);
   readonly isLoading = signal(true);
@@ -56,35 +42,45 @@ export class ProjectWorkspaceComponent implements OnInit {
 
   readonly sectionLabels = SECTION_LABELS;
   readonly sectionOrder: WorkspaceSection[] = [
-    'requirements',
-    'design',
-    'documents',
-    'code',
-    'versions',
-    'deploy',
+    'requirements', 'design', 'documents', 'code', 'versions', 'deploy',
   ];
+
+  readonly pcsfStatus = signal<string>('DRAFT');
+  readonly pendingQuestionsCount = signal(0);
+
+  private projectId: string | null = null;
+  private statusPollSub: Subscription | null = null;
+
+  readonly showQuestionsModal = signal(false);
+  readonly submittingAnswers = signal(false);
+  readonly submitError = signal<string | null>(null);
+  questions: ClarificationQuestion[] = [];
+  currentIndex = 0;
+  answers = new Map<string, string>();
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
     private readonly projectService: ProjectService,
+    private readonly toastService: ToastService,
   ) {}
 
   ngOnInit(): void {
     this.route.paramMap
       .pipe(
         switchMap((params) => {
-          const section = params.get('section') as WorkspaceSection | null;
-          this.section.set(section);
+          this.projectId = params.get('id');
+          this.section.set(params.get('section') as WorkspaceSection | null);
           this.isLoading.set(true);
           this.loadError.set(null);
-          const projectId = params.get('id')!;
-          return this.projectService.getById(projectId);
+          return this.projectService.getById(params.get('id')!);
         }),
       )
       .subscribe({
         next: (project) => {
           this.project.set(project);
           this.isLoading.set(false);
+          this.startStatusPolling();
         },
         error: (error: HttpErrorResponse) => {
           this.isLoading.set(false);
@@ -97,12 +93,145 @@ export class ProjectWorkspaceComponent implements OnInit {
       });
   }
 
+  ngOnDestroy(): void {
+    this.statusPollSub?.unsubscribe();
+  }
+
   get currentSectionLabel(): string {
     const section = this.section();
     return section ? SECTION_LABELS[section] : '';
   }
 
+  get breadcrumbSectionLabel(): string {
+    const section = this.section();
+    const status = this.pcsfStatus();
+    if (section === 'requirements' && status !== 'VALIDATED') return 'Questions';
+    if (section === 'review') return 'Requirements';
+    return section ? SECTION_LABELS[section] : '';
+  }
+
   get isKnownSection(): boolean {
     return this.section() !== null && this.section()! in SECTION_LABELS;
+  }
+
+  // ── Status polling ──────────────────────────────────────────────────────────
+
+  private startStatusPolling(): void {
+    if (!this.projectId) return;
+    const pid = this.projectId;
+    const terminalStatuses = ['UNDER_REVIEW', 'VALIDATED', 'FAILED'];
+
+    this.statusPollSub?.unsubscribe();
+    this.statusPollSub = timer(0, 5000)
+      .pipe(
+        switchMap(() => this.projectService.getPcsfStatus(pid)),
+        takeWhile((response) => !terminalStatuses.includes(response.pcsfStatus), true),
+      )
+      .subscribe({
+        next: (response) => {
+          this.pcsfStatus.set(response.pcsfStatus);
+          this.pendingQuestionsCount.set(response.pendingQuestionsCount);
+
+          if (response.pendingQuestionsCount > 0 && !this.showQuestionsModal()) {
+            this.openQuestionsModal();
+          } else if (response.pcsfStatus === 'UNDER_REVIEW' && this.section() !== 'review') {
+            this.router.navigate(['/app/projects', pid, 'review']);
+          } else if (response.pcsfStatus === 'FAILED') {
+            this.toastService.show(
+              'Could not analyse your document. Please try again.',
+              'error',
+            );
+          }
+        },
+        error: (err) => {
+          console.error('Status polling failed', err);
+        },
+      });
+  }
+
+  // ── Questions modal ─────────────────────────────────────────────────────────
+
+  openQuestionsModal(): void {
+    if (!this.projectId) return;
+    this.projectService.getQuestions(this.projectId).subscribe({
+      next: (questions) => {
+        if (questions.length > 0) {
+          this.questions = questions;
+          this.currentIndex = 0;
+          this.answers = new Map<string, string>();
+          this.submitError.set(null);
+          this.showQuestionsModal.set(true);
+        }
+      },
+      error: () => {
+        this.toastService.show('Failed to load questions. Please try again.', 'error');
+      },
+    });
+  }
+
+  get currentQuestion(): ClarificationQuestion {
+    return this.questions[this.currentIndex];
+  }
+
+  get isFirst(): boolean { return this.currentIndex === 0; }
+  get isLast(): boolean { return this.currentIndex === this.questions.length - 1; }
+  get currentAnswer(): string { return this.answers.get(this.currentQuestion.id) ?? ''; }
+  get progressPercent(): number {
+    return ((this.currentIndex + 1) / this.questions.length) * 100;
+  }
+
+  setAnswer(value: string): void { this.answers.set(this.currentQuestion.id, value); }
+  onInput(event: Event): void { this.setAnswer((event.target as HTMLInputElement).value); }
+  onTextareaInput(event: Event): void { this.setAnswer((event.target as HTMLTextAreaElement).value); }
+  goBack(): void { if (!this.isFirst) this.currentIndex--; }
+  goNext(): void { if (!this.isLast) this.currentIndex++; }
+
+  toggleMultiSelect(option: string): void {
+    const current = this.getMultiSelectOptions();
+    const idx = current.indexOf(option);
+    if (idx >= 0) current.splice(idx, 1); else current.push(option);
+    this.answers.set(this.currentQuestion.id, current.join(','));
+  }
+
+  getMultiSelectOptions(): string[] {
+    return (this.answers.get(this.currentQuestion.id) ?? '').split(',').filter(Boolean);
+  }
+
+  isMultiSelected(option: string): boolean {
+    return this.getMultiSelectOptions().includes(option);
+  }
+
+  submitAnswers(): void {
+    this.submitError.set(null);
+    this.submittingAnswers.set(true);
+    const pid = this.projectId;
+    if (!pid) {
+      this.submitError.set('Something went wrong — please start over.');
+      this.submittingAnswers.set(false);
+      return;
+    }
+    const payload = {
+      answers: Array.from(this.answers.entries()).map(([questionId, answer]) => ({
+        questionId,
+        answer,
+      })),
+    };
+    this.projectService.submitAnswers(pid, payload).subscribe({
+      next: (response: SubmitAnswersResponseData) => {
+        this.submittingAnswers.set(false);
+        this.pcsfStatus.set(response.pcsfStatus);
+        this.pendingQuestionsCount.set(response.pendingQuestionsCount);
+
+        if (response.pendingQuestionsCount > 0) {
+          this.openQuestionsModal();
+        } else {
+          this.showQuestionsModal.set(false);
+        }
+      },
+      error: () => {
+        this.submittingAnswers.set(false);
+        this.submitError.set('Something went wrong. Please try again.');
+      },
+    });
   }
 }

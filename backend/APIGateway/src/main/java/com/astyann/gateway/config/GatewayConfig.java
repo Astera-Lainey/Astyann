@@ -25,31 +25,31 @@ public class GatewayConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
 
-    @Value("${services.auth-service.url}")
+    @Value("${services.auth-service.url:http://localhost:8081}")
     private String authServiceUrl;
 
-    @Value("${services.project-service.url}")
+    @Value("${services.project-service.url:http://localhost:8082}")
     private String projectServiceUrl;
 
-    @Value("${services.requirement-service.url}")
+    @Value("${services.requirement-service.url:http://localhost:8083}")
     private String requirementServiceUrl;
 
-    @Value("${services.uml-service.url}")
+    @Value("${services.uml-service.url:http://localhost:8084}")
     private String umlServiceUrl;
 
-    @Value("${services.document-service.url}")
+    @Value("${services.document-service.url:http://localhost:8085}")
     private String documentServiceUrl;
 
-    @Value("${services.code-generation-service.url}")
+    @Value("${services.code-generation-service.url:http://localhost:8086}")
     private String codeGenerationServiceUrl;
 
-    @Value("${services.version-management-service.url}")
+    @Value("${services.version-management-service.url:http://localhost:8087}")
     private String versionManagementServiceUrl;
 
-    @Value("${services.deployment-service.url}")
+    @Value("${services.deployment-service.url:http://localhost:8088}")
     private String deploymentServiceUrl;
 
-    @Value("${services.ai-orchestrator-service.url}")
+    @Value("${services.ai-orchestrator-service.url:http://localhost:8089}")
     private String aiOrchestratorServiceUrl;
 
     public GatewayConfig(JwtAuthenticationFilter jwtFilter) {
