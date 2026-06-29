@@ -73,8 +73,8 @@ public class PcsfController {
      * Returns the full PCSF object for the review screen.
      */
     @GetMapping("/{projectId}/pcsf")
-    public ResponseEntity<ApiResponse<Pcsf>> getPcsf(@PathVariable UUID projectId) {
-        Project project = findOrThrow(projectId);
+    public ResponseEntity<ApiResponse<Pcsf>> getPcsf(@PathVariable String projectId) {
+        Project project = findOrThrow(parseId(projectId));
         if (project.getPcsfJson() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.<Pcsf>builder()
@@ -123,8 +123,8 @@ public class PcsfController {
      */
     @PostMapping("/{projectId}/pcsf/validate")
     public ResponseEntity<ApiResponse<PcsfValidateResponse>> validatePcsf(
-            @PathVariable UUID projectId) {
-        PcsfValidateResponse result = validationService.validate(projectId);
+            @PathVariable String projectId) {
+        PcsfValidateResponse result = validationService.validate(parseId(projectId));
         int status = result.isValid() ? 200 : 422;
         return ResponseEntity.status(status)
                 .body(ApiResponse.<PcsfValidateResponse>builder()
@@ -139,8 +139,8 @@ public class PcsfController {
      */
     @GetMapping("/{projectId}/pcsf/status")
     public ResponseEntity<ApiResponse<PcsfStatusResponse>> getPcsfStatus(
-            @PathVariable UUID projectId) {
-        Project project = findOrThrow(projectId);
+            @PathVariable String projectId) {
+        Project project = findOrThrow(parseId(projectId));
         double score = 0.0;
         if (project.getPcsfJson() != null) {
             try {
@@ -204,5 +204,23 @@ public class PcsfController {
                 .options(options).placeholder(q.getPlaceholder())
                 .answered(q.isAnswered()).answer(q.getAnswer())
                 .build();
+    }
+
+    private UUID parseId(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new IllegalArgumentException("X-User-Id header is missing");
+        }
+        String s = rawId.trim();
+        // Strip 0x prefix if present
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        // Insert dashes if raw 32-char hex (no dashes)
+        if (s.length() == 32 && !s.contains("-")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-"
+                    + s.substring(12, 16) + "-" + s.substring(16, 20) + "-"
+                    + s.substring(20);
+        }
+        return UUID.fromString(s);
     }
 }

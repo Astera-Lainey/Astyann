@@ -1,13 +1,16 @@
 package afb.astyann.projectservice.pcsf.service;
 
 import afb.astyann.projectservice.client.AIServiceClient;
+import afb.astyann.projectservice.domain.ClarificationQuestion;
 import afb.astyann.projectservice.domain.PcsfStatus;
 import afb.astyann.projectservice.domain.Project;
+import afb.astyann.projectservice.dto.ProjectAnalysisResponseDTO;
 import afb.astyann.projectservice.pcsf.dto.InferenceResponseDTO;
 import afb.astyann.projectservice.pcsf.model.*;
 import afb.astyann.projectservice.pcsf.model.enums.FieldSource;
 import afb.astyann.projectservice.pcsf.model.enums.FieldStatus;
 import afb.astyann.projectservice.pcsf.model.enums.RiskLevel;
+import afb.astyann.projectservice.repository.ClarificationQuestionRepository;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,9 +31,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AiInferencePcsfService {
 
-    private final AIServiceClient   aiServiceClient;
-    private final ProjectRepository projectRepository;
-    private final ObjectMapper      objectMapper;
+    private final AIServiceClient                  aiServiceClient;
+    private final ProjectRepository                projectRepository;
+    private final ClarificationQuestionRepository  clarificationQuestionRepository;
+    private final ObjectMapper                     objectMapper;
 
     @Async
     @Transactional
@@ -49,10 +53,18 @@ public class AiInferencePcsfService {
         try {
             Pcsf pcsf = objectMapper.readValue(project.getPcsfJson(), Pcsf.class);
 
-            runInf1Entities(pcsf);
+            // Merge document context with answered clarification questions before inference.
+            // This gives every INF step the richest possible natural-language description.
+            String fullContext = mergeContextWithAnswers(project);
+            if (fullContext != null && !fullContext.isBlank()) {
+                project.setProjectContext(fullContext);
+                projectRepository.save(project);
+            }
+
+            runInf1Entities(pcsf, fullContext);
             runInf2Relationships(pcsf);
-            runInf3BusinessRules(pcsf);
-            runInf4ScreensAndNfr(pcsf);
+            runInf3BusinessRules(pcsf, fullContext);
+            runInf4ScreensAndNfr(pcsf, fullContext);
 
             pcsf.getValidation().setPendingInferredItems(List.of());
             project.setPcsfJson(objectMapper.writeValueAsString(pcsf));
@@ -69,19 +81,21 @@ public class AiInferencePcsfService {
 
     // ── INF-1: Entity Model ───────────────────────────────────────────────────
 
-    private void runInf1Entities(Pcsf pcsf) {
-        String projectName  = val(pcsf.getProject().getName());
-        String description  = val(pcsf.getProject().getDescription());
+    private void runInf1Entities(Pcsf pcsf, String fullContext) {
+        String projectName   = val(pcsf.getProject().getName());
+        String description   = val(pcsf.getProject().getDescription());
         String moduleSummary = pcsf.getModules().stream()
                 .map(m -> "- " + val(m.getName()) + ": " + val(m.getDescription()))
                 .collect(Collectors.joining("\n"));
+        String contextBlock  = fullContext != null && !fullContext.isBlank()
+                ? "\nFULL PROJECT CONTEXT:\n" + fullContext + "\n" : "";
 
         String prompt = """
                 You are a senior software architect.
                 Based on the project context below, identify all database entities required.
 
                 PROJECT NAME: %s
-                DESCRIPTION: %s
+                DESCRIPTION: %s%s
                 MODULES AND FEATURES:
                 %s
 
@@ -115,7 +129,7 @@ public class AiInferencePcsfService {
                     }
                   ]
                 }
-                """.formatted(projectName, description, moduleSummary);
+                """.formatted(projectName, description, contextBlock, moduleSummary);
 
         try {
             String content = infer("qwen2.5-coder:7b",
@@ -225,8 +239,9 @@ public class AiInferencePcsfService {
 
     // ── INF-3: Business Rules, Status Machines, ACL ───────────────────────────
 
-    private void runInf3BusinessRules(Pcsf pcsf) {
-        String contextSummary = val(pcsf.getProject().getDescription());
+    private void runInf3BusinessRules(Pcsf pcsf, String fullContext) {
+        String contextSummary = (fullContext != null && !fullContext.isBlank())
+                ? fullContext : val(pcsf.getProject().getDescription());
         String entitySummary = pcsf.getEntities().stream()
                 .map(e -> e.getId() + ":" + val(e.getName())).collect(Collectors.joining(", "));
         String actorSummary = pcsf.getActors().stream()
@@ -323,7 +338,7 @@ public class AiInferencePcsfService {
 
     // ── INF-4: Screens, Navigation, NFRs ─────────────────────────────────────
 
-    private void runInf4ScreensAndNfr(Pcsf pcsf) {
+    private void runInf4ScreensAndNfr(Pcsf pcsf, String fullContext) {
         String entitySummary = pcsf.getEntities().stream()
                 .map(e -> e.getId() + ":" + val(e.getName())).collect(Collectors.joining(", "));
         String moduleSummary = pcsf.getModules().stream()
@@ -333,9 +348,11 @@ public class AiInferencePcsfService {
                         (a.getAllowedRoles() != null && a.getAllowedRoles().getValue() != null
                                 ? a.getAllowedRoles().getValue().toString() : "[]"))
                 .collect(Collectors.joining("; "));
+        String contextBlock = fullContext != null && !fullContext.isBlank()
+                ? "\nFULL PROJECT CONTEXT:\n" + fullContext + "\n" : "";
 
         String prompt = """
-                Based on the entities, modules and access control rules, generate:
+                Based on the entities, modules, access control rules and project context, generate:
 
                 1. Angular screens — rules:
                    - Every entity gets one LIST screen and one FORM screen (create+edit)
@@ -350,7 +367,7 @@ public class AiInferencePcsfService {
 
                 ENTITIES: %s
                 MODULES: %s
-                ACCESS CONTROL: %s
+                ACCESS CONTROL: %s%s
 
                 Return ONLY valid JSON:
                 {
@@ -372,7 +389,7 @@ public class AiInferencePcsfService {
                     "securityDepth": "RBAC"
                   }
                 }
-                """.formatted(entitySummary, moduleSummary, aclSummary);
+                """.formatted(entitySummary, moduleSummary, aclSummary, contextBlock);
 
         try {
             String content = infer("qwen2.5-coder:7b",
@@ -434,6 +451,46 @@ public class AiInferencePcsfService {
         } catch (Exception ex) {
             log.error("INF-4 inference failed", ex);
         }
+    }
+
+    // ── Context Merge ─────────────────────────────────────────────────────────
+
+    private String mergeContextWithAnswers(Project project) {
+        List<ClarificationQuestion> answered = clarificationQuestionRepository
+                .findByProject_ProjectIdOrderByPriorityAsc(project.getProjectId())
+                .stream()
+                .filter(q -> q.isAnswered() && q.getAnswer() != null && !q.getAnswer().isBlank())
+                .toList();
+
+        String existingContext = project.getProjectContext();
+
+        if (answered.isEmpty()) {
+            log.debug("No answered questions for project={} — using existing document context",
+                    project.getProjectId());
+            return existingContext;
+        }
+
+        List<AIServiceClient.MergeRequestBody.AnswerItem> answerItems = answered.stream()
+                .map(q -> new AIServiceClient.MergeRequestBody.AnswerItem(q.getQuestion(), q.getAnswer()))
+                .toList();
+
+        try {
+            ProjectAnalysisResponseDTO merged = aiServiceClient.mergeDocumentAndAnswers(
+                    project.getProjectId(),
+                    new AIServiceClient.MergeRequestBody(project.getProjectId(), existingContext, answerItems));
+
+            if (merged != null && merged.getExtractedContext() != null
+                    && !merged.getExtractedContext().isBlank()) {
+                log.info("Context merged with {} Q&A pairs for project={}",
+                        answered.size(), project.getProjectId());
+                return merged.getExtractedContext();
+            }
+        } catch (Exception ex) {
+            log.warn("Context merge failed for project={}, falling back to document context: {}",
+                    project.getProjectId(), ex.getMessage());
+        }
+
+        return existingContext;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
