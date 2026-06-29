@@ -25,6 +25,9 @@ export class ProjectService {
   private readonly _projectDeleted = new Subject<string>();
   readonly projectDeleted$ = this._projectDeleted.asObservable();
 
+  private readonly _projectCreated = new Subject<ProjectSummary>();
+  readonly projectCreated$ = this._projectCreated.asObservable();
+
   constructor(private readonly http: HttpClient) {}
 
   /**
@@ -52,7 +55,10 @@ export class ProjectService {
     formData.append('document', request.specificationFile);
     return this.http
       .post<ApiEnvelope<Project>>(this.baseUrl, formData)
-      .pipe(map((res) => res.data));
+      .pipe(
+        map((res) => res.data),
+        tap((project) => this._projectCreated.next(project)),
+      );
   }
 
   /**

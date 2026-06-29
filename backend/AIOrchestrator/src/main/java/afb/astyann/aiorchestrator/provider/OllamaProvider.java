@@ -19,7 +19,7 @@ public class OllamaProvider implements AIProvider {
 
     private final OllamaChatModel chatModel;
 
-    @Value("${spring.ai.ollama.chat.options.model:llama3.2}")
+    @Value("${spring.ai.ollama.chat.options.model:qwen2.5-coder:3b}")
     private String modelName;
 
     public OllamaProvider(OllamaChatModel chatModel) {

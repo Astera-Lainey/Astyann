@@ -20,6 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -93,13 +95,19 @@ public class ProjectServiceImpl implements IProjectService {
         // Initialise blank PCSF with hardcoded values and derived names.
         pcsfInitialiserService.initialise(saved);
 
-        // Fire AI processing in the background.
-        // This returns immediately — it does NOT block the HTTP response.
-        projectBackgroundService.processDocumentAsync(
-                saved.getProjectId(),
-                docBytes,
-                document.getOriginalFilename(),
-                document.getContentType());
+        // Fire AI processing in the background AFTER the transaction commits,
+        // so the async thread can see the newly-saved project.
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        projectBackgroundService.processDocumentAsync(
+                                saved.getProjectId(),
+                                docBytes,
+                                document.getOriginalFilename(),
+                                document.getContentType());
+                    }
+                });
 
         // Return 201 immediately. Angular will poll the status endpoint
         // to know when background processing finishes.
