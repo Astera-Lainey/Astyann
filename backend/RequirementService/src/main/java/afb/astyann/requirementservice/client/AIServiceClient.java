@@ -1,6 +1,7 @@
-package afb.astyann.projectservice.client;
+package afb.astyann.requirementservice.client;
 
-import afb.astyann.projectservice.dto.ProjectAnalysisResponseDTO;
+import afb.astyann.requirementservice.dto.InferenceResponseDTO;
+import afb.astyann.requirementservice.dto.ProjectAnalysisResponseDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +26,12 @@ public interface AIServiceClient {
             @PathVariable UUID projectId,
             @RequestBody MergeRequestBody body);
 
+    @PostMapping("/api/v1/ai/infer")
+    InferenceResponseDTO infer(@RequestBody InferBody body);
+
     record MergeRequestBody(UUID projectId, String documentContext, List<AnswerItem> answers) {
         public record AnswerItem(String question, String answer) {}
     }
+
+    record InferBody(String model, String systemPrompt, String userPrompt) {}
 }

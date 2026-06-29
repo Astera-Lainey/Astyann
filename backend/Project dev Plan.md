@@ -1,0 +1,171 @@
+REPUBLIQUE DU CAMEROUN
+
+\*\*\*\*\*
+
+Paix\-Travail\-Patrie
+
+REPUBLIC OF CAMEROUN
+
+\*\*\*\*\*
+
+Peace\-Work\-Fatherland
+
+![](data:image/jpeg;base64,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)
+
+__	__
+
+__AFRILAND FIRST BANK__
+
+Directions des Systèmes d’Information
+
+__Design and Implementation of a Software Development Automation Platform __
+
+__Plan of Work__
+
+__Presented by:__
+
+FORBIN Astera\-Lainey Etonde
+
+__and__
+
+KOUETCHE SIMO Yann Jefferson
+
+*Engineering students in Computer Science and Information Systems*
+
+Based on the User Stories backlog \(338 Story Points, 8 sprints\)\.  
+Prepared on: 17 June 2026
+
+Academic Year 2025\-2026
+
+June 2026
+
+## Project Schedule
+
+Sprint
+
+Objective
+
+Start Date
+
+End Date
+
+Services Required
+
+Key Deliverables
+
+1
+
+User Management & Authentication
+
+15 June 2026
+
+21 June 2026
+
+Authentication Service, API Gateway
+
+User registration, login, password reset, logout, JWT security layer, error\-handling framework, dashboard scaffold\.
+
+2
+
+Project Lifecycle Management
+
+22 June 2026
+
+28 June 2026
+
+API Gateway, Project Service, AI orchestrator service\.
+
+Project creation with document upload and guided questions, project listing, search, deletion, file parsing pipeline \(PDF/DOCX\), project workspace routing\.
+
+3
+
+Requirements Extraction & Validation
+
+29 June 2026
+
+05 July 2026
+
+API Gateway, Requirement Service, RAG service, AI orchestrator service\. 
+
+Automatic requirements generation, requirements review workspace, approval with RAG initialization, change request workflow, iterative regeneration\.
+
+4
+
+UML Diagram Generation & Approval
+
+06 July 2026
+
+12 July 2026
+
+UML Service, API Gateway, RAG service, AI orchestrator service, Kroki\(external\), Version service
+
+PlantUML generation, Kroki rendering integration, design review workspace, approval workflow, diagram regeneration and versioning\.
+
+5
+
+System Documentation Generation
+
+13 July 2026
+
+19 July 2026
+
+Document Service, API Gateway, RAG service, AI orchestrator service, Version service
+
+Documentation generation, RAG indexing, validation, regeneration workflow, DOCX export\.
+
+6
+
+Code Generation & Version Management
+
+20 July 2026
+
+26 July 2026
+
+API Gateway, Code Service, RAG service, AI orchestrator service, Version service
+
+Full code generation, automatic validation/self\-correction, code approval, version snapshots, ZIP download\.
+
+7
+
+Deployment Packaging & Version Timeline
+
+27 July 2026
+
+02 Aug 2026
+
+API Gateway, Deployment Service, AI orchestrator service, Version service
+
+Docker deployment package generation, deployment ZIP download, version timeline, historical download, restoration\.
+
+8
+
+Dockerise and final Presentation 
+
+03 Aug 2026
+
+09 Aug 2026
+
+/
+
+Dockerised application, deployment documentation, validation report, final presentation, and deployment\-ready package for the company's server\.
+
+## NB: Testing is done throughout each sprint\!
+
+## Milestones
+
+M1\. Authentication and security completed
+
+M2\. Project management workflow operational
+
+M3\. Requirements generation validated
+
+M4\. Diagram generation approved
+
+M5\. Documentation generation completed
+
+M6\. Code generation and validation completed
+
+M7\. Deployment package available
+
+M8\. Final testing and hardening completed
+

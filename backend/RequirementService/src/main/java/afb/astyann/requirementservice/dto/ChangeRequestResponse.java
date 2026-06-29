@@ -1,0 +1,13 @@
+package afb.astyann.requirementservice.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data @Builder @AllArgsConstructor @NoArgsConstructor
+public class ChangeRequestResponse {
+    private String changeRequestId;
+    private String status;
+    private String message;
+}

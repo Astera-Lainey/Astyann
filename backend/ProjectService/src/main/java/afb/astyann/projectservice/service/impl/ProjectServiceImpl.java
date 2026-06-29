@@ -8,9 +8,6 @@ import afb.astyann.projectservice.domain.ProjectStatus;
 import afb.astyann.projectservice.dto.*;
 import afb.astyann.projectservice.exception.InvalidFileFormatException;
 import afb.astyann.projectservice.exception.ProjectNotFoundException;
-import afb.astyann.projectservice.pcsf.service.DocumentExtractionService;
-import afb.astyann.projectservice.pcsf.service.PcsfInitialiserService;
-import afb.astyann.projectservice.repository.ClarificationQuestionRepository;
 import afb.astyann.projectservice.repository.GuidedQuestionRepository;
 import afb.astyann.projectservice.repository.ProjectRepository;
 import afb.astyann.projectservice.service.IProjectService;
@@ -49,18 +46,15 @@ public class ProjectServiceImpl implements IProjectService {
     @Value("${app.upload-dir:uploads/documents}")
     private String uploadDir;
 
-    private final ProjectRepository                projectRepository;
-    private final GuidedQuestionRepository         guidedQuestionRepository;
-    private final ClarificationQuestionRepository  clarificationQuestionRepository;
-    private final AIServiceClient             aiServiceClient;
-    private final RequirementsServiceClient   requirementsClient;
-    private final DocumentServiceClient       documentClient;
-    private final UMLServiceClient            umlClient;
-    private final CodeGenServiceClient        codeGenClient;
-    private final DeploymentServiceClient     deploymentClient;
-    private final PcsfInitialiserService      pcsfInitialiserService;
-    private final DocumentExtractionService   documentExtractionService;
-    private final ProjectBackgroundService    projectBackgroundService;
+    private final ProjectRepository          projectRepository;
+    private final GuidedQuestionRepository   guidedQuestionRepository;
+    private final AIServiceClient            aiServiceClient;
+    private final RequirementsServiceClient  requirementsClient;
+    private final DocumentServiceClient      documentClient;
+    private final UMLServiceClient           umlClient;
+    private final CodeGenServiceClient       codeGenClient;
+    private final DeploymentServiceClient    deploymentClient;
+    private final ProjectBackgroundService   projectBackgroundService;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -92,9 +86,6 @@ public class ProjectServiceImpl implements IProjectService {
         Project saved = projectRepository.save(project);
         log.debug("Project saved: id={}", saved.getProjectId());
 
-        // Initialise blank PCSF with hardcoded values and derived names.
-        pcsfInitialiserService.initialise(saved);
-
         // Fire AI processing in the background AFTER the transaction commits,
         // so the async thread can see the newly-saved project.
         TransactionSynchronizationManager.registerSynchronization(
@@ -114,58 +105,6 @@ public class ProjectServiceImpl implements IProjectService {
         return toDTO(saved);
     }
 
-    // ── Guided Questions (legacy Sprint 2 — kept for backward compatibility) ──
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<GuidedQuestionDTO> getGuidedQuestions(UUID projectId) {
-        findOrThrow(projectId);
-        return guidedQuestionRepository.findByProjectId(projectId).stream()
-                .map(gq -> GuidedQuestionDTO.builder()
-                        .gqId(gq.getGqId())
-                        .question(gq.getQuestion())
-                        .answer(gq.getAnswer())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public ProjectDTO submitGuidedAnswers(UUID projectId, SubmitAnswersDTO dto) {
-        log.info("Submitting guided answers for projectId={}", projectId);
-        Project project = findOrThrow(projectId);
-
-        List<GuidedQuestion> questions = guidedQuestionRepository.findByProjectId(projectId);
-
-        if (dto.getAnswers() != null) {
-            dto.getAnswers().forEach(item -> questions.stream()
-                    .filter(q -> q.getGqId().equals(item.getGqId()))
-                    .findFirst()
-                    .ifPresent(q -> {
-                        q.setAnswer(item.getAnswer());
-                        guidedQuestionRepository.save(q);
-                    }));
-        }
-
-        List<AIServiceClient.MergeRequestBody.AnswerItem> answerItems = questions.stream()
-                .filter(q -> q.getAnswer() != null)
-                .map(q -> new AIServiceClient.MergeRequestBody.AnswerItem(q.getQuestion(), q.getAnswer()))
-                .collect(Collectors.toList());
-
-        AIServiceClient.MergeRequestBody mergeBody = new AIServiceClient.MergeRequestBody(
-                projectId, project.getProjectContext(), answerItems);
-
-        ProjectAnalysisResponseDTO merged = callClient("ai-merge",
-                () -> aiServiceClient.mergeDocumentAndAnswers(projectId, mergeBody));
-
-        if (merged != null) {
-            project.setProjectContext(merged.getExtractedContext());
-            project.setStatus(ProjectStatus.COMPLETED);
-            projectRepository.save(project);
-        }
-
-        return toDTO(project);
-    }
-
     // ── Update ────────────────────────────────────────────────────────────────
 
     @Override
@@ -183,8 +122,7 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     public void deleteProject(UUID projectId) {
         log.info("Deleting project id={}", projectId);
-        Project project = findOrThrow(projectId);
-        clarificationQuestionRepository.deleteByProject(project);
+        findOrThrow(projectId);
         guidedQuestionRepository.deleteByProjectId(projectId);
         projectRepository.deleteByProjectId(projectId);
     }
@@ -219,8 +157,7 @@ public class ProjectServiceImpl implements IProjectService {
         projectRepository.save(project);
 
         switch (type) {
-            case REQUIREMENTS -> callClient("requirements", () ->
-                    requirementsClient.triggerRequirementsGeneration(projectId));
+            case REQUIREMENTS -> log.info("Requirements pipeline is auto-initiated on project creation.");
             case DOCUMENTS    -> callClient("documents",    () ->
                     documentClient.triggerDocumentGeneration(projectId));
             case UML          -> callClient("uml",          () ->
@@ -230,11 +167,10 @@ public class ProjectServiceImpl implements IProjectService {
             case DEPLOYMENT   -> callClient("deployment",   () ->
                     deploymentClient.triggerDeploymentGeneration(projectId));
             case FULL -> {
-                callClient("requirements", () -> requirementsClient.triggerRequirementsGeneration(projectId));
-                callClient("documents",    () -> documentClient.triggerDocumentGeneration(projectId));
-                callClient("uml",          () -> umlClient.triggerUMLGeneration(projectId));
-                callClient("codegen",      () -> codeGenClient.triggerCodeGeneration(projectId));
-                callClient("deployment",   () -> deploymentClient.triggerDeploymentGeneration(projectId));
+                callClient("documents",  () -> documentClient.triggerDocumentGeneration(projectId));
+                callClient("uml",        () -> umlClient.triggerUMLGeneration(projectId));
+                callClient("codegen",    () -> codeGenClient.triggerCodeGeneration(projectId));
+                callClient("deployment", () -> deploymentClient.triggerDeploymentGeneration(projectId));
             }
         }
     }

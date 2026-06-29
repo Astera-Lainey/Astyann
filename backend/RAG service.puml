@@ -1,0 +1,143 @@
+' ============================================================
+' 9. RAG SERVICE — Design Class Diagram
+' ============================================================
+@startuml RAGService_DesignClass
+left to right direction
+skinparam classAttributeIconSize 0
+
+package "controller" {
+  class RAGController {
+    -ragService : IRAGService
+    +indexDocument(dto : IndexRequestDTO) : ResponseEntity<Void>
+    +indexBatch(dto : BatchIndexRequestDTO) : ResponseEntity<Void>
+    +retrieveContext(dto : RetrievalRequestDTO) : ResponseEntity<RetrievalResponseDTO>
+    +deleteIndex(projectId : UUID) : ResponseEntity<Void>
+    +rebuildIndex(projectId : UUID) : ResponseEntity<Void>
+  }
+}
+
+package "service" {
+  interface IRAGService {
+    +indexDocument(request : IndexRequestDTO) : void
+    +indexBatch(request : BatchIndexRequestDTO) : void
+    +retrieveContext(request : RetrievalRequestDTO) : RetrievalResponseDTO
+    +deleteIndex(projectId : UUID) : void
+    +rebuildIndex(projectId : UUID) : void
+  }
+
+  class RAGServiceImpl {
+    -embeddingService : EmbeddingService
+    -vectorRepository : VectorRepository
+    -chunkingService : ChunkingService
+    -storageReader : StorageReaderService
+    +indexDocument(request : IndexRequestDTO) : void
+    +indexBatch(request : BatchIndexRequestDTO) : void
+    +retrieveContext(request : RetrievalRequestDTO) : RetrievalResponseDTO
+    +deleteIndex(projectId : UUID) : void
+    +rebuildIndex(projectId : UUID) : void
+  }
+
+  class EmbeddingService {
+    -providerName : String
+    -modelName : String
+    +embed(text : String) : float[]
+    +embedBatch(texts : List<String>) : List<float[]>
+  }
+
+  class ChunkingService {
+    -chunkSize : int
+    -chunkOverlap : int
+    +chunk(content : String) : List<String>
+    +chunkWithMetadata(content : String, metadata : Map<String,String>) : List<Chunk>
+  }
+}
+
+package "domain" {
+  class VectorEntry {
+    -entryId : UUID
+    -projectId : UUID
+    -sourceType : SourceType
+    -sourceId : UUID
+    -content : String
+    -vector : float[]
+    -metadata : Map<String, String>
+    -indexedDate : LocalDateTime
+  }
+
+  class Chunk {
+    -chunkId : UUID
+    -content : String
+    -metadata : Map<String, String>
+    -sequenceNumber : int
+  }
+
+  enum SourceType {
+    REQUIREMENT
+    DOCUMENT
+    DIAGRAM
+    CODE
+    TEMPLATE
+  }
+}
+
+package "repository" {
+  interface VectorRepository {
+    +insert(entry : VectorEntry) : void
+    +insertBatch(entries : List<VectorEntry>) : void
+    +similaritySearch(projectId : UUID, queryVector : float[], topK : int) : List<VectorEntry>
+    +deleteByProjectId(projectId : UUID) : void
+    +deleteBySourceId(sourceId : UUID) : void
+  }
+}
+
+package "dto" {
+  class IndexRequestDTO {
+    +projectId : UUID
+    +sourceType : SourceType
+    +sourceId : UUID
+    +content : String
+    +metadata : Map<String, String>
+  }
+
+  class BatchIndexRequestDTO {
+    +projectId : UUID
+    +sourceType : SourceType
+    +items : List<IndexRequestDTO>
+  }
+
+  class RetrievalRequestDTO {
+    +projectId : UUID
+    +query : String
+    +topK : int
+    +sourceTypeFilter : SourceType
+  }
+
+  class RetrievalResponseDTO {
+    +context : String
+    +chunks : List<String>
+    +sources : List<String>
+    +scores : List<Double>
+  }
+}
+
+package "client" {
+  class StorageReaderService {
+    +readRequirements(projectId : UUID) : List<String>
+    +readDocuments(projectId : UUID) : List<String>
+    +readDiagrams(projectId : UUID) : List<String>
+    +readCode(projectId : UUID) : List<String>
+    +readTemplates() : List<String>
+  }
+}
+
+RAGController       ..>  IRAGService
+RAGServiceImpl       ..|> IRAGService
+RAGServiceImpl       ..>  EmbeddingService
+RAGServiceImpl       ..>  VectorRepository
+RAGServiceImpl       ..>  ChunkingService
+RAGServiceImpl       ..>  StorageReaderService
+ChunkingService      ..>  Chunk
+VectorRepository     ..>  VectorEntry
+VectorEntry          ..>  SourceType
+
+@enduml
