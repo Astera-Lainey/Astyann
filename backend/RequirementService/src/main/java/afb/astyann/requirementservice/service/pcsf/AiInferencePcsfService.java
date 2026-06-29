@@ -4,7 +4,7 @@ import afb.astyann.requirementservice.client.AIServiceClient;
 import afb.astyann.requirementservice.domain.ClarificationQuestion;
 import afb.astyann.requirementservice.domain.PcsfStatus;
 import afb.astyann.requirementservice.domain.Requirement;
-import afb.astyann.requirementservice.domain.pcsf.Pcsf;
+import afb.astyann.requirementservice.domain.pcsf.*;
 import afb.astyann.requirementservice.dto.InferenceResponseDTO;
 import afb.astyann.requirementservice.repository.ClarificationQuestionRepository;
 import afb.astyann.requirementservice.repository.RequirementRepository;
@@ -156,21 +156,21 @@ public class AiInferencePcsfService {
                     objectMapper.getTypeFactory()
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfEntity.class));
-            pcsf.setEntities(entities);
+            pcsf.setEntities((List<PcsfEntity>) entities);
         }
         if (node.has("relationships") && node.get("relationships").isArray()) {
             var rels = objectMapper.convertValue(node.get("relationships"),
                     objectMapper.getTypeFactory()
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfRelationship.class));
-            pcsf.setRelationships(rels);
+            pcsf.setRelationships((List<PcsfRelationship>) rels);
         }
         if (node.has("businessRules") && node.get("businessRules").isArray()) {
             var rules = objectMapper.convertValue(node.get("businessRules"),
                     objectMapper.getTypeFactory()
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfBusinessRule.class));
-            pcsf.setBusinessRules(rules);
+            pcsf.setBusinessRules((List<PcsfBusinessRule>) rules);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
@@ -208,14 +208,14 @@ public class AiInferencePcsfService {
                     objectMapper.getTypeFactory()
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfScreen.class));
-            pcsf.getUserInterface().setScreens(screens);
+            pcsf.getUserInterface().setScreens((List<PcsfScreen>) screens);
         }
         if (node.has("navItems") && node.get("navItems").isArray()) {
             var navItems = objectMapper.convertValue(node.get("navItems"),
                     objectMapper.getTypeFactory()
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfNavItem.class));
-            pcsf.getUserInterface().setNavItems(navItems);
+            pcsf.getUserInterface().setNavigation((List<PcsfNavItem>) navItems);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));

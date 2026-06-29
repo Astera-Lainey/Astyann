@@ -1,6 +1,7 @@
 # Java / Spring Boot
 backend/target/
 backend/.mvn/
+backend/RequirementService/target
 *.class
 
 # Node / Angular
