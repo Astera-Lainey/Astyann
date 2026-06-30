@@ -1,77 +1,318 @@
-<div class="req">
-  @if (isLoading()) {
-    <div class="req__loading">Generating requirements…</div>
-  } @else if (loadError()) {
-    <p class="req__error" role="alert">{{ loadError() }}</p>
-  } @else {
-    <div class="req__layout">
-      <div class="req__main">
-        <div class="req__header">
-          <div>
-            <h2 class="req__title">Requirements</h2>
-            <p class="req__subtitle">Review and approve each requirement. Request changes inline.</p>
-          </div>
-          @if (!isApproved()) {
-            <button type="button" class="req__approve-btn" [disabled]="isApproving()" (click)="approveAll()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              {{ isApproving() ? 'Approving…' : 'Approve all' }}
-            </button>
-          } @else {
-            <div class="req__approved-badge">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              Approved
-            </div>
-          }
-        </div>
-        @if (approveError()) { <p class="req__error" role="alert">{{ approveError() }}</p> }
+@if (isLoading()) {
+  <p class="req__loading">Loading requirements…</p>
+} @else if (loadError()) {
+  <p class="req__error" role="alert">{{ loadError() }}</p>
+} @else if (pcsf(); as data) {
+  <div class="req">
 
-        @for (group of groupedFunctional(); track group.category) {
-          <div class="req__group">
-            <div class="req__group-header">
-              <span class="req__group-title">{{ group.category }}</span>
-              <span class="req__group-count">{{ group.items.length }} {{ group.items.length === 1 ? 'item' : 'items' }}</span>
-            </div>
-            <ul class="req__item-list">
-              @for (item of group.items; track item.id) {
-                <li class="req__item">{{ item.description }}</li>
-              }
-            </ul>
-          </div>
-        }
-
-        @for (group of groupedNonFunctional(); track group.category) {
-          <div class="req__group">
-            <div class="req__group-header">
-              <span class="req__group-title">{{ group.category }}</span>
-              <span class="req__group-count">{{ group.items.length }} {{ group.items.length === 1 ? 'item' : 'items' }}</span>
-            </div>
-            <ul class="req__item-list">
-              @for (item of group.items; track item.id) {
-                <li class="req__item">{{ item.description }}</li>
-              }
-            </ul>
-          </div>
+    <!-- Page header -->
+    <div class="req__header">
+      <div class="req__header-text">
+        <h2 class="req__title">
+          {{ data.project?.displayName?.value ?? data.project?.name?.value ?? 'Requirements Review' }}
+        </h2>
+        @if (data.project?.description?.value) {
+          <p class="req__subtitle">{{ data.project!.description!.value }}</p>
+        } @else {
+          <p class="req__subtitle">Review the extracted requirements and approve or request changes.</p>
         }
       </div>
 
+      <div class="req__header-actions">
+        @if (approveError()) {
+          <p class="req__inline-error" role="alert">{{ approveError() }}</p>
+        }
+        @if (localStatus() === 'APPROVED') {
+          <div class="req__approved-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Approved
+          </div>
+        } @else if (localStatus() === 'VALIDATED') {
+          <button type="button" class="req__approve-btn" [disabled]="isApproving()" (click)="approve()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            {{ isApproving() ? 'Approving…' : 'Approve requirements' }}
+          </button>
+        } @else {
+          <button type="button" class="req__validate-btn" [disabled]="isValidating()" (click)="validate()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            {{ isValidating() ? 'Validating…' : 'Validate' }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Validation errors -->
+    @if (validateResult() && !validateResult()!.valid) {
+      <div class="req__validate-errors" role="alert">
+        <p class="req__validate-errors__title">Validation failed — fix the following before approving:</p>
+        <ul class="req__validate-errors__list">
+          @for (err of validateResult()!.errors; track err) {
+            <li>{{ err }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="req__layout">
+
+      <!-- ── Left: PCSF sections ── -->
+      <div class="req__main">
+
+        <!-- Project Info (with inline edit) -->
+        @if (data.project) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Project Info</span>
+            </div>
+            <ul class="req__item-list">
+
+              <!-- Name -->
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Name</span>
+                @if (editingPath() === 'project.name.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input"
+                      [value]="editingValue()"
+                      (input)="onEditInput($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) {
+                    <p class="req__error" role="alert">{{ fieldSaveError() }}</p>
+                  }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.project.name?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit name"
+                      (click)="startEdit('project.name.value', data.project.name?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <!-- Display name -->
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Display name</span>
+                @if (editingPath() === 'project.displayName.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input"
+                      [value]="editingValue()"
+                      (input)="onEditInput($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) {
+                    <p class="req__error" role="alert">{{ fieldSaveError() }}</p>
+                  }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.project.displayName?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit display name"
+                      (click)="startEdit('project.displayName.value', data.project.displayName?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <!-- Description -->
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Description</span>
+                @if (editingPath() === 'project.description.value') {
+                  <div class="req__field-edit-row req__field-edit-row--column">
+                    <textarea class="req__field-input req__field-input--textarea" rows="3"
+                      [value]="editingValue()"
+                      (input)="onEditInput($event)"></textarea>
+                    <div class="req__field-edit-actions">
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                  </div>
+                  @if (fieldSaveError()) {
+                    <p class="req__error" role="alert">{{ fieldSaveError() }}</p>
+                  }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ data.project.description?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit description"
+                      (click)="startEdit('project.description.value', data.project.description?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+            </ul>
+          </div>
+        }
+
+        <!-- Actors -->
+        @if (hasActors()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Actors</span>
+              <span class="req__group-count">{{ data.actors!.length }}</span>
+            </div>
+            <ul class="req__item-list">
+              @for (actor of data.actors; track actor.id) {
+                <li class="req__item req__actor">
+                  <div class="req__actor-row">
+                    <span class="req__item-name">{{ actor.name?.value ?? '—' }}</span>
+                    @if (actor.type?.value) {
+                      <span class="req__badge" [class.req__badge--external]="actor.type!.value === 'EXTERNAL'">
+                        {{ actor.type!.value }}
+                      </span>
+                    }
+                  </div>
+                  @if (actor.description?.value) {
+                    <p class="req__item-desc">{{ actor.description!.value }}</p>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Modules & Use Cases -->
+        @if (hasModules()) {
+          @for (mod of data.modules; track mod.id) {
+            <div class="req__group">
+              <div class="req__group-header">
+                <span class="req__group-title">{{ mod.name?.value ?? 'Module' }}</span>
+                <span class="req__group-count">
+                  {{ (mod.useCases ?? []).length }}&nbsp;use-case{{ (mod.useCases ?? []).length === 1 ? '' : 's' }}
+                </span>
+              </div>
+
+              @if (mod.description?.value) {
+                <p class="req__module-desc">{{ mod.description!.value }}</p>
+              }
+
+              @if ((mod.crudOperations?.value ?? []).length > 0) {
+                <div class="req__crud-row">
+                  @for (op of mod.crudOperations!.value!; track op) {
+                    <span class="req__crud-chip">{{ op }}</span>
+                  }
+                </div>
+              }
+
+              @if ((mod.useCases ?? []).length > 0) {
+                <ul class="req__item-list">
+                  @for (uc of mod.useCases; track uc.id) {
+                    <li class="req__item req__uc">
+                      <div class="req__uc-name">{{ uc.name?.value ?? '—' }}</div>
+                      @if (uc.preconditions?.value) {
+                        <p class="req__uc-meta"><strong>Pre-condition:</strong> {{ uc.preconditions!.value }}</p>
+                      }
+                      @if (uc.postconditions?.value) {
+                        <p class="req__uc-meta"><strong>Post-condition:</strong> {{ uc.postconditions!.value }}</p>
+                      }
+                      @if ((uc.mainScenario?.value ?? []).length > 0) {
+                        <ol class="req__uc-steps">
+                          @for (step of uc.mainScenario!.value!; track step) {
+                            <li>{{ step }}</li>
+                          }
+                        </ol>
+                      }
+                      @if (uc.alternativeScenario?.value) {
+                        <p class="req__uc-alt"><em>Alternative:</em> {{ uc.alternativeScenario!.value }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        }
+
+        <!-- Business Rules -->
+        @if (hasBusinessRules()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Business Rules</span>
+              <span class="req__group-count">{{ data.businessRules!.length }}</span>
+            </div>
+            <ul class="req__item-list">
+              @for (rule of data.businessRules; track rule.id; let i = $index) {
+                <li class="req__item">
+                  <span class="req__rule-id">BR-{{ (i + 1).toString().padStart(2, '0') }}</span>
+                  {{ rule.description?.value ?? '—' }}
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Technical Stack -->
+        @if (hasTechStack()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Technical Stack</span>
+            </div>
+            <ul class="req__item-list">
+              @if (data.databaseConfig; as db) {
+                <li class="req__item req__tech-item">
+                  <div class="req__tech-label">Database</div>
+                  <div class="req__tech-row">
+                    @if (db.type) { <span class="req__badge req__badge--tech">{{ db.type }}</span> }
+                    @if (db.name) { <span class="req__tech-detail">{{ db.name }}</span> }
+                    @if (db.user) { <span class="req__tech-detail">user: {{ db.user }}</span> }
+                    @if (db.host) { <span class="req__tech-detail">{{ db.host }}{{ db.port ? ':' + db.port : '' }}</span> }
+                  </div>
+                </li>
+              }
+              @if (data.apiConfig; as api) {
+                <li class="req__item req__tech-item">
+                  <div class="req__tech-label">REST API</div>
+                  <div class="req__tech-row">
+                    @if (api.authType) { <span class="req__badge req__badge--tech">{{ api.authType }}</span> }
+                    @if (api.baseUrl) { <span class="req__tech-detail">{{ api.baseUrl }}</span> }
+                  </div>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (!data.project && !hasActors() && !hasModules() && !hasBusinessRules() && !hasTechStack()) {
+          <p class="req__empty">The AI has not yet extracted any requirements data.</p>
+        }
+
+      </div>
+
+      <!-- ── Right: Change request panel ── -->
       <aside class="req__panel">
         <div class="req__panel-heading">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           Request changes
         </div>
-        <p class="req__panel-desc">Describe what should change. Regeneration is only available once an instruction is provided.</p>
-        <label class="req__panel-label">Your instruction</label>
-        <textarea class="req__panel-textarea" [ngModel]="instruction()" (ngModelChange)="instruction.set($event)"
-          placeholder="e.g. Add SAML SSO as a high priority requirement." rows="5" [disabled]="isSubmittingChange()"></textarea>
-        @if (changeError()) { <p class="req__error" role="alert">{{ changeError() }}</p> }
-        <button type="button" class="req__regenerate-btn" [class.req__regenerate-btn--active]="canSubmitChange()"
-          [disabled]="!canSubmitChange() || isSubmittingChange()" (click)="submitAndRegenerate()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
+        <p class="req__panel-desc">
+          Describe what you'd like to change and the AI will regenerate the requirements.
+        </p>
+        <span class="req__panel-label">Instructions</span>
+        <textarea
+          class="req__panel-textarea"
+          rows="6"
+          placeholder="e.g. Add a notification module for push alerts and email digests…"
+          [value]="instruction()"
+          [disabled]="isSubmittingChange()"
+          (input)="onInstructionInput($event)">
+        </textarea>
+        @if (changeError()) {
+          <p class="req__error" role="alert">{{ changeError() }}</p>
+        }
+        <button
+          type="button"
+          class="req__regenerate-btn"
+          [class.req__regenerate-btn--active]="canSubmitChange()"
+          [disabled]="!canSubmitChange() || isSubmittingChange()"
+          (click)="submitAndRegenerate()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           {{ isSubmittingChange() ? 'Regenerating…' : 'Submit & regenerate' }}
         </button>
       </aside>
+
     </div>
-  }
-</div>
+  </div>
+}

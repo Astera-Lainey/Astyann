@@ -201,8 +201,19 @@ public class DocumentExtractionService {
     }
 
     private String cleanJson(String raw) {
-        return raw.replaceAll("(?s)```json\\s*", "")
-                  .replaceAll("(?s)```\\s*", "")
-                  .trim();
+        String cleaned = raw.replaceAll("(?s)```json\\s*", "")
+                            .replaceAll("(?s)```\\s*", "")
+                            .trim();
+        int objStart = cleaned.indexOf('{');
+        int arrStart = cleaned.indexOf('[');
+        if (objStart == -1 && arrStart == -1) return cleaned;
+        int start;
+        char endChar;
+        if (objStart == -1)           { start = arrStart; endChar = ']'; }
+        else if (arrStart == -1)      { start = objStart; endChar = '}'; }
+        else if (objStart < arrStart) { start = objStart; endChar = '}'; }
+        else                          { start = arrStart; endChar = ']'; }
+        int end = cleaned.lastIndexOf(endChar);
+        return (end > start) ? cleaned.substring(start, end + 1) : cleaned;
     }
 }

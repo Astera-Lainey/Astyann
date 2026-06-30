@@ -39,14 +39,17 @@ public class OllamaProvider implements AIProvider {
         }
         messages.add(new UserMessage(prompt));
 
+        int maxTokens = config.getMaxTokens() > 0 ? config.getMaxTokens() : 4096;
         Prompt p = effectiveModel.equals(modelName)
                 ? new Prompt(messages)
-                : new Prompt(messages, OllamaChatOptions.builder().model(effectiveModel).build());
+                : new Prompt(messages, OllamaChatOptions.builder()
+                        .model(effectiveModel)
+                        .numPredict(maxTokens)
+                        .build());
 
-        return chatModel.call(p)
-                .getResult()
-                .getOutput()
-                .getText();
+        var generation = chatModel.call(p).getResult();
+        if (generation == null || generation.getOutput() == null) return null;
+        return generation.getOutput().getText();
     }
 
     @Override

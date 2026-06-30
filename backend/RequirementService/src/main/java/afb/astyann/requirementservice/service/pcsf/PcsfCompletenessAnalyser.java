@@ -9,9 +9,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -70,7 +73,17 @@ public class PcsfCompletenessAnalyser {
             if (gate1Passed) {
                 log.info("GATE-1 PASSED for requirement={} — triggering AI inference",
                         requirement.getRequirementId());
-                inferenceService.runInferenceAsync(requirement.getRequirementId());
+                UUID reqId = requirement.getRequirementId();
+                if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            inferenceService.runInferenceAsync(reqId);
+                        }
+                    });
+                } else {
+                    inferenceService.runInferenceAsync(reqId);
+                }
             } else {
                 log.debug("GATE-1 not passed for requirement={}: {} missing, {} conditional pending",
                         requirement.getRequirementId(), missing.size(), conditionalPending.size());

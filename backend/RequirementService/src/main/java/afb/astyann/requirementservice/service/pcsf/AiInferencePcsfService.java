@@ -130,24 +130,30 @@ public class AiInferencePcsfService {
         return sb.toString();
     }
 
-    private void runINF1(Requirement requirement, String context) throws Exception {
-        String userPrompt = "Project context:\n" + context
-                + "\n\nExtract all entities, their attributes, relationships, and business rules. "
-                + "Return valid JSON with keys: entities[], relationships[], businessRules[], statusMachines[], "
-                + "accessControlRules[].";
+    private void runINF1(Requirement requirement, String context) {
+        try {
+            String userPrompt = "Project context:\n" + context
+                    + "\n\nExtract all entities, their attributes, relationships, and business rules. "
+                    + "Return valid JSON with keys: entities[], relationships[], businessRules[], statusMachines[], "
+                    + "accessControlRules[].";
 
-        InferenceResponseDTO response = aiServiceClient.infer(
-                new AIServiceClient.InferBody(INF1_MODEL, INF1_SYSTEM, userPrompt));
+            InferenceResponseDTO response = aiServiceClient.infer(
+                    new AIServiceClient.InferBody(INF1_MODEL, INF1_SYSTEM, userPrompt));
 
-        if (response == null || response.getContent() == null) {
-            log.warn("INF-1 returned null for requirement={}", requirement.getRequirementId());
-            return;
+            if (response == null || response.getContent() == null) {
+                log.warn("INF-1 returned null for requirement={}", requirement.getRequirementId());
+                return;
+            }
+
+            applyInf1Result(requirement, cleanJson(response.getContent()));
+        } catch (Exception ex) {
+            log.warn("INF-1 step failed for requirement={}, skipping: {}",
+                    requirement.getRequirementId(), ex.getMessage());
         }
-
-        applyInf1Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf1Result(Requirement requirement, String json) throws Exception {
+        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
@@ -178,25 +184,31 @@ public class AiInferencePcsfService {
         log.debug("INF-1 applied for requirement={}", requirement.getRequirementId());
     }
 
-    private void runINF3(Requirement requirement, String context) throws Exception {
-        String pcsfSummary = buildPcsfSummary(requirement);
-        String userPrompt = "Project context:\n" + context
-                + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                + "\n\nDefine the screen hierarchy and navigation. "
-                + "Return valid JSON with keys: screens[], navItems[].";
+    private void runINF3(Requirement requirement, String context) {
+        try {
+            String pcsfSummary = buildPcsfSummary(requirement);
+            String userPrompt = "Project context:\n" + context
+                    + "\n\nCurrent PCSF summary:\n" + pcsfSummary
+                    + "\n\nDefine the screen hierarchy and navigation. "
+                    + "Return valid JSON with keys: screens[], navItems[].";
 
-        InferenceResponseDTO response = aiServiceClient.infer(
-                new AIServiceClient.InferBody(INF3_MODEL, INF3_SYSTEM, userPrompt));
+            InferenceResponseDTO response = aiServiceClient.infer(
+                    new AIServiceClient.InferBody(INF3_MODEL, INF3_SYSTEM, userPrompt));
 
-        if (response == null || response.getContent() == null) {
-            log.warn("INF-3 returned null for requirement={}", requirement.getRequirementId());
-            return;
+            if (response == null || response.getContent() == null) {
+                log.warn("INF-3 returned null for requirement={}", requirement.getRequirementId());
+                return;
+            }
+
+            applyInf3Result(requirement, cleanJson(response.getContent()));
+        } catch (Exception ex) {
+            log.warn("INF-3 step failed for requirement={}, skipping: {}",
+                    requirement.getRequirementId(), ex.getMessage());
         }
-
-        applyInf3Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf3Result(Requirement requirement, String json) throws Exception {
+        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
@@ -223,26 +235,32 @@ public class AiInferencePcsfService {
         log.debug("INF-3 applied for requirement={}", requirement.getRequirementId());
     }
 
-    private void runINF4(Requirement requirement, String context) throws Exception {
-        String pcsfSummary = buildPcsfSummary(requirement);
-        String userPrompt = "Project context:\n" + context
-                + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                + "\n\nDefine API endpoints and database configuration. "
-                + "Return valid JSON with keys: apiConfig (baseUrl, authType, endpoints[]), "
-                + "databaseConfig (type, host, port, name, user).";
+    private void runINF4(Requirement requirement, String context) {
+        try {
+            String pcsfSummary = buildPcsfSummary(requirement);
+            String userPrompt = "Project context:\n" + context
+                    + "\n\nCurrent PCSF summary:\n" + pcsfSummary
+                    + "\n\nDefine API endpoints and database configuration. "
+                    + "Return valid JSON with keys: apiConfig (baseUrl, authType, endpoints[]), "
+                    + "databaseConfig (type, host, port, name, user).";
 
-        InferenceResponseDTO response = aiServiceClient.infer(
-                new AIServiceClient.InferBody(INF4_MODEL, INF4_SYSTEM, userPrompt));
+            InferenceResponseDTO response = aiServiceClient.infer(
+                    new AIServiceClient.InferBody(INF4_MODEL, INF4_SYSTEM, userPrompt));
 
-        if (response == null || response.getContent() == null) {
-            log.warn("INF-4 returned null for requirement={}", requirement.getRequirementId());
-            return;
+            if (response == null || response.getContent() == null) {
+                log.warn("INF-4 returned null for requirement={}", requirement.getRequirementId());
+                return;
+            }
+
+            applyInf4Result(requirement, cleanJson(response.getContent()));
+        } catch (Exception ex) {
+            log.warn("INF-4 step failed for requirement={}, skipping: {}",
+                    requirement.getRequirementId(), ex.getMessage());
         }
-
-        applyInf4Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf4Result(Requirement requirement, String json) throws Exception {
+        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
@@ -296,8 +314,20 @@ public class AiInferencePcsfService {
     }
 
     private String cleanJson(String raw) {
-        return raw.replaceAll("(?s)```json\\s*", "")
-                  .replaceAll("(?s)```\\s*", "")
-                  .trim();
+        String cleaned = raw.replaceAll("(?s)```json\\s*", "")
+                            .replaceAll("(?s)```\\s*", "")
+                            .trim();
+        // Extract the outermost JSON object or array, tolerating preamble/postamble text
+        int objStart = cleaned.indexOf('{');
+        int arrStart = cleaned.indexOf('[');
+        if (objStart == -1 && arrStart == -1) return cleaned;
+        int start;
+        char endChar;
+        if (objStart == -1)              { start = arrStart; endChar = ']'; }
+        else if (arrStart == -1)         { start = objStart; endChar = '}'; }
+        else if (objStart < arrStart)    { start = objStart; endChar = '}'; }
+        else                             { start = arrStart; endChar = ']'; }
+        int end = cleaned.lastIndexOf(endChar);
+        return (end > start) ? cleaned.substring(start, end + 1) : cleaned;
     }
 }

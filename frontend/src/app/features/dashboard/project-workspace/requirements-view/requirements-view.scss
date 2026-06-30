@@ -1,51 +1,223 @@
 @use '../../../auth/_auth-page-shared' as shared;
 
 .req { font-family: "Alata", ui-sans-serif, system-ui, sans-serif; color: shared.$slate-900; }
+
 .req__loading { padding: 3rem 0; font-size: 0.875rem; color: shared.$slate-500; }
-.req__error { margin: 0 0 1rem; font-size: 0.8125rem; color: #dc2626; }
+.req__error   { margin: 0 0 0.75rem; font-size: 0.8125rem; color: #dc2626; }
+.req__empty   { font-size: 0.875rem; color: shared.$slate-500; padding: 1.5rem 0; }
+.req__inline-error { margin: 0; font-size: 0.75rem; color: #dc2626; flex-shrink: 0; }
 
-.req__layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; align-items: start; }
+// ── Header ──────────────────────────────────────────────────────────────────
+.req__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.req__header-text { flex: 1; min-width: 0; }
+.req__header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.375rem; flex-shrink: 0; }
 
-.req__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
-.req__title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
-.req__subtitle { margin: 0.25rem 0 0; font-size: 0.8125rem; color: shared.$slate-500; }
+.req__title    { margin: 0; font-size: 1.375rem; font-weight: 700; letter-spacing: -0.01em; }
+.req__subtitle { margin: 0.3rem 0 0; font-size: 0.8125rem; color: shared.$slate-500; line-height: 1.5; }
+
+.req__validate-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
+  padding: 0.5rem 1rem; border: 1.5px solid shared.$brand-red; border-radius: 0.5rem;
+  background-color: transparent; color: shared.$brand-red;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  &:not(:disabled):hover { background-color: #fef2f2; }
+}
 
 .req__approve-btn {
   display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
-  padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; background-color: shared.$brand-red;
-  color: #ffffff; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  padding: 0.5rem 1rem; border: none; border-radius: 0.5rem;
+  background-color: shared.$brand-red; color: #fff;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  transition: opacity 0.15s;
   &:disabled { opacity: 0.6; cursor: not-allowed; }
   &:not(:disabled):hover { opacity: 0.88; }
 }
 .req__approved-badge {
-  display: inline-flex; align-items: center; gap: 0.375rem; flex-shrink: 0;
-  padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: #dcfce7; color: #16a34a;
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.5rem 1rem; border-radius: 0.5rem;
+  background-color: #dcfce7; color: #16a34a;
   font-size: 0.8125rem; font-weight: 600;
 }
 
-.req__group { margin-bottom: 1.25rem; border-radius: 0.625rem; border: 1px solid shared.$slate-200; background-color: #ffffff; overflow: hidden; }
-.req__group-header { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 1rem; }
+// ── Validation errors ────────────────────────────────────────────────────────
+.req__validate-errors {
+  margin-bottom: 1.25rem; padding: 0.875rem 1rem;
+  border-radius: 0.5rem; border: 1px solid #fca5a5;
+  background-color: #fff1f2;
+}
+.req__validate-errors__title {
+  margin: 0 0 0.5rem; font-size: 0.8125rem; font-weight: 600; color: #dc2626;
+}
+.req__validate-errors__list {
+  margin: 0; padding-left: 1.25rem;
+  li { font-size: 0.8125rem; color: #dc2626; line-height: 1.5; margin-bottom: 0.125rem; }
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────────
+.req__layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; align-items: start; }
+.req__main   { min-width: 0; }
+
+// ── Group cards ──────────────────────────────────────────────────────────────
+.req__group {
+  margin-bottom: 1.125rem;
+  border-radius: 0.625rem;
+  border: 1px solid shared.$slate-200;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+.req__group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.625rem 1rem;
+}
 .req__group-title { font-size: 0.875rem; font-weight: 700; color: shared.$brand-red; }
 .req__group-count { font-size: 0.75rem; color: shared.$slate-400; }
-.req__item-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid shared.$slate-200; }
-.req__item { padding: 0.75rem 1rem; font-size: 0.8125rem; border-bottom: 1px solid shared.$slate-200; line-height: 1.5; &:last-child { border-bottom: none; } }
 
-.req__panel { position: sticky; top: 1rem; border-radius: 0.75rem; border: 1px solid shared.$slate-200; background-color: #ffffff; padding: 1.125rem; display: flex; flex-direction: column; gap: 0.625rem; }
-.req__panel-heading { display: flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; font-weight: 700; }
-.req__panel-desc { margin: 0; font-size: 0.75rem; color: shared.$slate-500; line-height: 1.5; }
+.req__module-desc {
+  margin: 0; padding: 0.5rem 1rem;
+  font-size: 0.8125rem; color: shared.$slate-500; line-height: 1.5;
+  border-top: 1px solid shared.$slate-200;
+}
+
+.req__crud-row {
+  display: flex; flex-wrap: wrap; gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid shared.$slate-200;
+}
+.req__crud-chip {
+  padding: 0.125rem 0.5rem; border-radius: 0.25rem;
+  background-color: #fef2f2; color: shared.$brand-red;
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em;
+}
+
+// ── Item list ────────────────────────────────────────────────────────────────
+.req__item-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid shared.$slate-200; }
+.req__item {
+  padding: 0.75rem 1rem; font-size: 0.8125rem; line-height: 1.5;
+  border-bottom: 1px solid shared.$slate-200;
+  &:last-child { border-bottom: none; }
+}
+
+// ── Actors ───────────────────────────────────────────────────────────────────
+.req__actor-row { display: flex; align-items: center; gap: 0.5rem; }
+.req__item-name { font-size: 0.8125rem; font-weight: 600; color: shared.$slate-900; }
+.req__item-desc { margin: 0.25rem 0 0; font-size: 0.8125rem; color: shared.$slate-500; line-height: 1.5; }
+
+.req__badge {
+  display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
+  background-color: #f1f5f9; color: shared.$slate-500;
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  &--external { background-color: #fef2f2; color: shared.$brand-red; }
+  &--tech     { background-color: #eff6ff; color: #2563eb; }
+}
+
+// ── Use cases ────────────────────────────────────────────────────────────────
+.req__uc-name { font-size: 0.8125rem; font-weight: 600; color: shared.$slate-900; margin-bottom: 0.25rem; }
+.req__uc-meta { margin: 0.125rem 0; font-size: 0.75rem; color: shared.$slate-500; line-height: 1.5; }
+.req__uc-alt  { margin: 0.25rem 0 0; font-size: 0.75rem; color: shared.$slate-400; line-height: 1.5; }
+.req__uc-steps {
+  margin: 0.375rem 0 0; padding-left: 1.25rem;
+  li { font-size: 0.75rem; color: shared.$slate-500; line-height: 1.5; margin-bottom: 0.125rem; }
+}
+
+// ── Business rules ───────────────────────────────────────────────────────────
+.req__rule-id {
+  display: inline-block; margin-right: 0.625rem;
+  font-size: 0.6875rem; font-weight: 700; color: shared.$brand-red;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+
+// ── Inline field edit ────────────────────────────────────────────────────────
+.req__field-item { display: flex; flex-direction: column; gap: 0.375rem; }
+.req__field-label {
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: shared.$slate-400;
+}
+.req__field-row {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+}
+.req__field-value {
+  flex: 1; font-size: 0.8125rem; color: shared.$slate-900; line-height: 1.5;
+  &--muted { color: shared.$slate-500; }
+}
+.req__field-edit-btn {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.25rem; border: none; border-radius: 0.25rem;
+  background: transparent; color: shared.$slate-400; cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+  &:hover { color: shared.$brand-red; background-color: #fef2f2; }
+}
+.req__field-edit-row {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  &--column { flex-direction: column; align-items: stretch; }
+}
+.req__field-edit-actions { display: flex; gap: 0.5rem; }
+.req__field-input {
+  flex: 1; padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem; border: 1px solid shared.$slate-200;
+  background-color: #fafafa; font-family: inherit;
+  font-size: 0.8125rem; color: shared.$slate-900; line-height: 1.5;
+  outline: none;
+  &:focus { border-color: shared.$brand-red; box-shadow: 0 0 0 3px rgba(227, 4, 17, 0.1); }
+  &--textarea { resize: vertical; width: 100%; box-sizing: border-box; }
+}
+.req__field-save-btn {
+  padding: 0.375rem 0.75rem; border: none; border-radius: 0.375rem;
+  background-color: shared.$brand-red; color: #fff;
+  font-family: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+.req__field-cancel-btn {
+  padding: 0.375rem 0.75rem; border: 1px solid shared.$slate-200; border-radius: 0.375rem;
+  background-color: transparent; color: shared.$slate-500;
+  font-family: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  &:hover { background-color: shared.$slate-200; }
+}
+
+// ── Technical stack ──────────────────────────────────────────────────────────
+.req__tech-label { font-size: 0.75rem; font-weight: 700; color: shared.$slate-500; margin-bottom: 0.375rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.req__tech-row   { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.req__tech-detail { font-size: 0.8125rem; color: shared.$slate-500; }
+
+// ── Right panel ──────────────────────────────────────────────────────────────
+.req__panel {
+  position: sticky; top: 1rem;
+  border-radius: 0.75rem; border: 1px solid shared.$slate-200;
+  background-color: #ffffff; padding: 1.125rem;
+  display: flex; flex-direction: column; gap: 0.625rem;
+}
+.req__panel-heading {
+  display: flex; align-items: center; gap: 0.375rem;
+  font-size: 0.875rem; font-weight: 700;
+}
+.req__panel-desc  { margin: 0; font-size: 0.75rem; color: shared.$slate-500; line-height: 1.5; }
 .req__panel-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: shared.$slate-500; }
 .req__panel-textarea {
-  width: 100%; box-sizing: border-box; padding: 0.625rem 0.75rem; border-radius: 0.5rem;
-  border: 1px solid shared.$slate-200; background-color: #fafafa; font-family: inherit;
-  font-size: 0.8125rem; color: shared.$slate-900; line-height: 1.5; resize: vertical; outline: none;
+  width: 100%; box-sizing: border-box; padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem; border: 1px solid shared.$slate-200;
+  background-color: #fafafa; font-family: inherit;
+  font-size: 0.8125rem; color: shared.$slate-900; line-height: 1.5;
+  resize: vertical; outline: none;
   &::placeholder { color: shared.$slate-400; }
   &:focus { border-color: shared.$brand-red; box-shadow: 0 0 0 3px rgba(227, 4, 17, 0.1); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .req__regenerate-btn {
   display: flex; align-items: center; justify-content: center; gap: 0.375rem; width: 100%;
-  padding: 0.625rem 1rem; border: none; border-radius: 0.5rem; background-color: shared.$slate-200;
-  color: shared.$slate-400; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: not-allowed;
-  &--active { background-color: shared.$brand-red; color: #ffffff; cursor: pointer; &:not(:disabled):hover { opacity: 0.88; } }
+  padding: 0.625rem 1rem; border: none; border-radius: 0.5rem;
+  background-color: shared.$slate-200; color: shared.$slate-400;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: not-allowed;
+  transition: opacity 0.15s;
+  &--active {
+    background-color: shared.$brand-red; color: #ffffff; cursor: pointer;
+    &:not(:disabled):hover { opacity: 0.88; }
+  }
   &:disabled { opacity: 0.7; }
 }

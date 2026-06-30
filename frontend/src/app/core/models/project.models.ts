@@ -3,7 +3,7 @@
 export type ProjectStatus = 'ANALYZING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
 
 // Mirrors backend PcsfStatus enum exactly: DRAFT | INFERRING | UNDER_REVIEW | VALIDATED | FAILED
-export type PcsfStatus = 'DRAFT' | 'INFERRING' | 'UNDER_REVIEW' | 'VALIDATED' | 'FAILED';
+export type PcsfStatus = 'DRAFT' | 'INFERRING' | 'UNDER_REVIEW' | 'VALIDATED' | 'APPROVED' | 'CHANGE_REQUESTED' | 'FAILED';
 
 // ── Project ───────────────────────────────────────────────────────────────────
 // Mirrors backend ProjectDTO exactly (fields: projectId, userId, title, description,

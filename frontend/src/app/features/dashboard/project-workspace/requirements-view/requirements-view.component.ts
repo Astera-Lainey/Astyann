@@ -1,100 +1,185 @@
-import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges, computed, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { HttpErrorResponse } from '@angular/common/http';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  computed,
+  signal,
+} from '@angular/core';
 import { RequirementsService } from '../../../../core/services/requirements.service';
-import { RequirementItem, Requirements, RequirementsStatus } from '../../../../core/models/requirement.models';
+import { PcsfData } from '../../../../core/models/requirement.models';
+import { PcsfValidateResponse } from '../../../../core/models/project.models';
 
 @Component({
   selector: 'app-requirements-view',
   standalone: true,
-  imports: [FormsModule],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './requirements-view.html',
   styleUrl: './requirements-view.scss',
 })
 export class RequirementsViewComponent implements OnChanges {
   @Input({ required: true }) projectId!: string;
+  @Input() pcsfStatus = 'UNDER_REVIEW';
+  @Output() readonly restartPolling = new EventEmitter<void>();
 
-  readonly requirements = signal<Requirements | null>(null);
+  readonly pcsf = signal<PcsfData | null>(null);
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
+
+  /** Tracks status locally so validate/approve updates are reflected immediately. */
+  readonly localStatus = signal('UNDER_REVIEW');
+
+  // Validate
+  readonly isValidating = signal(false);
+  readonly validateResult = signal<PcsfValidateResponse | null>(null);
+
+  // Approve
   readonly isApproving = signal(false);
   readonly approveError = signal<string | null>(null);
-  readonly isApproved = signal(false);
+
+  // Inline field edit
+  readonly editingPath = signal<string | null>(null);
+  readonly editingValue = signal('');
+  readonly isSavingField = signal(false);
+  readonly fieldSaveError = signal<string | null>(null);
+
+  // Change request
   readonly instruction = signal('');
   readonly isSubmittingChange = signal(false);
   readonly changeError = signal<string | null>(null);
   readonly canSubmitChange = computed(() => this.instruction().trim().length > 0);
 
-  readonly groupedFunctional = computed(() =>
-    groupByCategory(this.requirements()?.content?.functionalRequirements ?? []),
-  );
-  readonly groupedNonFunctional = computed(() =>
-    groupByCategory(this.requirements()?.content?.nonFunctionalRequirements ?? []),
-  );
-  readonly status = computed<RequirementsStatus | null>(() => this.requirements()?.status ?? null);
+  readonly hasActors = computed(() => (this.pcsf()?.actors ?? []).length > 0);
+  readonly hasModules = computed(() => (this.pcsf()?.modules ?? []).length > 0);
+  readonly hasBusinessRules = computed(() => (this.pcsf()?.businessRules ?? []).length > 0);
+  readonly hasTechStack = computed(() => !!(this.pcsf()?.databaseConfig || this.pcsf()?.apiConfig));
 
   constructor(private readonly requirementsService: RequirementsService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['pcsfStatus']) this.localStatus.set(this.pcsfStatus);
     if (changes['projectId'] && this.projectId) this.load();
   }
 
   private load(): void {
     this.isLoading.set(true);
     this.loadError.set(null);
-    this.isApproved.set(false);
-    this.requirementsService.getCurrent(this.projectId).subscribe({
-      next: (data) => { this.requirements.set(data); this.isLoading.set(false); },
-      error: (error: HttpErrorResponse) => {
-        if (error.status === 404) {
-          this.generate();
-        } else {
-          this.isLoading.set(false);
-          this.loadError.set('Could not load requirements. Please try again later.');
-        }
+    this.requirementsService.getPcsf(this.projectId).subscribe({
+      next: (data) => {
+        this.pcsf.set(data);
+        this.isLoading.set(false);
+      },
+      error: () => {
+        this.isLoading.set(false);
+        this.loadError.set('Could not load requirements. Please try again.');
       },
     });
   }
 
-  private generate(): void {
-    this.requirementsService.generate(this.projectId).subscribe({
-      next: (data) => { this.requirements.set(data); this.isLoading.set(false); },
-      error: () => { this.isLoading.set(false); this.loadError.set('Could not generate requirements. Please try again later.'); },
+  // ── Validate ────────────────────────────────────────────────────────────────
+
+  validate(): void {
+    this.isValidating.set(true);
+    this.validateResult.set(null);
+    this.requirementsService.validatePcsf(this.projectId).subscribe({
+      next: (result) => {
+        this.isValidating.set(false);
+        this.validateResult.set(result);
+        if (result.valid) this.localStatus.set('VALIDATED');
+      },
+      error: () => {
+        this.isValidating.set(false);
+      },
     });
   }
 
-  approveAll(): void {
+  // ── Approve ─────────────────────────────────────────────────────────────────
+
+  approve(): void {
     this.approveError.set(null);
     this.isApproving.set(true);
     this.requirementsService.approve(this.projectId).subscribe({
-      next: () => { this.isApproving.set(false); this.isApproved.set(true); },
-      error: () => { this.isApproving.set(false); this.approveError.set('Could not approve requirements. Please try again.'); },
+      next: () => {
+        this.isApproving.set(false);
+        this.localStatus.set('APPROVED');
+      },
+      error: () => {
+        this.isApproving.set(false);
+        this.approveError.set('Could not approve. Please try again.');
+      },
     });
+  }
+
+  // ── Inline field edit ────────────────────────────────────────────────────────
+
+  startEdit(path: string, currentValue: string): void {
+    this.editingPath.set(path);
+    this.editingValue.set(currentValue);
+    this.fieldSaveError.set(null);
+  }
+
+  cancelEdit(): void {
+    this.editingPath.set(null);
+    this.fieldSaveError.set(null);
+  }
+
+  onEditInput(event: Event): void {
+    this.editingValue.set((event.target as HTMLInputElement | HTMLTextAreaElement).value);
+  }
+
+  saveField(): void {
+    const path = this.editingPath();
+    if (!path) return;
+    this.isSavingField.set(true);
+    this.fieldSaveError.set(null);
+    this.requirementsService
+      .patchField(this.projectId, { path, value: this.editingValue() })
+      .subscribe({
+        next: () => {
+          this.isSavingField.set(false);
+          this.editingPath.set(null);
+          this.load();
+        },
+        error: () => {
+          this.isSavingField.set(false);
+          this.fieldSaveError.set('Could not save. Please try again.');
+        },
+      });
+  }
+
+  // ── Change request ───────────────────────────────────────────────────────────
+
+  onInstructionInput(event: Event): void {
+    this.instruction.set((event.target as HTMLTextAreaElement).value);
   }
 
   submitAndRegenerate(): void {
     if (!this.canSubmitChange()) return;
+    const instructions = this.instruction().trim();
     this.changeError.set(null);
     this.isSubmittingChange.set(true);
-    this.requirementsService.submitChangeRequest(this.projectId, { instructions: this.instruction().trim() }).subscribe({
-      next: (changeData) => {
-        this.requirementsService.regenerate(this.projectId, { changeRequestId: changeData.changeRequestId }).subscribe({
-          next: () => { this.instruction.set(''); this.isSubmittingChange.set(false); this.load(); },
-          error: () => { this.isSubmittingChange.set(false); this.changeError.set('Regeneration failed. Please try again.'); },
+    this.requirementsService.submitChangeRequest(this.projectId, instructions).subscribe({
+      next: () => {
+        this.requirementsService.regenerate(this.projectId).subscribe({
+          next: () => {
+            this.instruction.set('');
+            this.isSubmittingChange.set(false);
+            this.restartPolling.emit();
+          },
+          error: () => {
+            this.isSubmittingChange.set(false);
+            this.changeError.set('Regeneration failed. Please try again.');
+          },
         });
       },
-      error: () => { this.isSubmittingChange.set(false); this.changeError.set('Could not submit change request. Please try again.'); },
+      error: () => {
+        this.isSubmittingChange.set(false);
+        this.changeError.set('Could not submit change request. Please try again.');
+      },
     });
   }
-}
-
-function groupByCategory(items: RequirementItem[]): { category: string; items: RequirementItem[] }[] {
-  const map = new Map<string, RequirementItem[]>();
-  for (const item of items) {
-    const existing = map.get(item.category);
-    if (existing) existing.push(item);
-    else map.set(item.category, [item]);
-  }
-  return Array.from(map.entries()).map(([category, items]) => ({ category, items }));
 }

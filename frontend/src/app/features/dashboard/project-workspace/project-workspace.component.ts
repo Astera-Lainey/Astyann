@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { Router, ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
+import { Subscription, timer, switchMap, takeWhile, catchError, of } from 'rxjs';
 import { ProjectService } from '../../../core/services/project.service';
 import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../../../core/models/project.models';
 import { ToastService } from '../../../core/services/toast.service';
@@ -114,17 +114,30 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     return this.section() !== null && this.section()! in SECTION_LABELS;
   }
 
+  onRestartPolling(): void {
+    if (this.projectId) this.startStatusPolling();
+  }
+
   // ── Status polling ──────────────────────────────────────────────────────────
 
   private startStatusPolling(): void {
     if (!this.projectId) return;
     const pid = this.projectId;
-    const terminalStatuses = ['UNDER_REVIEW', 'VALIDATED', 'FAILED'];
+    const terminalStatuses = ['UNDER_REVIEW', 'VALIDATED', 'APPROVED', 'FAILED'];
 
     this.statusPollSub?.unsubscribe();
     this.statusPollSub = timer(0, 5000)
       .pipe(
-        switchMap(() => this.projectService.getPcsfStatus(pid)),
+        switchMap(() =>
+          this.projectService.getPcsfStatus(pid).pipe(
+            catchError((err: HttpErrorResponse) => {
+              if (err.status === 404) {
+                return of({ pcsfStatus: 'DRAFT', pendingQuestionsCount: 0, completenessScore: 0 });
+              }
+              throw err;
+            }),
+          ),
+        ),
         takeWhile((response) => !terminalStatuses.includes(response.pcsfStatus), true),
       )
       .subscribe({
