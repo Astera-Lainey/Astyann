@@ -211,9 +211,34 @@ public class AiInferencePcsfService {
     private void runINF3(Requirement requirement, String context) throws Exception {
         String pcsfSummary = buildPcsfSummary(requirement);
         String userPrompt = "Project context:\n" + context
-                + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                + "\n\nDefine the screen hierarchy and navigation. "
-                + "Return valid JSON with keys: screens[], navItems[].";
+                + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
+
+                Define the screen hierarchy and navigation for this application.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "screens": [
+                    {
+                      "name": "ScreenName",
+                      "type": "LIST",
+                      "entityId": "entity_1",
+                      "moduleId": "module_1",
+                      "routePath": "/path",
+                      "requiredRoles": ["ADMIN"],
+                      "tableColumns": [{"attributeId": "attr_1", "headerLabel": "Header", "sortable": true}],
+                      "formFields": [{"attributeId": "attr_1", "label": "Field Label", "controlType": "INPUT"}]
+                    }
+                  ],
+                  "navItems": [
+                    {
+                      "label": "Nav Label",
+                      "routePath": "/path",
+                      "icon": "icon-name",
+                      "visibleToRoles": ["ADMIN"],
+                      "moduleId": "module_1"
+                    }
+                  ]
+                }
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
         InferenceResponseDTO response = aiServiceClient.infer(
                 new AIServiceClient.InferBody(INF3_MODEL, INF3_SYSTEM, userPrompt));
@@ -256,10 +281,30 @@ public class AiInferencePcsfService {
     private void runINF4(Requirement requirement, String context) throws Exception {
         String pcsfSummary = buildPcsfSummary(requirement);
         String userPrompt = "Project context:\n" + context
-                + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                + "\n\nDefine API endpoints and database configuration. "
-                + "Return valid JSON with keys: apiConfig (baseUrl, authType, endpoints[]), "
-                + "databaseConfig (type, host, port, name, user).";
+                + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
+
+                Define API configuration, database, and non-functional requirements.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "apiConfig": {
+                    "versionPrefix": "/api/v1",
+                    "rateLimitPerMinute": 1000,
+                    "corsAllowedOriginsDev": "http://localhost:4200"
+                  },
+                  "databaseConfig": {
+                    "name": "db_name",
+                    "user": "db_user"
+                  },
+                  "nonFunctionalRequirements": {
+                    "concurrentUsers": 100,
+                    "targetResponseTimeMs": 500,
+                    "dataVolumeDescription": "e.g. 50 000 transactions/day",
+                    "availabilityTarget": "99.9%",
+                    "securityDepth": "BANK_GRADE",
+                    "locale": "fr-CM"
+                  }
+                }
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
         InferenceResponseDTO response = aiServiceClient.infer(
                 new AIServiceClient.InferBody(INF4_MODEL, INF4_SYSTEM, userPrompt));
@@ -290,6 +335,11 @@ public class AiInferencePcsfService {
             } else {
                 pcsf.setDatabaseConfig(dbConfig);
             }
+        }
+        if (node.has("nonFunctionalRequirements")) {
+            var nfr = objectMapper.treeToValue(node.get("nonFunctionalRequirements"),
+                    afb.astyann.requirementservice.domain.pcsf.PcsfNonFunctionalRequirements.class);
+            pcsf.setNonFunctionalRequirements(nfr);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
