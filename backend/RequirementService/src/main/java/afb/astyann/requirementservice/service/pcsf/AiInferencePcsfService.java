@@ -131,10 +131,40 @@ public class AiInferencePcsfService {
     }
 
     private void runINF1(Requirement requirement, String context) throws Exception {
-        String userPrompt = "Project context:\n" + context
-                + "\n\nExtract all entities, their attributes, relationships, and business rules. "
-                + "Return valid JSON with keys: entities[], relationships[], businessRules[], statusMachines[], "
-                + "accessControlRules[].";
+        String userPrompt = "Project context:\n" + context + """
+
+                Extract all entities, relationships, and business rules.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "entities": [
+                    {
+                      "id": "entity_1",
+                      "name": "EntityName",
+                      "tableName": "table_name",
+                      "attributes": [
+                        {"id": "attr_1", "name": "attributeName", "javaType": "String",
+                         "mysqlType": "VARCHAR(255)", "columnName": "column_name",
+                         "constraints": {"required": true, "unique": false}}
+                      ]
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "id": "rel_1",
+                      "fromEntityId": "entity_1",
+                      "toEntityId": "entity_2",
+                      "cardinality": "ONE_TO_MANY",
+                      "label": "owns",
+                      "owningEntityId": "entity_1",
+                      "joinColumnName": "entity1_id"
+                    }
+                  ],
+                  "businessRules": [
+                    {"id": "rule_1", "description": "rule text", "implementationHint": "how to implement"}
+                  ],
+                  "accessControlRules": []
+                }
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
         InferenceResponseDTO response = aiServiceClient.infer(
                 new AIServiceClient.InferBody(INF1_MODEL, INF1_SYSTEM, userPrompt));
