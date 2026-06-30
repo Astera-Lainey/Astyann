@@ -133,7 +133,7 @@ public class AiInferencePcsfService {
     private void runINF1(Requirement requirement, String context) throws Exception {
         String userPrompt = "Project context:\n" + context + """
 
-                Extract all entities, relationships, and business rules.
+                Extract all entities, relationships, business rules, status machines, access control rules, and error codes.
                 Return ONLY valid JSON matching this exact schema — use these exact field names:
                 {
                   "entities": [
@@ -144,7 +144,7 @@ public class AiInferencePcsfService {
                       "attributes": [
                         {"id": "attr_1", "name": "attributeName", "javaType": "String",
                          "mysqlType": "VARCHAR(255)", "columnName": "column_name",
-                         "constraints": {"required": true, "unique": false}}
+                         "constraints": {"required": true, "unique": false, "minLength": 2, "maxLength": 100}}
                       ]
                     }
                   ],
@@ -160,9 +160,39 @@ public class AiInferencePcsfService {
                     }
                   ],
                   "businessRules": [
-                    {"id": "rule_1", "description": "rule text", "implementationHint": "how to implement"}
+                    {
+                      "id": "rule_1",
+                      "description": "rule text",
+                      "implementationHint": "how to implement",
+                      "affectedEntityId": "entity_1",
+                      "moduleId": "module_1"
+                    }
                   ],
-                  "accessControlRules": []
+                  "statusMachines": [
+                    {
+                      "entityId": "entity_1",
+                      "states": ["PENDING", "ACTIVE", "CLOSED"],
+                      "initialState": "PENDING",
+                      "transitions": [
+                        {"from": "PENDING", "to": "ACTIVE", "trigger": "activate",
+                         "guard": "balance > 0", "action": "sendActivationEmail()"}
+                      ]
+                    }
+                  ],
+                  "accessControlRules": [
+                    {"id": "acl_1", "moduleId": "module_1", "entityId": "entity_1",
+                     "operation": "CREATE", "allowedRoles": ["ADMIN", "MANAGER"]}
+                  ],
+                  "errorCodes": [
+                    {
+                      "id": "err_1",
+                      "code": "ENTITY_NOT_FOUND",
+                      "httpStatus": 404,
+                      "messageTemplate": "Entity with id {id} not found",
+                      "exceptionClass": "EntityNotFoundException",
+                      "moduleId": "module_1"
+                    }
+                  ]
                 }
                 Use exact field names. No preamble. No code fences. No explanation.""";
 
@@ -201,6 +231,27 @@ public class AiInferencePcsfService {
                             .constructCollectionType(List.class,
                                     afb.astyann.requirementservice.domain.pcsf.PcsfBusinessRule.class));
             pcsf.setBusinessRules((List<PcsfBusinessRule>) rules);
+        }
+        if (node.has("statusMachines") && node.get("statusMachines").isArray()) {
+            var machines = objectMapper.convertValue(node.get("statusMachines"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfStatusMachine.class));
+            pcsf.setStatusMachines((List<PcsfStatusMachine>) machines);
+        }
+        if (node.has("accessControlRules") && node.get("accessControlRules").isArray()) {
+            var acls = objectMapper.convertValue(node.get("accessControlRules"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfAccessControlRule.class));
+            pcsf.setAccessControlRules((List<PcsfAccessControlRule>) acls);
+        }
+        if (node.has("errorCodes") && node.get("errorCodes").isArray()) {
+            var errors = objectMapper.convertValue(node.get("errorCodes"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfErrorCode.class));
+            pcsf.setErrorCodes((List<PcsfErrorCode>) errors);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
@@ -283,13 +334,30 @@ public class AiInferencePcsfService {
         String userPrompt = "Project context:\n" + context
                 + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
 
-                Define API configuration, database, and non-functional requirements.
+                Define REST API endpoints, API config, database config, and non-functional requirements.
                 Return ONLY valid JSON matching this exact schema — use these exact field names:
                 {
+                  "endpoints": [
+                    {
+                      "id": "ep_1",
+                      "moduleId": "module_1",
+                      "httpMethod": "GET",
+                      "path": "/api/v1/loans",
+                      "operationId": "getAllLoans",
+                      "summary": "Retrieve paginated list of loans",
+                      "requestBodyEntityId": null,
+                      "responseEntityId": "entity_1",
+                      "requiredRoles": ["LOAN_OFFICER"],
+                      "paginated": true,
+                      "requiresAuth": true
+                    }
+                  ],
                   "apiConfig": {
                     "versionPrefix": "/api/v1",
                     "rateLimitPerMinute": 1000,
-                    "corsAllowedOriginsDev": "http://localhost:4200"
+                    "corsAllowedOriginsDev": "http://localhost:4200",
+                    "defaultPageSize": 20,
+                    "maxPageSize": 100
                   },
                   "databaseConfig": {
                     "name": "db_name",
@@ -304,6 +372,7 @@ public class AiInferencePcsfService {
                     "locale": "fr-CM"
                   }
                 }
+                Generate one endpoint per use-case derived operation (CRUD + custom actions).
                 Use exact field names. No preamble. No code fences. No explanation.""";
 
         InferenceResponseDTO response = aiServiceClient.infer(
@@ -321,6 +390,13 @@ public class AiInferencePcsfService {
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
+        if (node.has("endpoints") && node.get("endpoints").isArray()) {
+            var eps = objectMapper.convertValue(node.get("endpoints"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfApiEndpoint.class));
+            pcsf.setEndpoints((List<PcsfApiEndpoint>) eps);
+        }
         if (node.has("apiConfig")) {
             var apiConfig = objectMapper.treeToValue(node.get("apiConfig"),
                     afb.astyann.requirementservice.domain.pcsf.PcsfApiConfig.class);
