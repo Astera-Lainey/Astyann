@@ -130,30 +130,84 @@ public class AiInferencePcsfService {
         return sb.toString();
     }
 
-    private void runINF1(Requirement requirement, String context) {
-        try {
-            String userPrompt = "Project context:\n" + context
-                    + "\n\nExtract all entities, their attributes, relationships, and business rules. "
-                    + "Return valid JSON with keys: entities[], relationships[], businessRules[], statusMachines[], "
-                    + "accessControlRules[].";
+    private void runINF1(Requirement requirement, String context) throws Exception {
+        String userPrompt = "Project context:\n" + context + """
 
-            InferenceResponseDTO response = aiServiceClient.infer(
-                    new AIServiceClient.InferBody(INF1_MODEL, INF1_SYSTEM, userPrompt));
+                Extract all entities, relationships, business rules, status machines, access control rules, and error codes.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "entities": [
+                    {
+                      "id": "entity_1",
+                      "name": "EntityName",
+                      "tableName": "table_name",
+                      "attributes": [
+                        {"id": "attr_1", "name": "attributeName", "javaType": "String",
+                         "mysqlType": "VARCHAR(255)", "columnName": "column_name",
+                         "constraints": {"required": true, "unique": false, "minLength": 2, "maxLength": 100}}
+                      ]
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "id": "rel_1",
+                      "fromEntityId": "entity_1",
+                      "toEntityId": "entity_2",
+                      "cardinality": "ONE_TO_MANY",
+                      "label": "owns",
+                      "owningEntityId": "entity_1",
+                      "joinColumnName": "entity1_id"
+                    }
+                  ],
+                  "businessRules": [
+                    {
+                      "id": "rule_1",
+                      "description": "rule text",
+                      "implementationHint": "how to implement",
+                      "affectedEntityId": "entity_1",
+                      "moduleId": "module_1"
+                    }
+                  ],
+                  "statusMachines": [
+                    {
+                      "entityId": "entity_1",
+                      "states": ["PENDING", "ACTIVE", "CLOSED"],
+                      "initialState": "PENDING",
+                      "transitions": [
+                        {"from": "PENDING", "to": "ACTIVE", "trigger": "activate",
+                         "guard": "balance > 0", "action": "sendActivationEmail()"}
+                      ]
+                    }
+                  ],
+                  "accessControlRules": [
+                    {"id": "acl_1", "moduleId": "module_1", "entityId": "entity_1",
+                     "operation": "CREATE", "allowedRoles": ["ADMIN", "MANAGER"]}
+                  ],
+                  "errorCodes": [
+                    {
+                      "id": "err_1",
+                      "code": "ENTITY_NOT_FOUND",
+                      "httpStatus": 404,
+                      "messageTemplate": "Entity with id {id} not found",
+                      "exceptionClass": "EntityNotFoundException",
+                      "moduleId": "module_1"
+                    }
+                  ]
+                }
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
-            if (response == null || response.getContent() == null) {
-                log.warn("INF-1 returned null for requirement={}", requirement.getRequirementId());
-                return;
-            }
+        InferenceResponseDTO response = aiServiceClient.infer(
+                new AIServiceClient.InferBody(INF1_MODEL, INF1_SYSTEM, userPrompt));
 
-            applyInf1Result(requirement, cleanJson(response.getContent()));
-        } catch (Exception ex) {
-            log.warn("INF-1 step failed for requirement={}, skipping: {}",
-                    requirement.getRequirementId(), ex.getMessage());
+        if (response == null || response.getContent() == null) {
+            log.warn("INF-1 returned null for requirement={}", requirement.getRequirementId());
+            return;
         }
+
+        applyInf1Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf1Result(Requirement requirement, String json) throws Exception {
-        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
@@ -178,37 +232,77 @@ public class AiInferencePcsfService {
                                     afb.astyann.requirementservice.domain.pcsf.PcsfBusinessRule.class));
             pcsf.setBusinessRules((List<PcsfBusinessRule>) rules);
         }
+        if (node.has("statusMachines") && node.get("statusMachines").isArray()) {
+            var machines = objectMapper.convertValue(node.get("statusMachines"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfStatusMachine.class));
+            pcsf.setStatusMachines((List<PcsfStatusMachine>) machines);
+        }
+        if (node.has("accessControlRules") && node.get("accessControlRules").isArray()) {
+            var acls = objectMapper.convertValue(node.get("accessControlRules"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfAccessControlRule.class));
+            pcsf.setAccessControlRules((List<PcsfAccessControlRule>) acls);
+        }
+        if (node.has("errorCodes") && node.get("errorCodes").isArray()) {
+            var errors = objectMapper.convertValue(node.get("errorCodes"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfErrorCode.class));
+            pcsf.setErrorCodes((List<PcsfErrorCode>) errors);
+        }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
         requirementRepository.save(requirement);
         log.debug("INF-1 applied for requirement={}", requirement.getRequirementId());
     }
 
-    private void runINF3(Requirement requirement, String context) {
-        try {
-            String pcsfSummary = buildPcsfSummary(requirement);
-            String userPrompt = "Project context:\n" + context
-                    + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                    + "\n\nDefine the screen hierarchy and navigation. "
-                    + "Return valid JSON with keys: screens[], navItems[].";
+    private void runINF3(Requirement requirement, String context) throws Exception {
+        String pcsfSummary = buildPcsfSummary(requirement);
+        String userPrompt = "Project context:\n" + context
+                + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
 
-            InferenceResponseDTO response = aiServiceClient.infer(
-                    new AIServiceClient.InferBody(INF3_MODEL, INF3_SYSTEM, userPrompt));
+                Define the screen hierarchy and navigation for this application.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "screens": [
+                    {
+                      "name": "ScreenName",
+                      "type": "LIST",
+                      "entityId": "entity_1",
+                      "moduleId": "module_1",
+                      "routePath": "/path",
+                      "requiredRoles": ["ADMIN"],
+                      "tableColumns": [{"attributeId": "attr_1", "headerLabel": "Header", "sortable": true}],
+                      "formFields": [{"attributeId": "attr_1", "label": "Field Label", "controlType": "INPUT"}]
+                    }
+                  ],
+                  "navItems": [
+                    {
+                      "label": "Nav Label",
+                      "routePath": "/path",
+                      "icon": "icon-name",
+                      "visibleToRoles": ["ADMIN"],
+                      "moduleId": "module_1"
+                    }
+                  ]
+                }
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
-            if (response == null || response.getContent() == null) {
-                log.warn("INF-3 returned null for requirement={}", requirement.getRequirementId());
-                return;
-            }
+        InferenceResponseDTO response = aiServiceClient.infer(
+                new AIServiceClient.InferBody(INF3_MODEL, INF3_SYSTEM, userPrompt));
 
-            applyInf3Result(requirement, cleanJson(response.getContent()));
-        } catch (Exception ex) {
-            log.warn("INF-3 step failed for requirement={}, skipping: {}",
-                    requirement.getRequirementId(), ex.getMessage());
+        if (response == null || response.getContent() == null) {
+            log.warn("INF-3 returned null for requirement={}", requirement.getRequirementId());
+            return;
         }
+
+        applyInf3Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf3Result(Requirement requirement, String json) throws Exception {
-        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
@@ -235,35 +329,74 @@ public class AiInferencePcsfService {
         log.debug("INF-3 applied for requirement={}", requirement.getRequirementId());
     }
 
-    private void runINF4(Requirement requirement, String context) {
-        try {
-            String pcsfSummary = buildPcsfSummary(requirement);
-            String userPrompt = "Project context:\n" + context
-                    + "\n\nCurrent PCSF summary:\n" + pcsfSummary
-                    + "\n\nDefine API endpoints and database configuration. "
-                    + "Return valid JSON with keys: apiConfig (baseUrl, authType, endpoints[]), "
-                    + "databaseConfig (type, host, port, name, user).";
+    private void runINF4(Requirement requirement, String context) throws Exception {
+        String pcsfSummary = buildPcsfSummary(requirement);
+        String userPrompt = "Project context:\n" + context
+                + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
 
-            InferenceResponseDTO response = aiServiceClient.infer(
-                    new AIServiceClient.InferBody(INF4_MODEL, INF4_SYSTEM, userPrompt));
+                Define REST API endpoints, API config, database config, and non-functional requirements.
+                Return ONLY valid JSON matching this exact schema — use these exact field names:
+                {
+                  "endpoints": [
+                    {
+                      "id": "ep_1",
+                      "moduleId": "module_1",
+                      "httpMethod": "GET",
+                      "path": "/api/v1/loans",
+                      "operationId": "getAllLoans",
+                      "summary": "Retrieve paginated list of loans",
+                      "requestBodyEntityId": null,
+                      "responseEntityId": "entity_1",
+                      "requiredRoles": ["LOAN_OFFICER"],
+                      "paginated": true,
+                      "requiresAuth": true
+                    }
+                  ],
+                  "apiConfig": {
+                    "versionPrefix": "/api/v1",
+                    "rateLimitPerMinute": 1000,
+                    "corsAllowedOriginsDev": "http://localhost:4200",
+                    "defaultPageSize": 20,
+                    "maxPageSize": 100
+                  },
+                  "databaseConfig": {
+                    "name": "db_name",
+                    "user": "db_user"
+                  },
+                  "nonFunctionalRequirements": {
+                    "concurrentUsers": 100,
+                    "targetResponseTimeMs": 500,
+                    "dataVolumeDescription": "e.g. 50 000 transactions/day",
+                    "availabilityTarget": "99.9%",
+                    "securityDepth": "BANK_GRADE",
+                    "locale": "fr-CM"
+                  }
+                }
+                Generate one endpoint per use-case derived operation (CRUD + custom actions).
+                Use exact field names. No preamble. No code fences. No explanation.""";
 
-            if (response == null || response.getContent() == null) {
-                log.warn("INF-4 returned null for requirement={}", requirement.getRequirementId());
-                return;
-            }
+        InferenceResponseDTO response = aiServiceClient.infer(
+                new AIServiceClient.InferBody(INF4_MODEL, INF4_SYSTEM, userPrompt));
 
-            applyInf4Result(requirement, cleanJson(response.getContent()));
-        } catch (Exception ex) {
-            log.warn("INF-4 step failed for requirement={}, skipping: {}",
-                    requirement.getRequirementId(), ex.getMessage());
+        if (response == null || response.getContent() == null) {
+            log.warn("INF-4 returned null for requirement={}", requirement.getRequirementId());
+            return;
         }
+
+        applyInf4Result(requirement, cleanJson(response.getContent()));
     }
 
     private void applyInf4Result(Requirement requirement, String json) throws Exception {
-        if (requirement.getPcsfJson() == null || json == null || json.isBlank()) return;
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
         var node = objectMapper.readTree(json);
 
+        if (node.has("endpoints") && node.get("endpoints").isArray()) {
+            var eps = objectMapper.convertValue(node.get("endpoints"),
+                    objectMapper.getTypeFactory()
+                            .constructCollectionType(List.class,
+                                    afb.astyann.requirementservice.domain.pcsf.PcsfApiEndpoint.class));
+            pcsf.setEndpoints((List<PcsfApiEndpoint>) eps);
+        }
         if (node.has("apiConfig")) {
             var apiConfig = objectMapper.treeToValue(node.get("apiConfig"),
                     afb.astyann.requirementservice.domain.pcsf.PcsfApiConfig.class);
@@ -278,6 +411,11 @@ public class AiInferencePcsfService {
             } else {
                 pcsf.setDatabaseConfig(dbConfig);
             }
+        }
+        if (node.has("nonFunctionalRequirements")) {
+            var nfr = objectMapper.treeToValue(node.get("nonFunctionalRequirements"),
+                    afb.astyann.requirementservice.domain.pcsf.PcsfNonFunctionalRequirements.class);
+            pcsf.setNonFunctionalRequirements(nfr);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
@@ -314,20 +452,8 @@ public class AiInferencePcsfService {
     }
 
     private String cleanJson(String raw) {
-        String cleaned = raw.replaceAll("(?s)```json\\s*", "")
-                            .replaceAll("(?s)```\\s*", "")
-                            .trim();
-        // Extract the outermost JSON object or array, tolerating preamble/postamble text
-        int objStart = cleaned.indexOf('{');
-        int arrStart = cleaned.indexOf('[');
-        if (objStart == -1 && arrStart == -1) return cleaned;
-        int start;
-        char endChar;
-        if (objStart == -1)              { start = arrStart; endChar = ']'; }
-        else if (arrStart == -1)         { start = objStart; endChar = '}'; }
-        else if (objStart < arrStart)    { start = objStart; endChar = '}'; }
-        else                             { start = arrStart; endChar = ']'; }
-        int end = cleaned.lastIndexOf(endChar);
-        return (end > start) ? cleaned.substring(start, end + 1) : cleaned;
+        return raw.replaceAll("(?s)```json\\s*", "")
+                  .replaceAll("(?s)```\\s*", "")
+                  .trim();
     }
 }

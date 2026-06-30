@@ -48,10 +48,10 @@ public class RequirementController {
      */
     @PostMapping("/{projectId}/initialize")
     public ResponseEntity<ApiResponse<Void>> initialize(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @RequestBody RequirementInitRequest body) {
 
-        if (requirementRepository.existsByProjectId(projectId)) {
+        if (requirementRepository.existsByProjectId(parseId(projectId))) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiResponse.<Void>builder()
                             .status(409).message("Requirements pipeline already initialized for this project.")
@@ -59,7 +59,7 @@ public class RequirementController {
         }
 
         backgroundService.initializePipelineAsync(
-                projectId,
+                parseId(projectId),
                 body.getProjectTitle(),
                 body.getProjectDescription(),
                 body.getProjectContext(),
@@ -77,8 +77,8 @@ public class RequirementController {
      */
     @GetMapping("/{projectId}/questions")
     public ResponseEntity<ApiResponse<List<ClarificationQuestionDto>>> getQuestions(
-            @PathVariable UUID projectId) {
-        List<ClarificationQuestion> questions = qaService.getPendingQuestions(projectId);
+            @PathVariable String projectId) {
+        List<ClarificationQuestion> questions = qaService.getPendingQuestions(parseId(projectId));
         List<ClarificationQuestionDto> dtos = questions.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.<List<ClarificationQuestionDto>>builder()
                 .status(200).message("Questions retrieved.").data(dtos).build());
@@ -89,9 +89,9 @@ public class RequirementController {
      */
     @PostMapping("/{projectId}/questions/answers")
     public ResponseEntity<ApiResponse<QAResponse>> submitAnswers(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @RequestBody SubmitAnswersRequest request) {
-        QAResponse response = qaService.submitAnswers(projectId, request);
+        QAResponse response = qaService.submitAnswers(parseId(projectId), request);
         return ResponseEntity.ok(ApiResponse.<QAResponse>builder()
                 .status(200).message("Answers submitted.").data(response).build());
     }
@@ -102,8 +102,8 @@ public class RequirementController {
      * GET /api/v1/requirements/{projectId}/pcsf
      */
     @GetMapping("/{projectId}/pcsf")
-    public ResponseEntity<ApiResponse<Pcsf>> getPcsf(@PathVariable UUID projectId) {
-        Requirement req = findOrThrow(projectId);
+    public ResponseEntity<ApiResponse<Pcsf>> getPcsf(@PathVariable String projectId) {
+        Requirement req = findOrThrow(parseId(projectId));
         if (req.getPcsfJson() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.<Pcsf>builder().status(404).message("PCSF not yet initialised.").build());
@@ -124,9 +124,9 @@ public class RequirementController {
      */
     @PatchMapping("/{projectId}/pcsf/fields")
     public ResponseEntity<ApiResponse<Void>> patchField(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @Valid @RequestBody PatchFieldRequest request) {
-        Requirement req = findOrThrow(projectId);
+        Requirement req = findOrThrow(parseId(projectId));
         if (req.getPcsfJson() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.<Void>builder().status(404).message("PCSF not found.").build());
@@ -147,8 +147,8 @@ public class RequirementController {
      * GET /api/v1/requirements/{projectId}/pcsf/status
      */
     @GetMapping("/{projectId}/pcsf/status")
-    public ResponseEntity<ApiResponse<PcsfStatusResponse>> getPcsfStatus(@PathVariable UUID projectId) {
-        Requirement req = findOrThrow(projectId);
+    public ResponseEntity<ApiResponse<PcsfStatusResponse>> getPcsfStatus(@PathVariable String projectId) {
+        Requirement req = findOrThrow(parseId(projectId));
         double score = 0.0;
         if (req.getPcsfJson() != null) {
             try {
@@ -171,8 +171,8 @@ public class RequirementController {
      * POST /api/v1/requirements/{projectId}/pcsf/validate
      */
     @PostMapping("/{projectId}/pcsf/validate")
-    public ResponseEntity<ApiResponse<PcsfValidateResponse>> validatePcsf(@PathVariable UUID projectId) {
-        PcsfValidateResponse result = validationService.validate(projectId);
+    public ResponseEntity<ApiResponse<PcsfValidateResponse>> validatePcsf(@PathVariable String projectId) {
+        PcsfValidateResponse result = validationService.validate(parseId(projectId));
         int status = result.isValid() ? 200 : 422;
         return ResponseEntity.status(status)
                 .body(ApiResponse.<PcsfValidateResponse>builder()
@@ -187,8 +187,8 @@ public class RequirementController {
      * POST /api/v1/requirements/{projectId}/approve
      */
     @PostMapping("/{projectId}/approve")
-    public ResponseEntity<ApiResponse<ApproveResponse>> approve(@PathVariable UUID projectId) {
-        ApproveResponse result = generationService.approve(projectId);
+    public ResponseEntity<ApiResponse<ApproveResponse>> approve(@PathVariable String projectId) {
+        ApproveResponse result = generationService.approve(parseId(projectId));
         return ResponseEntity.ok(ApiResponse.<ApproveResponse>builder()
                 .status(200).message(result.getMessage()).data(result).build());
     }
@@ -200,9 +200,9 @@ public class RequirementController {
      */
     @PostMapping("/{projectId}/change-request")
     public ResponseEntity<ApiResponse<ChangeRequestResponse>> changeRequest(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @Valid @RequestBody ChangeRequestBody body) {
-        ChangeRequestResponse result = generationService.submitChangeRequest(projectId, body.getInstructions());
+        ChangeRequestResponse result = generationService.submitChangeRequest(parseId(projectId), body.getInstructions());
         return ResponseEntity.ok(ApiResponse.<ChangeRequestResponse>builder()
                 .status(200).message(result.getMessage()).data(result).build());
     }
@@ -213,8 +213,8 @@ public class RequirementController {
      * POST /api/v1/requirements/{projectId}/regenerate
      */
     @PostMapping("/{projectId}/regenerate")
-    public ResponseEntity<ApiResponse<Void>> regenerate(@PathVariable UUID projectId) {
-        generationService.regenerate(projectId);
+    public ResponseEntity<ApiResponse<Void>> regenerate(@PathVariable String projectId) {
+        generationService.regenerate(parseId(projectId));
         return ResponseEntity.accepted()
                 .body(ApiResponse.<Void>builder()
                         .status(202).message("Regeneration started. Poll /pcsf/status for updates.").build());
@@ -263,5 +263,23 @@ public class RequirementController {
                 .options(options).placeholder(q.getPlaceholder())
                 .answered(q.isAnswered()).answer(q.getAnswer())
                 .build();
+    }
+
+    private UUID parseId(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new IllegalArgumentException("X-User-Id header is missing");
+        }
+        String s = rawId.trim();
+        // Strip 0x prefix if present
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        // Insert dashes if raw 32-char hex (no dashes)
+        if (s.length() == 32 && !s.contains("-")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-"
+                    + s.substring(12, 16) + "-" + s.substring(16, 20) + "-"
+                    + s.substring(20);
+        }
+        return UUID.fromString(s);
     }
 }

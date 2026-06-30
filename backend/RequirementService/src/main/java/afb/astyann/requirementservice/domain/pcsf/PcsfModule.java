@@ -1,5 +1,6 @@
 package afb.astyann.requirementservice.domain.pcsf;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,11 @@ public class PcsfModule {
     private FieldValue<String> name;
     private FieldValue<String> description;
     private FieldValue<List<String>> crudOperations;
+
+    /** e.g. "loan", "customer" — used as Java sub-package and Angular feature folder */
+    @JsonAlias({"packageName", "package", "java_package", "subpackage"})
+    private String javaPackageName;
+
     @Builder.Default
     private List<PcsfUseCase> useCases = new ArrayList<>();
 }

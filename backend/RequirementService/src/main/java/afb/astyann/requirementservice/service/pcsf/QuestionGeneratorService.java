@@ -1,6 +1,7 @@
 package afb.astyann.requirementservice.service.pcsf;
 
 import afb.astyann.requirementservice.domain.ClarificationQuestion;
+import afb.astyann.requirementservice.domain.PcsfStatus;
 import afb.astyann.requirementservice.domain.Requirement;
 import afb.astyann.requirementservice.domain.QuestionType;
 import afb.astyann.requirementservice.domain.pcsf.FieldValue;
@@ -116,6 +117,7 @@ public class QuestionGeneratorService {
 
         questionRepository.saveAll(questions);
         requirement.setPendingQuestionsCount(questions.size());
+        requirement.setPcsfStatus(PcsfStatus.UNDER_REVIEW);
         requirementRepository.save(requirement);
         log.info("Generated {} clarification questions for requirement={}",
                 questions.size(), requirement.getRequirementId());

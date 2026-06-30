@@ -73,14 +73,17 @@ public class PcsfCompletenessAnalyser {
             if (gate1Passed) {
                 log.info("GATE-1 PASSED for requirement={} — triggering AI inference",
                         requirement.getRequirementId());
+                // Defer the async call until AFTER the current transaction commits.
+                // Without this, the async thread reads stale (pre-commit) data from MySQL
+                // and overwrites the updated pendingQuestionsCount / pcsfStatus on completion.
                 UUID reqId = requirement.getRequirementId();
                 if (TransactionSynchronizationManager.isActualTransactionActive()) {
-                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            inferenceService.runInferenceAsync(reqId);
-                        }
-                    });
+                    TransactionSynchronizationManager.registerSynchronization(
+                        new TransactionSynchronization() {
+                            @Override public void afterCommit() {
+                                inferenceService.runInferenceAsync(reqId);
+                            }
+                        });
                 } else {
                     inferenceService.runInferenceAsync(reqId);
                 }

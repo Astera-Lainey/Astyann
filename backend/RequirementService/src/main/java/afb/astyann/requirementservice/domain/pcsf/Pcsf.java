@@ -33,6 +33,10 @@ public class Pcsf {
     @Builder.Default private List<PcsfBusinessRule>      businessRules      = new ArrayList<>();
     @Builder.Default private List<PcsfStatusMachine>     statusMachines     = new ArrayList<>();
     @Builder.Default private List<PcsfAccessControlRule> accessControlRules = new ArrayList<>();
+    @Builder.Default private List<PcsfErrorCode>         errorCodes         = new ArrayList<>();
+
+    // Section 5b — API Endpoints (AI_INFERRED, one entry per use-case-derived REST operation)
+    @Builder.Default private List<PcsfApiEndpoint>       endpoints          = new ArrayList<>();
 
     // Section 6 — NFRs
     private PcsfNonFunctionalRequirements nonFunctionalRequirements;
