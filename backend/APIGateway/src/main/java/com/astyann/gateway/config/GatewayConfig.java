@@ -52,6 +52,9 @@ public class GatewayConfig {
     @Value("${services.ai-orchestrator-service.url:http://localhost:8089}")
     private String aiOrchestratorServiceUrl;
 
+    @Value("${services.rag-service.url:http://localhost:8090}")
+    private String ragServiceUrl;
+
     public GatewayConfig(JwtAuthenticationFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
     }
@@ -117,6 +120,12 @@ public class GatewayConfig {
                     .path("/api/v1/ai/**")
                     .filters(f -> f.filter(jwtFilter))
                     .uri(aiOrchestratorServiceUrl))
+
+            // ── RAG Service (port 8090) ───────────────────────────────────────
+            .route("rag-service", r -> r
+                    .path("/api/v1/rag/**")
+                    .filters(f -> f.filter(jwtFilter))
+                    .uri(ragServiceUrl))
 
             .build();
     }
