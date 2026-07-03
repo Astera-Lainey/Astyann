@@ -2,7 +2,8 @@
 
 .shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   font-family: "Alata", ui-sans-serif, system-ui, sans-serif;
   background: #f5f6f8;
   color: #111827;
@@ -16,7 +17,8 @@ $sidebar-width: 220px;
 
 .shell__sidebar {
   width: $sidebar-width;
-  min-height: 100vh;
+  height: 100vh;
+  flex-shrink: 0;
 
   display: flex;
   flex-direction: column;
@@ -25,6 +27,12 @@ $sidebar-width: 220px;
   border-right: 1px solid #e5e7eb;
 
   padding: 0.75rem;
+
+  // Sidebar itself never scrolls with the main content — it's pinned for the
+  // lifetime of the shell. If its own nav/project list ever outgrows the
+  // viewport it scrolls independently rather than pushing the sidebar off-screen.
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .shell__brand {
@@ -251,9 +259,11 @@ $sidebar-width: 220px;
   flex: 1;
 
   min-width: 0;
+  height: 100vh;
 
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 // =====================================================
@@ -262,6 +272,7 @@ $sidebar-width: 220px;
 
 .shell__topbar {
   height: 60px;
+  flex-shrink: 0;
 
   display: flex;
   align-items: center;
@@ -445,6 +456,10 @@ $sidebar-width: 220px;
 
 .shell__content {
   flex: 1;
+  // Required alongside `overflow-y: auto` — without it a flex column child
+  // defaults to min-height:auto (content-based) and can never shrink below
+  // its content, so it grows past the viewport instead of scrolling.
+  min-height: 0;
 
   padding: 1.25rem;
 

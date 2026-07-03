@@ -73,7 +73,8 @@
                   <div class="req__field-edit-row">
                     <input class="req__field-input"
                       [value]="editingValue()"
-                      (input)="onEditInput($event)" />
+                      (input)="onEditInput($event)"
+                      (keydown)="onFieldKeydown($event)" />
                     <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
                     <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
                   </div>
@@ -98,7 +99,8 @@
                   <div class="req__field-edit-row">
                     <input class="req__field-input"
                       [value]="editingValue()"
-                      (input)="onEditInput($event)" />
+                      (input)="onEditInput($event)"
+                      (keydown)="onFieldKeydown($event)" />
                     <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
                     <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
                   </div>
@@ -123,7 +125,8 @@
                   <div class="req__field-edit-row req__field-edit-row--column">
                     <textarea class="req__field-input req__field-input--textarea" rows="3"
                       [value]="editingValue()"
-                      (input)="onEditInput($event)"></textarea>
+                      (input)="onEditInput($event)"
+                      (keydown)="onFieldKeydown($event)"></textarea>
                     <div class="req__field-edit-actions">
                       <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
                       <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
@@ -147,83 +150,354 @@
           </div>
         }
 
-        <!-- Actors -->
-        @if (hasActors()) {
+        <!-- Public Access -->
+        @if (hasPublicAccess()) {
           <div class="req__group">
             <div class="req__group-header">
-              <span class="req__group-title">Actors</span>
-              <span class="req__group-count">{{ data.actors!.length }}</span>
+              <span class="req__group-title">Public Access</span>
             </div>
             <ul class="req__item-list">
-              @for (actor of data.actors; track actor.id) {
-                <li class="req__item req__actor">
-                  <div class="req__actor-row">
-                    <span class="req__item-name">{{ actor.name?.value ?? '—' }}</span>
-                    @if (actor.type?.value) {
-                      <span class="req__badge" [class.req__badge--external]="actor.type!.value === 'EXTERNAL'">
-                        {{ actor.type!.value }}
-                      </span>
-                    }
+              <li class="req__item req__conditional-item">
+                <span class="req__field-value">Has public actor (unauthenticated access)</span>
+                <label class="req__toggle">
+                  <input type="checkbox" class="req__toggle-input"
+                    [checked]="data.publicAccess?.hasPublicActor?.value ?? false"
+                    [disabled]="savingPublicActorFlag()"
+                    (change)="togglePublicActor(data.publicAccess?.hasPublicActor?.value ?? false)" />
+                  <span class="req__toggle-track"></span>
+                </label>
+              </li>
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Public paths</span>
+                @if (editingPath() === 'publicAccess.publicPaths') {
+                  <div class="req__field-edit-row req__field-edit-row--column">
+                    <textarea class="req__field-input req__field-input--textarea" rows="3"
+                      [value]="editingValue()"
+                      (input)="onEditInput($event)"
+                      (keydown)="onFieldKeydown($event)"></textarea>
+                    <div class="req__field-edit-actions">
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
                   </div>
-                  @if (actor.description?.value) {
-                    <p class="req__item-desc">{{ actor.description!.value }}</p>
+                  @if (fieldSaveError()) {
+                    <p class="req__error" role="alert">{{ fieldSaveError() }}</p>
                   }
-                </li>
-              }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ (data.publicAccess?.publicPaths ?? []).join(', ') || '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit public paths"
+                      (click)="startEdit('publicAccess.publicPaths', (data.publicAccess?.publicPaths ?? []).join('\n'))">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
             </ul>
           </div>
         }
 
-        <!-- Modules & Use Cases -->
-        @if (hasModules()) {
-          @for (mod of data.modules; track mod.id) {
-            <div class="req__group">
-              <div class="req__group-header">
-                <span class="req__group-title">{{ mod.name?.value ?? 'Module' }}</span>
-                <span class="req__group-count">
-                  {{ (mod.useCases ?? []).length }}&nbsp;use-case{{ (mod.useCases ?? []).length === 1 ? '' : 's' }}
-                </span>
-              </div>
-
-              @if (mod.description?.value) {
-                <p class="req__module-desc">{{ mod.description!.value }}</p>
-              }
-
-              @if ((mod.crudOperations?.value ?? []).length > 0) {
-                <div class="req__crud-row">
-                  @for (op of mod.crudOperations!.value!; track op) {
-                    <span class="req__crud-chip">{{ op }}</span>
-                  }
+        <!-- Actors -->
+        @if (hasActors() || editingActors() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Actors</span>
+              @if (editingActors() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.actors!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit actors" (click)="startEditActors()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
                 </div>
               }
+            </div>
 
-              @if ((mod.useCases ?? []).length > 0) {
-                <ul class="req__item-list">
-                  @for (uc of mod.useCases; track uc.id) {
-                    <li class="req__item req__uc">
-                      <div class="req__uc-name">{{ uc.name?.value ?? '—' }}</div>
-                      @if (uc.preconditions?.value) {
-                        <p class="req__uc-meta"><strong>Pre-condition:</strong> {{ uc.preconditions!.value }}</p>
+            @if (editingActors(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__actor-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.name" placeholder="Name"
+                      (input)="updateActorField(i, 'name', $any($event.target).value)" />
+                    <select class="req__field-select"
+                      (change)="updateActorField(i, 'type', $any($event.target).value)">
+                      <option value="INTERNAL" [selected]="row.type === 'INTERNAL'">INTERNAL</option>
+                      <option value="EXTERNAL" [selected]="row.type === 'EXTERNAL'">EXTERNAL</option>
+                    </select>
+                    <input class="req__field-input req__field-input--flex" [value]="row.desc" placeholder="Description"
+                      (input)="updateActorField(i, 'desc', $any($event.target).value)" />
+                    <button class="req__remove-row-btn" aria-label="Remove actor" (click)="removeActorRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addActorRow()">+ Add actor</button>
+                @if (actorSaveError()) {
+                  <p class="req__error" role="alert">{{ actorSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingActors()" (click)="saveActors()">
+                    {{ isSavingActors() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditActors()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (actor of data.actors; track actor.id) {
+                  <li class="req__item req__actor">
+                    <div class="req__actor-row">
+                      <span class="req__item-name">{{ actor.name?.value ?? '—' }}</span>
+                      @if (actor.type?.value) {
+                        <span class="req__badge" [class.req__badge--external]="actor.type!.value === 'EXTERNAL'">
+                          {{ actor.type!.value }}
+                        </span>
                       }
-                      @if (uc.postconditions?.value) {
-                        <p class="req__uc-meta"><strong>Post-condition:</strong> {{ uc.postconditions!.value }}</p>
-                      }
-                      @if ((uc.mainScenario?.value ?? []).length > 0) {
-                        <ol class="req__uc-steps">
-                          @for (step of uc.mainScenario!.value!; track step) {
-                            <li>{{ step }}</li>
-                          }
-                        </ol>
-                      }
-                      @if (uc.alternativeScenario?.value) {
-                        <p class="req__uc-alt"><em>Alternative:</em> {{ uc.alternativeScenario!.value }}</p>
-                      }
-                    </li>
-                  }
-                </ul>
+                    </div>
+                    @if (actor.description?.value) {
+                      <p class="req__item-desc">{{ actor.description!.value }}</p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- Modules & Use Cases -->
+        @if (hasModules() || editingModules() !== null) {
+          @if (editingModules(); as rows) {
+            <div class="req__group">
+              <div class="req__group-header">
+                <span class="req__group-title">Modules</span>
+              </div>
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__module-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.name" placeholder="Module name"
+                      (input)="updateModuleField(i, 'name', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--flex" [value]="row.desc" placeholder="Description"
+                      (input)="updateModuleField(i, 'desc', $any($event.target).value)" />
+                    <button class="req__remove-row-btn" aria-label="Remove module" (click)="removeModuleRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addModuleRow()">+ Add module</button>
+                @if (moduleSaveError()) {
+                  <p class="req__error" role="alert">{{ moduleSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingModules()" (click)="saveModules()">
+                    {{ isSavingModules() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditModules()">Cancel</button>
+                </div>
+              </div>
+            </div>
+          } @else {
+            @for (mod of data.modules; track mod.id; let first = $first) {
+              <div class="req__group">
+                <div class="req__group-header">
+                  <span class="req__group-title">{{ mod.name?.value ?? 'Module' }}</span>
+                  <div class="req__group-header-actions">
+                    <span class="req__group-count">
+                      {{ (mod.useCases ?? []).length }}&nbsp;use-case{{ (mod.useCases ?? []).length === 1 ? '' : 's' }}
+                    </span>
+                    @if (first) {
+                      <button class="req__field-edit-btn" aria-label="Edit modules" (click)="startEditModules()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                @if (mod.description?.value) {
+                  <p class="req__module-desc">{{ mod.description!.value }}</p>
+                }
+
+                @if ((mod.crudOperations?.value ?? []).length > 0) {
+                  <div class="req__crud-row">
+                    @for (op of mod.crudOperations!.value!; track op) {
+                      <span class="req__crud-chip">{{ op }}</span>
+                    }
+                  </div>
+                }
+
+                @if ((mod.useCases ?? []).length > 0) {
+                  <ul class="req__item-list">
+                    @for (uc of mod.useCases; track uc.id) {
+                      <li class="req__item req__uc">
+                        <div class="req__uc-name">{{ uc.name?.value ?? '—' }}</div>
+                        @if (uc.preconditions?.value) {
+                          <p class="req__uc-meta"><strong>Pre-condition:</strong> {{ uc.preconditions!.value }}</p>
+                        }
+                        @if (uc.postconditions?.value) {
+                          <p class="req__uc-meta"><strong>Post-condition:</strong> {{ uc.postconditions!.value }}</p>
+                        }
+                        @if ((uc.mainScenario?.value ?? []).length > 0) {
+                          <ol class="req__uc-steps">
+                            @for (step of uc.mainScenario!.value!; track step) {
+                              <li>{{ step }}</li>
+                            }
+                          </ol>
+                        }
+                        @if (uc.alternativeScenario?.value) {
+                          <p class="req__uc-alt"><em>Alternative:</em> {{ uc.alternativeScenario!.value }}</p>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          }
+        }
+
+        <!-- Entities -->
+        @if (hasEntities() || editingEntities() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Entities</span>
+              @if (editingEntities() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.entities!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit entities" (click)="startEditEntities()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
               }
             </div>
-          }
+
+            @if (editingEntities(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__entity-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.name" placeholder="Name"
+                      (input)="updateEntityText(i, 'name', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.tableName" placeholder="Table name"
+                      (input)="updateEntityText(i, 'tableName', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.pkStrategy" placeholder="PK strategy"
+                      (input)="updateEntityText(i, 'pkStrategy', $any($event.target).value)" />
+                    <label class="req__inline-checkbox">
+                      <input type="checkbox" [checked]="row.auditFields" (change)="updateEntityFlag(i, 'auditFields', $any($event.target).checked)" />
+                      Audit
+                    </label>
+                    <label class="req__inline-checkbox">
+                      <input type="checkbox" [checked]="row.softDelete" (change)="updateEntityFlag(i, 'softDelete', $any($event.target).checked)" />
+                      Soft delete
+                    </label>
+                    <button class="req__remove-row-btn" aria-label="Remove entity" (click)="removeEntityRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addEntityRow()">+ Add entity</button>
+                @if (entitySaveError()) {
+                  <p class="req__error" role="alert">{{ entitySaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingEntities()" (click)="saveEntities()">
+                    {{ isSavingEntities() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditEntities()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (entity of data.entities; track entity.id) {
+                  <li class="req__item req__entity">
+                    <div class="req__actor-row">
+                      <span class="req__item-name">{{ entity.name?.value ?? '—' }}</span>
+                      @if (entity.tableName?.value) {
+                        <span class="req__badge req__badge--tech">{{ entity.tableName!.value }}</span>
+                      }
+                      <span class="req__badge">{{ entity.primaryKeyStrategy ?? 'UUID' }}</span>
+                      @if (entity.auditFields) { <span class="req__badge">AUDITED</span> }
+                      @if (entity.softDelete?.value) { <span class="req__badge">SOFT DELETE</span> }
+                    </div>
+                    @if ((entity.attributes ?? []).length > 0) {
+                      <ul class="req__sublist">
+                        @for (attr of entity.attributes; track attr.id) {
+                          <li class="req__sublist-item">
+                            <span class="req__sublist-name">{{ attr.name?.value ?? '—' }}</span>
+                            <span class="req__sublist-meta">{{ attributeSummary(attr) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- Relationships -->
+        @if (hasRelationships() || editingRelationships() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Relationships</span>
+              @if (editingRelationships() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.relationships!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit relationships" (click)="startEditRelationships()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (editingRelationships(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__relationship-edit-row">
+                    <select class="req__field-select" (change)="updateRelationshipField(i, 'fromEntityId', $any($event.target).value)">
+                      @for (opt of entityOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.fromEntityId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <span class="req__rel-arrow">→</span>
+                    <select class="req__field-select" (change)="updateRelationshipField(i, 'toEntityId', $any($event.target).value)">
+                      @for (opt of entityOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.toEntityId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <input class="req__field-input req__field-input--name" [value]="row.cardinality" placeholder="Cardinality"
+                      (input)="updateRelationshipField(i, 'cardinality', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--flex" [value]="row.label" placeholder="Label"
+                      (input)="updateRelationshipField(i, 'label', $any($event.target).value)" />
+                    <button class="req__remove-row-btn" aria-label="Remove relationship" (click)="removeRelationshipRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addRelationshipRow()">+ Add relationship</button>
+                @if (relationshipSaveError()) {
+                  <p class="req__error" role="alert">{{ relationshipSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingRelationships()" (click)="saveRelationships()">
+                    {{ isSavingRelationships() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditRelationships()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (rel of data.relationships; track rel.id) {
+                  <li class="req__item">
+                    <span class="req__item-name">{{ entityName(rel.fromEntityId) }} → {{ entityName(rel.toEntityId) }}</span>
+                    @if (rel.cardinality?.value) {
+                      <span class="req__badge">{{ rel.cardinality!.value }}</span>
+                    }
+                    @if (rel.label?.value) {
+                      <p class="req__item-desc">{{ rel.label!.value }}</p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
         }
 
         <!-- Business Rules -->
@@ -244,30 +518,196 @@
           </div>
         }
 
-        <!-- Technical Stack -->
-        @if (hasTechStack()) {
+        <!-- Status Machines (read-only — AI-derived) -->
+        @if (hasStatusMachines()) {
           <div class="req__group">
             <div class="req__group-header">
-              <span class="req__group-title">Technical Stack</span>
+              <span class="req__group-title">Status Machines</span>
+              <span class="req__group-count">{{ data.statusMachines!.length }}</span>
             </div>
             <ul class="req__item-list">
-              @if (data.databaseConfig; as db) {
-                <li class="req__item req__tech-item">
-                  <div class="req__tech-label">Database</div>
-                  <div class="req__tech-row">
-                    @if (db.type) { <span class="req__badge req__badge--tech">{{ db.type }}</span> }
-                    @if (db.name) { <span class="req__tech-detail">{{ db.name }}</span> }
-                    @if (db.user) { <span class="req__tech-detail">user: {{ db.user }}</span> }
-                    @if (db.host) { <span class="req__tech-detail">{{ db.host }}{{ db.port ? ':' + db.port : '' }}</span> }
-                  </div>
+              @for (sm of data.statusMachines; track sm.entityId) {
+                <li class="req__item">
+                  <span class="req__item-name">{{ entityName(sm.entityId) }}</span>
+                  @if ((sm.states ?? []).length > 0) {
+                    <div class="req__crud-row">
+                      @for (state of sm.states; track state) {
+                        <span class="req__crud-chip" [class.req__crud-chip--active]="state === sm.initialState">{{ state }}</span>
+                      }
+                    </div>
+                  }
+                  @if ((sm.transitions ?? []).length > 0) {
+                    <ul class="req__sublist">
+                      @for (t of sm.transitions; track $index) {
+                        <li class="req__sublist-item">
+                          <span class="req__sublist-name">{{ t.from }} → {{ t.to }}</span>
+                          <span class="req__sublist-meta">
+                            on {{ t.trigger }}@if (t.guard) {, if {{ t.guard }}}@if (t.action) { — {{ t.action }}}
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  }
                 </li>
               }
-              @if (data.apiConfig; as api) {
-                <li class="req__item req__tech-item">
-                  <div class="req__tech-label">REST API</div>
-                  <div class="req__tech-row">
-                    @if (api.authType) { <span class="req__badge req__badge--tech">{{ api.authType }}</span> }
-                    @if (api.baseUrl) { <span class="req__tech-detail">{{ api.baseUrl }}</span> }
+            </ul>
+          </div>
+        }
+
+        <!-- Access Control Rules -->
+        @if (hasAccessControlRules() || editingAccessControlRules() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Access Control Rules</span>
+              @if (editingAccessControlRules() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.accessControlRules!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit access control rules" (click)="startEditAccessControlRules()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (editingAccessControlRules(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__acl-edit-row">
+                    <select class="req__field-select" (change)="updateAccessControlField(i, 'moduleId', $any($event.target).value)">
+                      @for (opt of moduleOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.moduleId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <select class="req__field-select" (change)="updateAccessControlField(i, 'entityId', $any($event.target).value)">
+                      @for (opt of entityOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.entityId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <select class="req__field-select" (change)="updateAccessControlField(i, 'operation', $any($event.target).value)">
+                      @for (op of ['CREATE', 'READ', 'UPDATE', 'DELETE', 'ALL']; track op) {
+                        <option [value]="op" [selected]="op === row.operation">{{ op }}</option>
+                      }
+                    </select>
+                    <input class="req__field-input req__field-input--flex" [value]="row.allowedRoles" placeholder="Roles (comma separated)"
+                      (input)="updateAccessControlField(i, 'allowedRoles', $any($event.target).value)" />
+                    <button class="req__remove-row-btn" aria-label="Remove rule" (click)="removeAccessControlRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addAccessControlRow()">+ Add rule</button>
+                @if (accessControlSaveError()) {
+                  <p class="req__error" role="alert">{{ accessControlSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingAccessControlRules()" (click)="saveAccessControlRules()">
+                    {{ isSavingAccessControlRules() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditAccessControlRules()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (rule of data.accessControlRules; track rule.id) {
+                  <li class="req__item">
+                    <span class="req__item-name">{{ moduleName(rule.moduleId) }} / {{ entityName(rule.entityId) }}</span>
+                    <span class="req__badge">{{ rule.operation }}</span>
+                    @if ((rule.allowedRoles?.value ?? []).length > 0) {
+                      <p class="req__item-desc">{{ (rule.allowedRoles!.value ?? []).join(', ') }}</p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- Error Codes -->
+        @if (hasErrorCodes() || editingErrorCodes() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Error Codes</span>
+              @if (editingErrorCodes() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.errorCodes!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit error codes" (click)="startEditErrorCodes()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (editingErrorCodes(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__error-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.code" placeholder="CODE_NAME"
+                      (input)="updateErrorCodeField(i, 'code', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--status" [value]="row.httpStatus" placeholder="Status"
+                      (input)="updateErrorCodeField(i, 'httpStatus', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--flex" [value]="row.messageTemplate" placeholder="Message template"
+                      (input)="updateErrorCodeField(i, 'messageTemplate', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.exceptionClass" placeholder="Exception class"
+                      (input)="updateErrorCodeField(i, 'exceptionClass', $any($event.target).value)" />
+                    <select class="req__field-select" (change)="updateErrorCodeField(i, 'moduleId', $any($event.target).value)">
+                      @for (opt of moduleOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.moduleId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <button class="req__remove-row-btn" aria-label="Remove error code" (click)="removeErrorCodeRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addErrorCodeRow()">+ Add error code</button>
+                @if (errorCodeSaveError()) {
+                  <p class="req__error" role="alert">{{ errorCodeSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingErrorCodes()" (click)="saveErrorCodes()">
+                    {{ isSavingErrorCodes() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditErrorCodes()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (ec of data.errorCodes; track ec.id) {
+                  <li class="req__item">
+                    <span class="req__item-name">{{ ec.code }}</span>
+                    <span class="req__badge">{{ ec.httpStatus }}</span>
+                    <span class="req__badge req__badge--tech">{{ moduleName(ec.moduleId) }}</span>
+                    <p class="req__item-desc">{{ ec.messageTemplate }}</p>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- API Endpoints (read-only — AI-derived from use cases) -->
+        @if (hasEndpoints()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">API Endpoints</span>
+              <span class="req__group-count">{{ data.endpoints!.length }}</span>
+            </div>
+            <ul class="req__item-list">
+              @for (ep of data.endpoints; track ep.id) {
+                <li class="req__item">
+                  <div class="req__actor-row">
+                    <span class="req__badge req__badge--tech">{{ ep.httpMethod }}</span>
+                    <span class="req__item-name">{{ ep.path }}</span>
+                  </div>
+                  @if (ep.summary) {
+                    <p class="req__item-desc">{{ ep.summary }}</p>
+                  }
+                  <div class="req__crud-row">
+                    @if (ep.paginated) { <span class="req__crud-chip">PAGINATED</span> }
+                    @if (ep.requiresAuth) { <span class="req__crud-chip">AUTH</span> }
+                    @for (role of ep.requiredRoles ?? []; track role) {
+                      <span class="req__crud-chip">{{ role }}</span>
+                    }
                   </div>
                 </li>
               }
@@ -275,7 +715,671 @@
           </div>
         }
 
-        @if (!data.project && !hasActors() && !hasModules() && !hasBusinessRules() && !hasTechStack()) {
+        <!-- Non-Functional Requirements -->
+        @if (hasNfr()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Non-Functional Requirements</span>
+            </div>
+            <ul class="req__item-list">
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Concurrent users</span>
+                @if (editingPath() === 'nonFunctionalRequirements.concurrentUsers.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.nonFunctionalRequirements?.concurrentUsers?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit concurrent users"
+                      (click)="startEdit('nonFunctionalRequirements.concurrentUsers.value', data.nonFunctionalRequirements?.concurrentUsers?.value?.toString() ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Target response time (ms)</span>
+                @if (editingPath() === 'nonFunctionalRequirements.targetResponseTimeMs.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.nonFunctionalRequirements?.targetResponseTimeMs?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit target response time"
+                      (click)="startEdit('nonFunctionalRequirements.targetResponseTimeMs.value', data.nonFunctionalRequirements?.targetResponseTimeMs?.value?.toString() ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Data volume</span>
+                @if (editingPath() === 'nonFunctionalRequirements.dataVolumeDescription.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ data.nonFunctionalRequirements?.dataVolumeDescription?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit data volume"
+                      (click)="startEdit('nonFunctionalRequirements.dataVolumeDescription.value', data.nonFunctionalRequirements?.dataVolumeDescription?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Availability target</span>
+                @if (editingPath() === 'nonFunctionalRequirements.availabilityTarget.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ data.nonFunctionalRequirements?.availabilityTarget?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit availability target"
+                      (click)="startEdit('nonFunctionalRequirements.availabilityTarget.value', data.nonFunctionalRequirements?.availabilityTarget?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Security depth</span>
+                @if (editingPath() === 'nonFunctionalRequirements.securityDepth.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ data.nonFunctionalRequirements?.securityDepth?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit security depth"
+                      (click)="startEdit('nonFunctionalRequirements.securityDepth.value', data.nonFunctionalRequirements?.securityDepth?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Locale</span>
+                @if (editingPath() === 'nonFunctionalRequirements.locale.value') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.nonFunctionalRequirements?.locale?.value ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit locale"
+                      (click)="startEdit('nonFunctionalRequirements.locale.value', data.nonFunctionalRequirements?.locale?.value ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+            </ul>
+          </div>
+        }
+
+        <!-- Technical Stack -->
+        @if (hasTechStack()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Technical Stack</span>
+            </div>
+            <ul class="req__item-list">
+              @if (data.databaseConfig) {
+                <li class="req__item req__tech-subheader">Database</li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Database name</span>
+                  @if (editingPath() === 'databaseConfig.name') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.databaseConfig?.name ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit database name"
+                        (click)="startEdit('databaseConfig.name', data.databaseConfig?.name ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Database user</span>
+                  @if (editingPath() === 'databaseConfig.user') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.databaseConfig?.user ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit database user"
+                        (click)="startEdit('databaseConfig.user', data.databaseConfig?.user ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Charset / collation</span>
+                  @if (editingPath() === 'databaseConfig.charset') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.databaseConfig?.charset ?? '—' }} / {{ data.databaseConfig?.collation ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit charset"
+                        (click)="startEdit('databaseConfig.charset', data.databaseConfig?.charset ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+              }
+
+              @if (data.apiConfig) {
+                <li class="req__item req__tech-subheader">REST API</li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Version prefix</span>
+                  @if (editingPath() === 'apiConfig.versionPrefix') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.apiConfig?.versionPrefix ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit version prefix"
+                        (click)="startEdit('apiConfig.versionPrefix', data.apiConfig?.versionPrefix ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Rate limit (req/min)</span>
+                  @if (editingPath() === 'apiConfig.rateLimitPerMinute') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.apiConfig?.rateLimitPerMinute ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit rate limit"
+                        (click)="startEdit('apiConfig.rateLimitPerMinute', data.apiConfig?.rateLimitPerMinute?.toString() ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">Page size (default / max)</span>
+                  @if (editingPath() === 'apiConfig.defaultPageSize') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value">{{ data.apiConfig?.defaultPageSize ?? '—' }} / {{ data.apiConfig?.maxPageSize ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit default page size"
+                        (click)="startEdit('apiConfig.defaultPageSize', data.apiConfig?.defaultPageSize?.toString() ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__field-item">
+                  <span class="req__field-label">CORS allowed origin (dev)</span>
+                  @if (editingPath() === 'apiConfig.corsAllowedOriginsDev') {
+                    <div class="req__field-edit-row">
+                      <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                      <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                      <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                    </div>
+                    @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                  } @else {
+                    <div class="req__field-row">
+                      <span class="req__field-value req__field-value--muted">{{ data.apiConfig?.corsAllowedOriginsDev ?? '—' }}</span>
+                      <button class="req__field-edit-btn" aria-label="Edit CORS origin"
+                        (click)="startEdit('apiConfig.corsAllowedOriginsDev', data.apiConfig?.corsAllowedOriginsDev ?? '')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  }
+                </li>
+
+                <li class="req__item req__tech-readonly">
+                  <span class="req__field-label">JWT access / refresh token validity</span>
+                  <span class="req__field-value req__field-value--muted">
+                    {{ data.apiConfig?.jwtAccessTokenValidityMs ?? '—' }} ms / {{ data.apiConfig?.jwtRefreshTokenValidityMs ?? '—' }} ms
+                  </span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Screens -->
+        @if (hasScreens() || editingScreens() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Screens</span>
+              @if (editingScreens() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.userInterface!.screens!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit screens" (click)="startEditScreens()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (editingScreens(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__screen-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.name" placeholder="Screen name"
+                      (input)="updateScreenField(i, 'name', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.type" placeholder="Type (LIST/FORM/DETAIL)"
+                      (input)="updateScreenField(i, 'type', $any($event.target).value)" />
+                    <select class="req__field-select" (change)="updateScreenField(i, 'entityId', $any($event.target).value)">
+                      @for (opt of entityOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.entityId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <select class="req__field-select" (change)="updateScreenField(i, 'moduleId', $any($event.target).value)">
+                      @for (opt of moduleOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.moduleId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <input class="req__field-input req__field-input--flex" [value]="row.routePath" placeholder="Route"
+                      (input)="updateScreenField(i, 'routePath', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--flex" [value]="row.requiredRoles" placeholder="Roles (comma separated)"
+                      (input)="updateScreenField(i, 'requiredRoles', $any($event.target).value)" />
+                    <button class="req__remove-row-btn" aria-label="Remove screen" (click)="removeScreenRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addScreenRow()">+ Add screen</button>
+                @if (screenSaveError()) {
+                  <p class="req__error" role="alert">{{ screenSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingScreens()" (click)="saveScreens()">
+                    {{ isSavingScreens() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditScreens()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (screen of data.userInterface?.screens; track screen.name) {
+                  <li class="req__item">
+                    <div class="req__actor-row">
+                      <span class="req__item-name">{{ screen.name }}</span>
+                      @if (screen.type) { <span class="req__badge">{{ screen.type }}</span> }
+                      @if (screen.routePath) { <span class="req__badge req__badge--tech">{{ screen.routePath }}</span> }
+                    </div>
+                    @if ((screen.tableColumns ?? []).length > 0 || (screen.formFields ?? []).length > 0) {
+                      <ul class="req__sublist">
+                        @for (col of screen.tableColumns; track $index) {
+                          <li class="req__sublist-item">
+                            <span class="req__sublist-name">{{ col.headerLabel }}</span>
+                            <span class="req__sublist-meta">column · {{ col.attributeId }}</span>
+                          </li>
+                        }
+                        @for (field of screen.formFields; track $index) {
+                          <li class="req__sublist-item">
+                            <span class="req__sublist-name">{{ field.label }}</span>
+                            <span class="req__sublist-meta">field · {{ field.controlType }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- Navigation -->
+        @if (hasNavItems() || editingNavItems() !== null) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Navigation</span>
+              @if (editingNavItems() === null) {
+                <div class="req__group-header-actions">
+                  <span class="req__group-count">{{ data.userInterface!.navigation!.length }}</span>
+                  <button class="req__field-edit-btn" aria-label="Edit navigation" (click)="startEditNavItems()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (editingNavItems(); as rows) {
+              <div class="req__list-edit-form">
+                @for (row of rows; track $index; let i = $index) {
+                  <div class="req__nav-edit-row">
+                    <input class="req__field-input req__field-input--name" [value]="row.label" placeholder="Label"
+                      (input)="updateNavItemField(i, 'label', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.routePath" placeholder="Route"
+                      (input)="updateNavItemField(i, 'routePath', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--name" [value]="row.icon" placeholder="Icon"
+                      (input)="updateNavItemField(i, 'icon', $any($event.target).value)" />
+                    <input class="req__field-input req__field-input--flex" [value]="row.visibleToRoles" placeholder="Roles (comma separated)"
+                      (input)="updateNavItemField(i, 'visibleToRoles', $any($event.target).value)" />
+                    <select class="req__field-select" (change)="updateNavItemField(i, 'moduleId', $any($event.target).value)">
+                      @for (opt of moduleOptions(); track opt.id) {
+                        <option [value]="opt.id" [selected]="opt.id === row.moduleId">{{ opt.name }}</option>
+                      }
+                    </select>
+                    <button class="req__remove-row-btn" aria-label="Remove nav item" (click)="removeNavItemRow(i)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                }
+                <button class="req__add-row-btn" (click)="addNavItemRow()">+ Add nav item</button>
+                @if (navItemSaveError()) {
+                  <p class="req__error" role="alert">{{ navItemSaveError() }}</p>
+                }
+                <div class="req__list-edit-actions">
+                  <button class="req__field-save-btn" [disabled]="isSavingNavItems()" (click)="saveNavItems()">
+                    {{ isSavingNavItems() ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button class="req__field-cancel-btn" (click)="cancelEditNavItems()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <ul class="req__item-list">
+                @for (nav of data.userInterface?.navigation; track $index) {
+                  <li class="req__item">
+                    <span class="req__item-name">{{ nav.label }}</span>
+                    @if (nav.routePath) { <span class="req__badge req__badge--tech">{{ nav.routePath }}</span> }
+                    @if ((nav.visibleToRoles ?? []).length > 0) {
+                      <p class="req__item-desc">{{ (nav.visibleToRoles ?? []).join(', ') }}</p>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <!-- Infrastructure Config -->
+        @if (hasInfraConfig()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Infrastructure Config</span>
+            </div>
+            <ul class="req__item-list">
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Ports (backend / frontend)</span>
+                @if (editingPath() === 'infrastructureConfig.backendPort') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.infrastructureConfig?.backendPort ?? '—' }} / {{ data.infrastructureConfig?.frontendPort ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit backend port"
+                      (click)="startEdit('infrastructureConfig.backendPort', data.infrastructureConfig?.backendPort?.toString() ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Diagram renderer</span>
+                @if (editingPath() === 'infrastructureConfig.diagramRenderer') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.infrastructureConfig?.diagramRenderer ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit diagram renderer"
+                      (click)="startEdit('infrastructureConfig.diagramRenderer', data.infrastructureConfig?.diagramRenderer ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Kroki internal URL</span>
+                @if (editingPath() === 'infrastructureConfig.krokiInternalUrl') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value req__field-value--muted">{{ data.infrastructureConfig?.krokiInternalUrl ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit kroki URL"
+                      (click)="startEdit('infrastructureConfig.krokiInternalUrl', data.infrastructureConfig?.krokiInternalUrl ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+              <li class="req__item req__field-item">
+                <span class="req__field-label">Deployment target</span>
+                @if (editingPath() === 'infrastructureConfig.deploymentTarget') {
+                  <div class="req__field-edit-row">
+                    <input class="req__field-input" [value]="editingValue()" (input)="onEditInput($event)" (keydown)="onFieldKeydown($event)" />
+                    <button class="req__field-save-btn" [disabled]="isSavingField()" (click)="saveField()">Save</button>
+                    <button class="req__field-cancel-btn" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                  @if (fieldSaveError()) { <p class="req__error" role="alert">{{ fieldSaveError() }}</p> }
+                } @else {
+                  <div class="req__field-row">
+                    <span class="req__field-value">{{ data.infrastructureConfig?.deploymentTarget ?? '—' }}</span>
+                    <button class="req__field-edit-btn" aria-label="Edit deployment target"
+                      (click)="startEdit('infrastructureConfig.deploymentTarget', data.infrastructureConfig?.deploymentTarget ?? '')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                }
+              </li>
+
+            </ul>
+          </div>
+        }
+
+        <!-- Conditional Features -->
+        @if (hasConditionalFeatures()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Conditional Features</span>
+            </div>
+            <ul class="req__item-list">
+              @if (data.conditionalFeatures?.fileUpload !== undefined) {
+                <li class="req__item req__conditional-item">
+                  <span class="req__field-value">File Upload</span>
+                  <label class="req__toggle">
+                    <input type="checkbox" class="req__toggle-input"
+                      [checked]="conditionalFlagValue(data.conditionalFeatures!.fileUpload)"
+                      [disabled]="savingConditionalPath() !== null"
+                      (change)="toggleConditionalFeature('conditionalFeatures.fileUpload.required.value', conditionalFlagValue(data.conditionalFeatures!.fileUpload))" />
+                    <span class="req__toggle-track"></span>
+                  </label>
+                </li>
+              }
+              @if (data.conditionalFeatures?.dataExport !== undefined) {
+                <li class="req__item req__conditional-item">
+                  <span class="req__field-value">Data Export</span>
+                  <label class="req__toggle">
+                    <input type="checkbox" class="req__toggle-input"
+                      [checked]="conditionalFlagValue(data.conditionalFeatures!.dataExport)"
+                      [disabled]="savingConditionalPath() !== null"
+                      (change)="toggleConditionalFeature('conditionalFeatures.dataExport.required.value', conditionalFlagValue(data.conditionalFeatures!.dataExport))" />
+                    <span class="req__toggle-track"></span>
+                  </label>
+                </li>
+              }
+              @if (data.conditionalFeatures?.searchFilter !== undefined) {
+                <li class="req__item req__conditional-item">
+                  <span class="req__field-value">Search &amp; Filter</span>
+                  <label class="req__toggle">
+                    <input type="checkbox" class="req__toggle-input"
+                      [checked]="conditionalFlagValue(data.conditionalFeatures!.searchFilter)"
+                      [disabled]="savingConditionalPath() !== null"
+                      (change)="toggleConditionalFeature('conditionalFeatures.searchFilter.required.value', conditionalFlagValue(data.conditionalFeatures!.searchFilter))" />
+                    <span class="req__toggle-track"></span>
+                  </label>
+                </li>
+              }
+              @if (data.conditionalFeatures?.multiTenancy !== undefined) {
+                <li class="req__item req__conditional-item">
+                  <span class="req__field-value">Multi-Tenancy</span>
+                  <label class="req__toggle">
+                    <input type="checkbox" class="req__toggle-input"
+                      [checked]="conditionalFlagValue(data.conditionalFeatures!.multiTenancy)"
+                      [disabled]="savingConditionalPath() !== null"
+                      (change)="toggleConditionalFeature('conditionalFeatures.multiTenancy.required.value', conditionalFlagValue(data.conditionalFeatures!.multiTenancy))" />
+                    <span class="req__toggle-track"></span>
+                  </label>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Completeness / validation summary (read-only) -->
+        @if (hasValidation()) {
+          <div class="req__group">
+            <div class="req__group-header">
+              <span class="req__group-title">Completeness</span>
+              <span class="req__group-count">{{ ((data.validation!.completenessScore ?? 0) * 100).toFixed(0) }}%</span>
+            </div>
+            <ul class="req__item-list">
+              <li class="req__item">
+                <span class="req__badge" [class.req__badge--tech]="data.validation!.generationReady">
+                  {{ data.validation!.generationReady ? 'READY FOR GENERATION' : 'NOT READY' }}
+                </span>
+              </li>
+              @if ((data.validation!.missingMandatoryItems ?? []).length > 0) {
+                <li class="req__item">
+                  <span class="req__field-label">Missing mandatory</span>
+                  <ul class="req__sublist">
+                    @for (item of data.validation!.missingMandatoryItems; track item) {
+                      <li class="req__sublist-item">{{ item }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+              @if ((data.validation!.pendingConditionalItems ?? []).length > 0) {
+                <li class="req__item">
+                  <span class="req__field-label">Pending conditional</span>
+                  <ul class="req__sublist">
+                    @for (item of data.validation!.pendingConditionalItems; track item) {
+                      <li class="req__sublist-item">{{ item }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+              @if ((data.validation!.pendingInferredItems ?? []).length > 0) {
+                <li class="req__item">
+                  <span class="req__field-label">Pending inferred</span>
+                  <ul class="req__sublist">
+                    @for (item of data.validation!.pendingInferredItems; track item) {
+                      <li class="req__sublist-item">{{ item }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+              @if ((data.validation!.warnings ?? []).length > 0) {
+                <li class="req__item">
+                  <span class="req__field-label">Warnings</span>
+                  <ul class="req__sublist">
+                    @for (item of data.validation!.warnings; track item) {
+                      <li class="req__sublist-item">{{ item }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+              @if ((data.validation!.errors ?? []).length > 0) {
+                <li class="req__item">
+                  <span class="req__field-label">Errors</span>
+                  <ul class="req__sublist">
+                    @for (item of data.validation!.errors; track item) {
+                      <li class="req__sublist-item">{{ item }}</li>
+                    }
+                  </ul>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (!hasAnyData()) {
           <p class="req__empty">The AI has not yet extracted any requirements data.</p>
         }
 

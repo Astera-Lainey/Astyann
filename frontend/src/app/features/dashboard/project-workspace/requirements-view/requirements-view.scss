@@ -181,10 +181,118 @@
   &:hover { background-color: shared.$slate-200; }
 }
 
+// ── Group header actions ──────────────────────────────────────────────────────
+.req__group-header-actions { display: flex; align-items: center; gap: 0.375rem; }
+
+// ── List edit forms (actors, modules) ────────────────────────────────────────
+.req__list-edit-form {
+  padding: 0.75rem 1rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  border-top: 1px solid shared.$slate-200;
+}
+.req__actor-edit-row,
+.req__module-edit-row {
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.req__field-input--name { width: 140px; flex-shrink: 0; }
+.req__field-input--flex { flex: 1; min-width: 0; }
+.req__field-select {
+  padding: 0.375rem 0.5rem; border-radius: 0.375rem;
+  border: 1px solid shared.$slate-200; background-color: #fafafa;
+  font-family: inherit; font-size: 0.75rem; color: shared.$slate-900;
+  cursor: pointer; outline: none; flex-shrink: 0;
+  &:focus { border-color: shared.$brand-red; }
+}
+.req__remove-row-btn {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.625rem; height: 1.625rem;
+  border: none; border-radius: 0.25rem;
+  background: transparent; color: shared.$slate-400; cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+  &:hover { color: #dc2626; background-color: #fef2f2; }
+}
+.req__add-row-btn {
+  align-self: flex-start;
+  padding: 0.25rem 0.625rem; border: 1px dashed #cbd5e1; border-radius: 0.375rem;
+  background: transparent; color: shared.$slate-500;
+  font-family: inherit; font-size: 0.75rem; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  &:hover { border-color: shared.$brand-red; color: shared.$brand-red; }
+}
+.req__list-edit-actions { display: flex; gap: 0.5rem; margin-top: 0.125rem; }
+
+// ── Conditional features ──────────────────────────────────────────────────────
+.req__conditional-item {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.req__toggle {
+  display: inline-flex; align-items: center; cursor: pointer; position: relative;
+  input.req__toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .req__toggle-track {
+    display: block; width: 2.25rem; height: 1.25rem;
+    border-radius: 9999px; background-color: shared.$slate-200;
+    transition: background-color 0.2s;
+    &::after {
+      content: '';
+      display: block; width: 1rem; height: 1rem;
+      border-radius: 50%; background: #fff;
+      margin: 0.125rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+      transition: transform 0.2s;
+    }
+  }
+  input.req__toggle-input:checked + .req__toggle-track {
+    background-color: shared.$brand-red;
+    &::after { transform: translateX(1rem); }
+  }
+  input.req__toggle-input:disabled + .req__toggle-track {
+    opacity: 0.5; cursor: not-allowed;
+  }
+}
+
 // ── Technical stack ──────────────────────────────────────────────────────────
 .req__tech-label { font-size: 0.75rem; font-weight: 700; color: shared.$slate-500; margin-bottom: 0.375rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .req__tech-row   { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .req__tech-detail { font-size: 0.8125rem; color: shared.$slate-500; }
+.req__tech-subheader {
+  font-size: 0.6875rem; font-weight: 700; color: shared.$slate-400;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  background-color: #fafafa;
+}
+.req__tech-readonly { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+
+// ── Read-only sub-lists (attributes, transitions, table columns/form fields) ──
+.req__sublist {
+  list-style: none; margin: 0.5rem 0 0; padding: 0.5rem 0.75rem 0;
+  border-top: 1px dashed shared.$slate-200;
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+.req__sublist-item { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.req__sublist-name { font-size: 0.75rem; font-weight: 600; color: shared.$slate-500; }
+.req__sublist-meta { font-size: 0.6875rem; color: shared.$slate-400; }
+
+// ── Inline checkbox (entity edit rows) ────────────────────────────────────────
+.req__inline-checkbox {
+  display: inline-flex; align-items: center; gap: 0.25rem; flex-shrink: 0;
+  font-size: 0.75rem; color: shared.$slate-500; white-space: nowrap;
+}
+
+// ── Chip active state (status machine initial state) ──────────────────────────
+.req__crud-chip--active { background-color: shared.$brand-red; color: #fff; }
+
+// ── Relationship arrow ─────────────────────────────────────────────────────────
+.req__rel-arrow { flex-shrink: 0; color: shared.$slate-400; font-size: 0.875rem; }
+
+// ── Extra list-edit row layouts (entities, relationships, access control, etc.) ─
+.req__entity-edit-row,
+.req__relationship-edit-row,
+.req__acl-edit-row,
+.req__error-edit-row,
+.req__screen-edit-row,
+.req__nav-edit-row {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+}
+.req__field-input--status { width: 4.5rem; flex-shrink: 0; }
 
 // ── Right panel ──────────────────────────────────────────────────────────────
 .req__panel {
