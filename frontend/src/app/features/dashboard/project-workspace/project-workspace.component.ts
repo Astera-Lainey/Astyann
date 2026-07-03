@@ -239,6 +239,7 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
           this.openQuestionsModal();
         } else {
           this.showQuestionsModal.set(false);
+          this.startStatusPolling();
         }
       },
       error: () => {
