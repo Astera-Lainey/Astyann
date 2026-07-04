@@ -218,22 +218,33 @@ public class PcsfFieldWriter {
 
     // ── Actors ────────────────────────────────────────────────────────────────────
 
+    /**
+     * Accepts both "id|name|type|desc" (inline-edit, from the review screen) and the
+     * ID-less "name|type|desc" format the clarification question actually instructs
+     * the user to type. Without this, answering the Q&A prompt as worded parses to
+     * zero rows and wipes out any actors already extracted from the document.
+     */
     public List<PcsfActor> parseActors(String answer) {
-        List<String[]> rows = splitRows(answer, 4);
-        Set<String> used = collectProvidedIds(rows, 0);
+        List<String[]> rows = splitRows(answer, 3);
+        Set<String> used = new HashSet<>();
+        for (String[] row : rows) {
+            if (row.length >= 4 && row[0] != null && !row[0].isBlank()) used.add(row[0].trim());
+        }
         return rows.stream()
                 .map(parts -> {
-                    if (parts.length < 4) return null;
-                    String typeVal = parts[2].trim().toUpperCase().contains("EXTERNAL")
-                            ? "EXTERNAL" : "INTERNAL";
+                    boolean hasId = parts.length >= 4;
+                    String name = (hasId ? parts[1] : parts[0]).trim();
+                    String type = (hasId ? parts[2] : parts[1]).trim();
+                    String desc = (hasId ? parts[3] : parts[2]).trim();
+                    String providedId = hasId ? parts[0].trim() : "";
+                    String typeVal = type.toUpperCase().contains("EXTERNAL") ? "EXTERNAL" : "INTERNAL";
                     return PcsfActor.builder()
-                            .id(resolveId(parts[0].trim(), "ACT", used))
-                            .name(fv(parts[1].trim()))
+                            .id(resolveId(providedId, "ACT", used))
+                            .name(fv(name))
                             .type(fv(typeVal))
-                            .description(fv(parts[3].trim()))
+                            .description(fv(desc))
                             .build();
                 })
-                .filter(a -> a != null)
                 .collect(Collectors.toList());
     }
 
@@ -248,19 +259,30 @@ public class PcsfFieldWriter {
 
     // ── Modules ───────────────────────────────────────────────────────────────────
 
+    /**
+     * Accepts both "id|name|desc" (inline-edit, from the review screen) and the
+     * ID-less "name|desc" format the clarification question actually instructs
+     * the user to type. Without this, answering the Q&A prompt as worded parses to
+     * zero rows and wipes out any modules already extracted from the document.
+     */
     public List<PcsfModule> parseModules(String answer) {
-        List<String[]> rows = splitRows(answer, 3);
-        Set<String> used = collectProvidedIds(rows, 0);
+        List<String[]> rows = splitRows(answer, 2);
+        Set<String> used = new HashSet<>();
+        for (String[] row : rows) {
+            if (row.length >= 3 && row[0] != null && !row[0].isBlank()) used.add(row[0].trim());
+        }
         return rows.stream()
                 .map(parts -> {
-                    if (parts.length < 3) return null;
+                    boolean hasId = parts.length >= 3;
+                    String name = (hasId ? parts[1] : parts[0]).trim();
+                    String desc = (hasId ? parts[2] : parts[1]).trim();
+                    String providedId = hasId ? parts[0].trim() : "";
                     return PcsfModule.builder()
-                            .id(resolveId(parts[0].trim(), "MOD", used))
-                            .name(fv(parts[1].trim()))
-                            .description(fv(parts[2].trim()))
+                            .id(resolveId(providedId, "MOD", used))
+                            .name(fv(name))
+                            .description(fv(desc))
                             .build();
                 })
-                .filter(m -> m != null)
                 .collect(Collectors.toList());
     }
 
