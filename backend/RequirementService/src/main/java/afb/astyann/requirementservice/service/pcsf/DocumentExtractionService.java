@@ -50,7 +50,7 @@ public class DocumentExtractionService {
 
         try {
             InferenceResponseDTO response = aiServiceClient.infer(
-                    new AIServiceClient.InferBody("qwen2.5-coder:7b", SYSTEM_PROMPT, userPrompt));
+                    new AIServiceClient.InferBody("llama3.1:8b", SYSTEM_PROMPT, userPrompt));
 
             if (response == null || response.getContent() == null) {
                 log.warn("Null inference response for requirement={}", requirement.getRequirementId());
