@@ -59,6 +59,8 @@ services:
     url: ${DEPLOYMENT_SERVICE_URL:http://localhost:8088}
   ai-orchestrator-service:
     url: ${AI_ORCHESTRATOR_SERVICE_URL:http://localhost:8089}
+  rag-service:
+    url: ${RAG_SERVICE_URL:http://localhost:8090}
 
 # ── Actuator ──────────────────────────────────────────────────────────────
 management:

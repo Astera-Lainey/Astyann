@@ -48,6 +48,9 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   readonly pcsfStatus = signal<string>('DRAFT');
   readonly pendingQuestionsCount = signal(0);
 
+  readonly isRetrying = signal(false);
+  readonly retryError = signal<string | null>(null);
+
   private projectId: string | null = null;
   private statusPollSub: Subscription | null = null;
 
@@ -116,6 +119,26 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
 
   onRestartPolling(): void {
     if (this.projectId) this.startStatusPolling();
+  }
+
+  retryInference(): void {
+    if (!this.projectId || this.isRetrying()) return;
+    const pid = this.projectId;
+    this.isRetrying.set(true);
+    this.retryError.set(null);
+    this.projectService.retryInference(pid).subscribe({
+      next: () => {
+        this.isRetrying.set(false);
+        this.pcsfStatus.set('INFERRING');
+        this.startStatusPolling();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.isRetrying.set(false);
+        this.retryError.set(
+          error.error?.error ?? 'Could not retry analysis. Please try again.',
+        );
+      },
+    });
   }
 
   // ── Status polling ──────────────────────────────────────────────────────────
@@ -239,6 +262,7 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
           this.openQuestionsModal();
         } else {
           this.showQuestionsModal.set(false);
+          this.startStatusPolling();
         }
       },
       error: () => {

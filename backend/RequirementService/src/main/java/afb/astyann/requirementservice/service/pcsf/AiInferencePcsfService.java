@@ -334,7 +334,8 @@ public class AiInferencePcsfService {
         String userPrompt = "Project context:\n" + context
                 + "\n\nCurrent PCSF summary:\n" + pcsfSummary + """
 
-                Define REST API endpoints, API config, database config, and non-functional requirements.
+                Define REST API endpoints, API config, database config, non-functional requirements,
+                and infrastructure config.
                 Return ONLY valid JSON matching this exact schema — use these exact field names:
                 {
                   "endpoints": [
@@ -370,9 +371,25 @@ public class AiInferencePcsfService {
                     "availabilityTarget": "99.9%",
                     "securityDepth": "BANK_GRADE",
                     "locale": "fr-CM"
+                  },
+                  "infrastructureConfig": {
+                    "backendPort": 8080,
+                    "frontendPort": 4200,
+                    "diagramRenderer": "NONE",
+                    "krokiInternalUrl": null,
+                    "deploymentTarget": "VPS"
                   }
                 }
                 Generate one endpoint per use-case derived operation (CRUD + custom actions).
+                For infrastructureConfig:
+                - deploymentTarget must be one of VPS, DOCKER_COMPOSE, KUBERNETES — pick based on the
+                  concurrentUsers/availabilityTarget you just set (small internal tool with modest load →
+                  VPS or DOCKER_COMPOSE; high-concurrency or high-availability need → KUBERNETES).
+                - diagramRenderer is "NONE" by default. Kroki is an external diagram-rendering dependency —
+                  only set it to "kroki" (and fill krokiInternalUrl as "http://kroki:8000") if the
+                  application's own use-cases require rendering diagrams/flowcharts/org-charts to end
+                  users as a product feature. Do not set it just because the project has entities or
+                  workflows — most business applications do not need it.
                 Use exact field names. No preamble. No code fences. No explanation.""";
 
         InferenceResponseDTO response = aiServiceClient.infer(
@@ -416,6 +433,11 @@ public class AiInferencePcsfService {
             var nfr = objectMapper.treeToValue(node.get("nonFunctionalRequirements"),
                     afb.astyann.requirementservice.domain.pcsf.PcsfNonFunctionalRequirements.class);
             pcsf.setNonFunctionalRequirements(nfr);
+        }
+        if (node.has("infrastructureConfig")) {
+            var infraConfig = objectMapper.treeToValue(node.get("infrastructureConfig"),
+                    afb.astyann.requirementservice.domain.pcsf.PcsfInfrastructureConfig.class);
+            pcsf.setInfrastructureConfig(infraConfig);
         }
 
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));

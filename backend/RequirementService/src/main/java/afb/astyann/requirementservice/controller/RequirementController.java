@@ -220,6 +220,22 @@ public class RequirementController {
                         .status(202).message("Regeneration started. Poll /pcsf/status for updates.").build());
     }
 
+    // ── Retry after FAILED (inference stage only) ──────────────────────────────
+
+    /**
+     * POST /api/v1/requirements/{projectId}/retry
+     * Retries the AI-inference pipeline after pcsfStatus === FAILED. Only covers failures
+     * during INF-1/3/4 — if the PCSF was never created, generationService throws and the
+     * client is told to start a new project instead.
+     */
+    @PostMapping("/{projectId}/retry")
+    public ResponseEntity<ApiResponse<Void>> retry(@PathVariable String projectId) {
+        generationService.retryInference(parseId(projectId));
+        return ResponseEntity.accepted()
+                .body(ApiResponse.<Void>builder()
+                        .status(202).message("Retry started. Poll /pcsf/status for updates.").build());
+    }
+
     // ── Template download ──────────────────────────────────────────────────────
 
     /**

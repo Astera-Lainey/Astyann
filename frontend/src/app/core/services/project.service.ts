@@ -209,6 +209,16 @@ export class ProjectService {
       .pipe(map((res) => res.data));
   }
 
+  /**
+   * POST /api/v1/requirements/{projectId}/retry
+   * Retries the AI-inference pipeline after pcsfStatus === FAILED.
+   */
+  retryInference(projectId: string): Observable<void> {
+    return this.http
+      .post<ApiEnvelope<void>>(`${this.requirementsBaseUrl}/${projectId}/retry`, {})
+      .pipe(map(() => undefined));
+  }
+
   // ── Template Download ────────────────────────────────────────────────────────
 
   /**

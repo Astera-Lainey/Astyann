@@ -129,7 +129,17 @@
         @if (pcsfStatus() === 'FAILED') {
           <div class="workspace__placeholder">
             <h2 class="workspace__placeholder-title">Analysis failed</h2>
-            <p class="workspace__placeholder-text">We could not analyse your document. Please create a new project and try again.</p>
+            <p class="workspace__placeholder-text">We could not analyse your document.</p>
+            <button type="button" class="workspace__retry-btn" [disabled]="isRetrying()" (click)="retryInference()">
+              @if (isRetrying()) {
+                <span class="workspace__btn-spinner"></span> Retrying…
+              } @else {
+                Retry analysis
+              }
+            </button>
+            @if (retryError()) {
+              <p class="workspace__error" role="alert">{{ retryError() }}</p>
+            }
           </div>
         } @else if (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED') {
           <app-requirements-view

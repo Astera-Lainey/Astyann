@@ -7,20 +7,30 @@ import afb.astyann.requirementservice.dto.ChangeRequestResponse;
 import afb.astyann.requirementservice.exception.RequirementNotFoundException;
 import afb.astyann.requirementservice.repository.RequirementRepository;
 import afb.astyann.requirementservice.service.pcsf.AiInferencePcsfService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class RequirementGenerationService {
 
-    private final RequirementRepository requirementRepository;
+    private final RequirementRepository  requirementRepository;
     private final AiInferencePcsfService inferenceService;
+    private final RagIndexingService     ragIndexingService;
+
+    public RequirementGenerationService(RequirementRepository requirementRepository,
+                                        AiInferencePcsfService inferenceService,
+                                        @Lazy RagIndexingService ragIndexingService) {
+        this.requirementRepository = requirementRepository;
+        this.inferenceService      = inferenceService;
+        this.ragIndexingService    = ragIndexingService;
+    }
 
     @Transactional
     public ApproveResponse approve(UUID projectId) {
@@ -36,14 +46,25 @@ public class RequirementGenerationService {
         requirement.setPcsfStatus(PcsfStatus.APPROVED);
         requirementRepository.save(requirement);
 
-        // RAG indexing stub — RAG service (port 8089 /index endpoint) is not yet built.
-        // This is a graceful no-op; when the RAG service is implemented, add a Feign call here.
-        log.info("Requirements approved for projectId={}. RAG indexing deferred (service not yet available).",
-                projectId);
+        // Defer RAG indexing until after the current transaction commits so the async
+        // thread reads the persisted APPROVED state (same afterCommit pattern as inference).
+        UUID reqId = requirement.getRequirementId();
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        ragIndexingService.initializeIndexAsync(reqId);
+                    }
+                });
+        } else {
+            ragIndexingService.initializeIndexAsync(reqId);
+        }
+
+        log.info("Requirements approved for projectId={}. RAG indexing queued.", projectId);
 
         return ApproveResponse.builder()
                 .status("APPROVED")
-                .message("Requirements approved. RAG indexing will be triggered once the RAG service is available.")
+                .message("Requirements approved. PCSF is being indexed into the RAG knowledge base.")
                 .build();
     }
 
@@ -88,5 +109,53 @@ public class RequirementGenerationService {
 
         inferenceService.runReInferenceAsync(requirement.getRequirementId(), instructions);
         log.info("Regeneration triggered for projectId={}", projectId);
+    }
+
+    /**
+     * Retries the AI-inference stage after a FAILED pcsfStatus. Only covers inference-stage
+     * failures (INF-1/3/4) — if the PCSF skeleton was never created (document-extraction stage
+     * failed before it), there is nothing to re-run from, so the caller is told to start over.
+     */
+    @Transactional
+    public void retryInference(UUID projectId) {
+        Requirement requirement = requirementRepository.findByProjectId(projectId)
+                .orElseThrow(() -> new RequirementNotFoundException(projectId));
+
+        if (requirement.getPcsfStatus() != PcsfStatus.FAILED) {
+            throw new IllegalStateException(
+                    "Requirements are not in a FAILED state (current status: "
+                    + requirement.getPcsfStatus() + ")");
+        }
+        if (requirement.getPcsfJson() == null) {
+            throw new IllegalStateException(
+                    "Analysis failed before the requirement specification could be created. "
+                    + "Please create a new project and try again.");
+        }
+
+        UUID requirementId = requirement.getRequirementId();
+        String changeInstructions = requirement.getChangeInstructions();
+
+        requirement.setPcsfStatus(PcsfStatus.INFERRING);
+        requirementRepository.save(requirement);
+
+        // Defer until AFTER commit — same rationale as PcsfCompletenessAnalyser's inference
+        // trigger: the async worker reads via a separate connection, so if it starts before
+        // this transaction commits it sees stale (pre-retry) data.
+        Runnable retry = (changeInstructions != null && !changeInstructions.isBlank())
+                ? () -> inferenceService.runReInferenceAsync(requirementId, changeInstructions)
+                : () -> inferenceService.runInferenceAsync(requirementId);
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        retry.run();
+                    }
+                });
+        } else {
+            retry.run();
+        }
+
+        log.info("Inference retry triggered for projectId={}", projectId);
     }
 }
