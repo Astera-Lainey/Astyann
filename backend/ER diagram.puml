@@ -1,0 +1,240 @@
+@startuml
+
+hide circle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+
+title Astyann - Entity Relationship Diagram
+
+'=================================================
+' CORE ENTITIES
+'=================================================
+
+entity "User" as User {
+    * user_id : UUID <<PK>>
+    --
+    email : VARCHAR(255)
+    password_hash : VARCHAR(255)
+    is_verified : BOOLEAN
+    verification_code : VARCHAR(255)
+    verification_expiry_date : DATETIME
+    created_at : DATETIME
+    last_login : DATETIME
+}
+
+entity "Project" as Project {
+    * project_id : UUID <<PK>>
+    --
+    user_id : UUID <<FK>>
+    title : VARCHAR(255)
+    description : TEXT
+    status : VARCHAR(50)
+    specification_file_path : VARCHAR(500)
+    specification_file_url : VARCHAR(500)
+    created_at : DATETIME
+    updated_at : DATETIME
+}
+
+entity "GuidedQuestion" as GuidedQuestion {
+    * question_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    question : TEXT
+    answer : TEXT
+}
+
+entity "Requirement" as Requirement {
+    * requirement_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    title : VARCHAR(255)
+    description : TEXT
+    type : VARCHAR(50)
+    generated_date : DATETIME
+    approved : BOOLEAN
+}
+
+entity "ReferenceContext" as ReferenceContext {
+    * context_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    vector_store_id : VARCHAR(255)
+    indexed_at : DATETIME
+}
+
+'=================================================
+' DOCUMENT MANAGEMENT
+'=================================================
+
+entity "Template" as Template {
+    * template_id : UUID <<PK>>
+    --
+    name : VARCHAR(255)
+    type : VARCHAR(100)
+    content : LONGTEXT
+}
+
+entity "Document" as Document {
+    * document_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    template_id : UUID <<FK>>
+    type : VARCHAR(100)
+    path : VARCHAR(500)
+    url : VARCHAR(500)
+    generated_date : DATETIME
+    approved : BOOLEAN
+}
+
+'=================================================
+' UML MANAGEMENT
+'=================================================
+
+entity "Diagram" as Diagram {
+    * diagram_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    type : VARCHAR(100)
+    source_code : LONGTEXT
+    image_url : VARCHAR(500)
+    generated_date : DATETIME
+    approved : BOOLEAN
+}
+
+'=================================================
+' CODE GENERATION
+'=================================================
+
+entity "GeneratedCode" as GeneratedCode {
+    * code_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    layer : VARCHAR(100)
+    code_path : VARCHAR(500)
+    code_url : VARCHAR(500)
+    generated_date : DATETIME
+    approved : BOOLEAN
+}
+
+'=================================================
+' DEPLOYMENT
+'=================================================
+
+entity "DeploymentPackage" as DeploymentPackage {
+    * package_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    name : VARCHAR(255)
+    creation_date : DATETIME
+    package_url : VARCHAR(500)
+}
+
+entity "DockerPackage" as DockerPackage {
+    * docker_package_id : UUID <<PK>>
+    --
+    package_id : UUID <<FK>>
+    path : VARCHAR(500)
+    url : VARCHAR(500)
+}
+
+entity "EnvFile" as EnvFile {
+    * env_file_id : UUID <<PK>>
+    --
+    package_id : UUID <<FK>>
+    path : VARCHAR(500)
+    url : VARCHAR(500)
+}
+
+entity "READMEFile" as READMEFile {
+    * readme_file_id : UUID <<PK>>
+    --
+    package_id : UUID <<FK>>
+    path : VARCHAR(500)
+    url : VARCHAR(500)
+}
+
+'=================================================
+' VERSIONING
+'=================================================
+
+entity "Timeline" as Timeline {
+    * timeline_id : UUID <<PK>>
+    --
+    project_id : UUID <<FK>>
+    creation_date : DATETIME
+}
+
+entity "Snapshot" as Snapshot {
+    * snapshot_id : UUID <<PK>>
+    --
+    timeline_id : UUID <<FK>>
+    version_name : VARCHAR(100)
+    version_number : INTEGER
+    snapshot_date : DATETIME
+    entry_source : VARCHAR(100)
+}
+
+entity "DocumentSnapshot" as DocumentSnapshot {
+    * snapshot_id : UUID <<PK, FK>>
+    --
+    document_id : UUID <<FK>>
+}
+
+entity "DiagramSnapshot" as DiagramSnapshot {
+    * snapshot_id : UUID <<PK, FK>>
+    --
+    diagram_id : UUID <<FK>>
+}
+
+entity "CodeSnapshot" as CodeSnapshot {
+    * snapshot_id : UUID <<PK, FK>>
+    --
+    code_id : UUID <<FK>>
+}
+
+entity "DeploymentSnapshot" as DeploymentSnapshot {
+    * snapshot_id : UUID <<PK, FK>>
+    --
+    package_id : UUID <<FK>>
+}
+
+'=================================================
+' RELATIONSHIPS
+'=================================================
+
+User ||--o{ Project : owns
+
+Project ||--o{ GuidedQuestion
+Project ||--o{ Requirement
+
+Project ||--o{ Document
+Template ||--o{ Document
+
+Project ||--o{ Diagram
+
+Project ||--o{ GeneratedCode
+
+Project ||--o| ReferenceContext
+
+Project ||--o{ DeploymentPackage
+DeploymentPackage ||--|| DockerPackage
+DeploymentPackage ||--|| EnvFile
+DeploymentPackage ||--|| READMEFile
+
+Project ||--|| Timeline
+Timeline ||--o{ Snapshot
+
+Snapshot ||--|| DocumentSnapshot
+Snapshot ||--|| DiagramSnapshot
+Snapshot ||--|| CodeSnapshot
+Snapshot ||--|| DeploymentSnapshot
+
+DocumentSnapshot }o--|| Document
+DiagramSnapshot }o--|| Diagram
+CodeSnapshot }o--|| GeneratedCode
+DeploymentSnapshot }o--|| DeploymentPackage
+
+ReferenceContext }o--o{ Requirement : indexes
+ReferenceContext }o--o{ Document : indexes
+
+@enduml
