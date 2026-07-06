@@ -2,6 +2,9 @@
 
 .req { font-family: "Alata", ui-sans-serif, system-ui, sans-serif; color: shared.$slate-900; }
 
+// Once approved, requirements are locked — every edit trigger shares this class.
+.req--locked .req__field-edit-btn { display: none; }
+
 .req__loading { padding: 3rem 0; font-size: 0.875rem; color: shared.$slate-500; }
 .req__error   { margin: 0 0 0.75rem; font-size: 0.8125rem; color: #dc2626; }
 .req__empty   { font-size: 0.875rem; color: shared.$slate-500; padding: 1.5rem 0; }
@@ -328,4 +331,145 @@
     &:not(:disabled):hover { opacity: 0.88; }
   }
   &:disabled { opacity: 0.7; }
+}
+
+// ── Approve confirm / success modals ─────────────────────────────────────────
+
+@keyframes req-modal-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes req-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes req-spin {
+  to { transform: rotate(360deg); }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: oklch(0.14 0.012 25 / 0.72);
+  backdrop-filter: blur(1px) saturate(130%);
+  animation: req-overlay-in 0.18s ease both;
+}
+
+.modal-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 30px 80px -24px oklch(0.2 0.02 25 / 0.28), 0 12px 24px -8px oklch(0.2 0.02 25 / 0.16);
+  overflow: hidden;
+  animation: req-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.req__confirm-dialog { align-items: center; text-align: center; padding-top: 1.75rem; }
+
+.req__modal-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 3rem; height: 3rem; border-radius: 50%;
+  margin-bottom: 0.25rem;
+
+  &--warn    { background-color: #fef2f2; color: shared.$brand-red; }
+  &--success { background-color: #dcfce7; color: #16a34a; }
+}
+
+.req__modal-text {
+  margin: 0; font-size: 0.8438rem; color: shared.$slate-500; line-height: 1.6;
+}
+
+.modal__body {
+  padding: 0.5rem 2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.modal__question {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: shared.$slate-900;
+  letter-spacing: -0.01em;
+}
+
+.modal__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+
+  &::before { content: '⚠'; font-size: 0.75rem; flex-shrink: 0; }
+}
+
+.modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 1.5rem 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex: 1;
+  padding: 0.625rem 1.125rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, filter 0.15s, transform 0.15s, opacity 0.15s;
+
+  &:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; }
+}
+
+.modal__btn--primary {
+  background: #000000;
+  color: #ffffff;
+  &:hover:not(:disabled) { filter: brightness(1.18); transform: translateY(-1px); }
+}
+
+.modal__btn--secondary {
+  background: #ffffff;
+  border-color: shared.$slate-200;
+  color: shared.$slate-500;
+  &:hover:not(:disabled) { background: shared.$slate-200; color: shared.$slate-900; }
+}
+
+.req__confirm-btn {
+  background-color: shared.$brand-red; color: #ffffff;
+  &:hover:not(:disabled) { opacity: 0.88; }
+}
+
+.modal__btn-spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: req-spin 0.65s linear infinite;
+  flex-shrink: 0;
 }

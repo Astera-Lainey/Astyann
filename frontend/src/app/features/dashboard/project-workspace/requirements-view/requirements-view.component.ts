@@ -9,6 +9,7 @@ import {
   computed,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { RequirementsService } from '../../../../core/services/requirements.service';
 import { PcsfAttribute, PcsfConditionalFeatures, PcsfData } from '../../../../core/models/requirement.models';
 import { PcsfValidateResponse } from '../../../../core/models/project.models';
@@ -49,6 +50,8 @@ export class RequirementsViewComponent implements OnChanges {
   // Approve
   readonly isApproving = signal(false);
   readonly approveError = signal<string | null>(null);
+  readonly showApproveConfirm = signal(false);
+  readonly showApproveSuccess = signal(false);
 
   // Inline field edit
   readonly editingPath = signal<string | null>(null);
@@ -124,6 +127,8 @@ export class RequirementsViewComponent implements OnChanges {
   readonly hasInfraConfig = computed(() => !!this.pcsf()?.infrastructureConfig);
   readonly hasValidation = computed(() => !!this.pcsf()?.validation);
 
+  readonly isApproved = computed(() => this.localStatus() === 'APPROVED');
+
   readonly hasAnyData = computed(() =>
     !!this.pcsf()?.project || this.hasActors() || this.hasModules() || this.hasBusinessRules()
     || this.hasTechStack() || this.hasConditionalFeatures() || this.hasPublicAccess()
@@ -162,7 +167,10 @@ export class RequirementsViewComponent implements OnChanges {
     return parts.join(' · ');
   }
 
-  constructor(private readonly requirementsService: RequirementsService) {}
+  constructor(
+    private readonly requirementsService: RequirementsService,
+    private readonly router: Router,
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['pcsfStatus']) this.localStatus.set(this.pcsfStatus);
@@ -203,19 +211,37 @@ export class RequirementsViewComponent implements OnChanges {
 
   // ── Approve ─────────────────────────────────────────────────────────────────
 
-  approve(): void {
+  openApproveConfirm(): void {
+    this.approveError.set(null);
+    this.showApproveConfirm.set(true);
+  }
+
+  cancelApproveConfirm(): void {
+    if (this.isApproving()) return;
+    this.showApproveConfirm.set(false);
+    this.approveError.set(null);
+  }
+
+  confirmApprove(): void {
     this.approveError.set(null);
     this.isApproving.set(true);
     this.requirementsService.approve(this.projectId).subscribe({
       next: () => {
         this.isApproving.set(false);
         this.localStatus.set('APPROVED');
+        this.showApproveConfirm.set(false);
+        this.showApproveSuccess.set(true);
       },
       error: () => {
         this.isApproving.set(false);
         this.approveError.set('Could not approve. Please try again.');
       },
     });
+  }
+
+  goToSystemDesign(): void {
+    this.showApproveSuccess.set(false);
+    this.router.navigate(['/app/projects', this.projectId, 'design']);
   }
 
   // ── Inline field edit (generic — used for all scalar PCSF fields) ───────────

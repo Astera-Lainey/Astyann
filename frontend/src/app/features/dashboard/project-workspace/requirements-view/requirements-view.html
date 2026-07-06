@@ -1,9 +1,59 @@
+@if (showApproveConfirm()) {
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="approve-confirm-title">
+    <div class="modal-dialog req__confirm-dialog">
+      <div class="req__modal-icon req__modal-icon--warn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="modal__body">
+        <p id="approve-confirm-title" class="modal__question">Approve all requirements?</p>
+        <p class="req__modal-text">
+          Once approved, the requirements will be locked and no further changes can be made.
+          You'll move on to the next stage, where the system design and diagrams are generated.
+        </p>
+        @if (approveError()) {
+          <p class="modal__error" role="alert">{{ approveError() }}</p>
+        }
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="modal__btn modal__btn--secondary" [disabled]="isApproving()" (click)="cancelApproveConfirm()">Cancel</button>
+        <button type="button" class="modal__btn req__confirm-btn" [disabled]="isApproving()" (click)="confirmApprove()">
+          @if (isApproving()) {
+            <span class="modal__btn-spinner"></span> Approving…
+          } @else {
+            Yes, approve
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (showApproveSuccess()) {
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="approve-success-title">
+    <div class="modal-dialog req__confirm-dialog">
+      <div class="req__modal-icon req__modal-icon--success">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="modal__body">
+        <p id="approve-success-title" class="modal__question">Requirements approved</p>
+        <p class="req__modal-text">
+          All requirements are locked in and can no longer be edited. Continue to generate the
+          system design diagrams for your project.
+        </p>
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="modal__btn modal__btn--primary" (click)="goToSystemDesign()">Generate diagrams</button>
+      </div>
+    </div>
+  </div>
+}
+
 @if (isLoading()) {
   <p class="req__loading">Loading requirements…</p>
 } @else if (loadError()) {
   <p class="req__error" role="alert">{{ loadError() }}</p>
 } @else if (pcsf(); as data) {
-  <div class="req">
+  <div class="req" [class.req--locked]="isApproved()">
 
     <!-- Page header -->
     <div class="req__header">
@@ -28,7 +78,7 @@
             Approved
           </div>
         } @else if (localStatus() === 'VALIDATED') {
-          <button type="button" class="req__approve-btn" [disabled]="isApproving()" (click)="approve()">
+          <button type="button" class="req__approve-btn" [disabled]="isApproving()" (click)="openApproveConfirm()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             {{ isApproving() ? 'Approving…' : 'Approve requirements' }}
           </button>
@@ -162,7 +212,7 @@
                 <label class="req__toggle">
                   <input type="checkbox" class="req__toggle-input"
                     [checked]="data.publicAccess?.hasPublicActor?.value ?? false"
-                    [disabled]="savingPublicActorFlag()"
+                    [disabled]="savingPublicActorFlag() || isApproved()"
                     (change)="togglePublicActor(data.publicAccess?.hasPublicActor?.value ?? false)" />
                   <span class="req__toggle-track"></span>
                 </label>
@@ -1266,7 +1316,7 @@
                   <label class="req__toggle">
                     <input type="checkbox" class="req__toggle-input"
                       [checked]="conditionalFlagValue(data.conditionalFeatures!.fileUpload)"
-                      [disabled]="savingConditionalPath() !== null"
+                      [disabled]="savingConditionalPath() !== null || isApproved()"
                       (change)="toggleConditionalFeature('conditionalFeatures.fileUpload.required.value', conditionalFlagValue(data.conditionalFeatures!.fileUpload))" />
                     <span class="req__toggle-track"></span>
                   </label>
@@ -1278,7 +1328,7 @@
                   <label class="req__toggle">
                     <input type="checkbox" class="req__toggle-input"
                       [checked]="conditionalFlagValue(data.conditionalFeatures!.dataExport)"
-                      [disabled]="savingConditionalPath() !== null"
+                      [disabled]="savingConditionalPath() !== null || isApproved()"
                       (change)="toggleConditionalFeature('conditionalFeatures.dataExport.required.value', conditionalFlagValue(data.conditionalFeatures!.dataExport))" />
                     <span class="req__toggle-track"></span>
                   </label>
@@ -1290,7 +1340,7 @@
                   <label class="req__toggle">
                     <input type="checkbox" class="req__toggle-input"
                       [checked]="conditionalFlagValue(data.conditionalFeatures!.searchFilter)"
-                      [disabled]="savingConditionalPath() !== null"
+                      [disabled]="savingConditionalPath() !== null || isApproved()"
                       (change)="toggleConditionalFeature('conditionalFeatures.searchFilter.required.value', conditionalFlagValue(data.conditionalFeatures!.searchFilter))" />
                     <span class="req__toggle-track"></span>
                   </label>
@@ -1302,7 +1352,7 @@
                   <label class="req__toggle">
                     <input type="checkbox" class="req__toggle-input"
                       [checked]="conditionalFlagValue(data.conditionalFeatures!.multiTenancy)"
-                      [disabled]="savingConditionalPath() !== null"
+                      [disabled]="savingConditionalPath() !== null || isApproved()"
                       (change)="toggleConditionalFeature('conditionalFeatures.multiTenancy.required.value', conditionalFlagValue(data.conditionalFeatures!.multiTenancy))" />
                     <span class="req__toggle-track"></span>
                   </label>
@@ -1391,16 +1441,22 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           Request changes
         </div>
-        <p class="req__panel-desc">
-          Describe what you'd like to change and the AI will regenerate the requirements.
-        </p>
+        @if (isApproved()) {
+          <p class="req__panel-desc">
+            Requirements are approved and locked. No further changes can be made.
+          </p>
+        } @else {
+          <p class="req__panel-desc">
+            Describe what you'd like to change and the AI will regenerate the requirements.
+          </p>
+        }
         <span class="req__panel-label">Instructions</span>
         <textarea
           class="req__panel-textarea"
           rows="6"
           placeholder="e.g. Add a notification module for push alerts and email digests…"
           [value]="instruction()"
-          [disabled]="isSubmittingChange()"
+          [disabled]="isSubmittingChange() || isApproved()"
           (input)="onInstructionInput($event)">
         </textarea>
         @if (changeError()) {
@@ -1410,7 +1466,7 @@
           type="button"
           class="req__regenerate-btn"
           [class.req__regenerate-btn--active]="canSubmitChange()"
-          [disabled]="!canSubmitChange() || isSubmittingChange()"
+          [disabled]="!canSubmitChange() || isSubmittingChange() || isApproved()"
           (click)="submitAndRegenerate()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           {{ isSubmittingChange() ? 'Regenerating…' : 'Submit & regenerate' }}
