@@ -24,8 +24,8 @@ import java.util.UUID;
 public class AiInferencePcsfService {
 
     private static final String INF1_MODEL = "qwen2.5-coder:7b";
-    private static final String INF3_MODEL = "qwen2.5-coder:3b";
-    private static final String INF4_MODEL = "qwen2.5-coder:3b";
+    private static final String INF3_MODEL = "qwen2.5-coder:7b";
+    private static final String INF4_MODEL = "qwen2.5-coder:7b";
 
     private static final String INF1_SYSTEM = """
             You are a senior software architect specializing in enterprise systems for African banks.
