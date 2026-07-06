@@ -54,10 +54,19 @@ $blue-600: #2563eb;
 }
 
 @mixin auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.25rem;
   letter-spacing: -0.015em;
   color: $slate-900;
   text-decoration: none;
+
+  img {
+    height: 28px;
+    width: 28px;
+    object-fit: contain;
+  }
 }
 
 @mixin auth-main {
@@ -236,10 +245,19 @@ $blue-600: #2563eb;
 }
 
 @mixin auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.25rem;
   letter-spacing: -0.015em;
   color: $slate-900;
   text-decoration: none;
+
+  img {
+    height: 28px;
+    width: 28px;
+    object-fit: contain;
+  }
 }
 
 // The outer <main> is now just the left (form) half of the page.
