@@ -1334,6 +1334,8 @@ Yes
 
 ## <a id="_Toc232406768"></a>__Functional Specifications \(Requirements\)__
 
+__Note:__ this module was implemented as the Requirement Service around an internal document called the __PCSF \(Project Context Specification Format\)__ rather than a flat functional/non\-functional requirements list\. All endpoints below are exposed by the Requirement Service and reached through the API Gateway at base path /api/v1/requirements \(note the base path is /requirements/\{projectId\}/\.\.\., not /projects/\{projectId\}/requirements/\.\.\. as originally specified\)\.
+
 __API Code__
 
 __Method__
@@ -1346,47 +1348,103 @@ API\-REQ\-01
 
 POST
 
-/api/v1/projects/\{projectId\}/requirements/generate
+/api/v1/requirements/\{projectId\}/initialize
 
-Automatically generates functional and non\-functional requirements via the Anthropic Cl\.\.\.
+Starts the PCSF pipeline for a project\. Called server\-to\-server by the Project Service imm\.\.\.
 
 API\-REQ\-02
 
 GET
 
-/api/v1/projects/\{projectId\}/requirements
+/api/v1/requirements/\{projectId\}/pcsf/status
 
-Retrieves the current functional and non\-functional requirements for the project\.
+Lightweight polling endpoint returning pcsfStatus, completenessScore and pendingQuestions\.\.\.
 
 API\-REQ\-03
 
-POST
+GET
 
-/api/v1/projects/\{projectId\}/requirements/approve
+/api/v1/requirements/\{projectId\}/questions
 
-Approves the current set of requirements\. Sets status to APPROVED, creates a versioned \.\.\.
+Returns pending PCSF clarification questions, sorted by priority\.
 
 API\-REQ\-04
 
 POST
 
-/api/v1/projects/\{projectId\}/requirements/change\-request
+/api/v1/requirements/\{projectId\}/questions/answers
 
-Submits free\-text change instructions for the requirements\. Returns status to PENDING\_A\.\.\.
+Submits answers to clarification questions\. Once every pending question is answered, AI Inference starts
 
 API\-REQ\-05
 
+GET
+
+/api/v1/requirements/\{projectId\}/pcsf
+
+Retrieves the full PCSF document for the review screen\.
+
+API\-REQ\-06
+
+PATCH
+
+/api/v1/requirements/\{projectId\}/pcsf/fields
+
+Edits a single PCSF field in place \(inline edit on the review screen\)\.
+
+API\-REQ\-07
+
 POST
 
-/api/v1/projects/\{projectId\}/requirements/regenerate
+/api/v1/requirements/\{projectId\}/pcsf/validate
 
-Regenerates the requirements using the previous version, the recorded change instructio\.\.\.
+Runs all PCSF validation rules\. Locks the PCSF \(VALIDATED\) if they pass\.
+
+API\-REQ\-08
+
+POST
+
+/api/v1/requirements/\{projectId\}/approve
+
+Approves the PCSF\. Locks it \(APPROVED\) and queues asynchronous RAG indexing\.
+
+API\-REQ\-09
+
+POST
+
+/api/v1/requirements/\{projectId\}/change\-request
+
+Submits free\-text change instructions for the PCSF\. Sets status to CHANGE\_REQUESTED\.
+
+API\-REQ\-10
+
+POST
+
+/api/v1/requirements/\{projectId\}/regenerate
+
+Re\-runs the AI inference pipeline using the recorded change instructions\.
+
+API\-REQ\-11
+
+POST
+
+/api/v1/requirements/\{projectId\}/retry
+
+Retries the AI\-inference stage after a FAILED status, without requiring a new project\.
+
+API\-REQ\-12
+
+GET
+
+/api/v1/requirements/template
+
+Downloads the Astyann project specification template \(\.docx\)\.
 
 ### <a id="_Toc232406769"></a>__Endpoint Detail — Functional Specifications \(Requirements\)__
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/requirements/generate__
+__/api/v1/requirements/\{projectId\}/initialize__
 
 __API\-REQ\-01__
 
@@ -1396,57 +1454,37 @@ projectId \(uuid, required\)
 
 __Required Headers__
 
-Authorization: Bearer <token>
-
 Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
 
 __Request Schema \(example\)__
 
-\{\}
+\{
+
+  "projectTitle": "Loan Management System",
+
+  "projectDescription": "\.\.\.",
+
+  "projectContext": "\.\.\. \(AI\-extracted summary of the uploaded document\)",
+
+  "documentText": "\.\.\. \(raw extracted document text\)"
+
+\}
 
 __Response Schema \(example\)__
 
 \{
 
-  "status": 201,
+  "status": 202,
 
-  "message": "Requirements generated\.",
-
-  "data": \{
-
-    "requirementsId": "uuid",
-
-    "status": "PENDING\_APPROVAL",
-
-    "content": \{
-
-      "functionalRequirements": \[\.\.\.\],
-
-      "nonFunctionalRequirements": \[\.\.\.\]
-
-    \}
-
-  \}
+  "message": "Requirement pipeline started\."
 
 \}
 
 __Status Codes__
 
-201 Created
+202 Accepted
 
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-409 Conflict \(generation already in progress, or guided questions unanswered\)
-
-422 Unprocessable Entity \(AI failed after retries\)
-
-500 Internal Server Error
+409 Conflict \(pipeline already initialized for this project\)
 
 __FR Covered__
 
@@ -1454,15 +1492,15 @@ FR\-09
 
 __Security__
 
-JWT required
+Internal call only \(Project Service → Requirement Service\); not exposed to the frontend
 
 __Idempotent__
 
-No
+No \(second call for the same project returns 409\)
 
 __GET__
 
-__/api/v1/projects/\{projectId\}/requirements__
+__/api/v1/requirements/\{projectId\}/pcsf/status__
 
 __API\-REQ\-02__
 
@@ -1480,17 +1518,15 @@ __Response Schema \(example\)__
 
   "status": 200,
 
-  "message": "OK",
+  "message": "Status retrieved\.",
 
   "data": \{
 
-    "requirementsId": "uuid",
+    "pcsfStatus": "INFERRING",
 
-    "status": "PENDING\_APPROVAL",
+    "completenessScore": 0\.0,
 
-    "content": \{\.\.\.\},
-
-    "updatedAt": "\.\.\."
+    "pendingQuestionsCount": 0
 
   \}
 
@@ -1502,7 +1538,79 @@ __Status Codes__
 
 401 Unauthorized
 
-404 Not Found \(requirements not yet generated\)
+404 Not Found \(requirement pipeline not yet initialized — frontend should keep polling\)
+
+__FR Covered__
+
+FR\-10
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+__GET__
+
+__/api/v1/requirements/\{projectId\}/questions__
+
+__API\-REQ\-03__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response Schema \(example\)__
+
+\{
+
+  "status": 200,
+
+  "message": "Questions retrieved\.",
+
+  "data": \[
+
+    \{
+
+      "id": "uuid",
+
+      "inventoryRef": "2\.1",
+
+      "targetPath": "actors",
+
+      "priority": 2,
+
+      "question": "Who are the different types of users\.\.\.",
+
+      "type": "TEXTAREA",
+
+      "options": null,
+
+      "placeholder": "Administrator \| Internal \| Manages users\.\.\.",
+
+      "answered": false,
+
+      "answer": null
+
+    \}
+
+  \]
+
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
 
 __FR Covered__
 
@@ -1518,9 +1626,9 @@ Yes
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/requirements/approve__
+__/api/v1/requirements/\{projectId\}/questions/answers__
 
-__API\-REQ\-03__
+__API\-REQ\-04__
 
 __Path Parameters__
 
@@ -1528,7 +1636,7 @@ projectId \(uuid, required\)
 
 __Body Parameters__
 
-approvalComment \(string, optional\)
+answers \(array of \{questionId, answer\}, required\)
 
 __Required Headers__
 
@@ -1540,7 +1648,13 @@ __Request Schema \(example\)__
 
 \{
 
-  "approvalComment": "Approved in review session\."
+  "answers": \[
+
+    \{ "questionId": "uuid\-1", "answer": "No — all branches share data" \},
+
+    \{ "questionId": "uuid\-2", "answer": "Administrator \| Internal \| Manages users" \}
+
+  \]
 
 \}
 
@@ -1550,17 +1664,97 @@ __Response Schema \(example\)__
 
   "status": 200,
 
-  "message": "Requirements approved\.",
+  "message": "Answers submitted\.",
 
   "data": \{
 
-    "status": "APPROVED",
+    "pcsfStatus": "INFERRING",
 
-    "snapshotId": "uuid",
+    "pendingQuestionsCount": 0,
 
-    "snapshotVersion": "1\.0",
+    "missingItems": \[\]
 
-    "nextStep": "DIAGRAM\_GENERATION"
+  \}
+
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-09
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No \(re\-answering re\-applies and may re\-trigger inference\)
+
+__GET__
+
+__/api/v1/requirements/\{projectId\}/pcsf__
+
+__API\-REQ\-05__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response Schema \(example\)__
+
+\{
+
+  "status": 200,
+
+  "message": "PCSF retrieved\.",
+
+  "data": \{
+
+    "project": \{ "name": \{ "value": "Loan Management System", "status": "CONFIRMED" \} \},
+
+    "actors": \[\.\.\.\],
+
+    "modules": \[\.\.\.\],
+
+    "entities": \[\.\.\.\],
+
+    "relationships": \[\.\.\.\],
+
+    "businessRules": \[\.\.\.\],
+
+    "statusMachines": \[\.\.\.\],
+
+    "accessControlRules": \[\.\.\.\],
+
+    "errorCodes": \[\.\.\.\],
+
+    "endpoints": \[\.\.\.\],
+
+    "nonFunctionalRequirements": \{\.\.\.\},
+
+    "userInterface": \{ "screens": \[\.\.\.\], "navigation": \[\.\.\.\] \},
+
+    "apiConfig": \{\.\.\.\},
+
+    "databaseConfig": \{\.\.\.\},
+
+    "infrastructureConfig": \{\.\.\.\},
+
+    "validation": \{\.\.\.\}
 
   \}
 
@@ -1572,13 +1766,129 @@ __Status Codes__
 
 401 Unauthorized
 
-403 Forbidden
+404 Not Found \(PCSF not yet initialised\)
+
+500 Internal Server Error \(PCSF JSON failed to parse\)
+
+__FR Covered__
+
+FR\-10
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+__PATCH__
+
+__/api/v1/requirements/\{projectId\}/pcsf/fields__
+
+__API\-REQ\-06__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Body Parameters__
+
+path \(string, required — dot path into the PCSF, e\.g\. "project\.displayName\.value" or "actors"\)
+
+value \(string, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{ "path": "project\.displayName\.value", "value": "Loan Tracker" \}
+
+__Response Schema \(example\)__
+
+\{ "status": 200, "message": "Field updated\." \}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(PCSF not found\)
+
+500 Internal Server Error \(patch failed\)
+
+__FR Covered__
+
+FR\-12
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+__POST__
+
+__/api/v1/requirements/\{projectId\}/pcsf/validate__
+
+__API\-REQ\-07__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response Schema \(example — success\)__
+
+\{
+
+  "status": 200,
+
+  "message": "PCSF validated and locked\.",
+
+  "data": \{ "valid": true, "pcsfStatus": "VALIDATED", "errors": \[\], "warnings": \[\] \}
+
+\}
+
+__Response Schema \(example — failure\)__
+
+\{
+
+  "status": 422,
+
+  "message": "Validation failed\.",
+
+  "data": \{
+
+    "valid": false,
+
+    "pcsfStatus": "UNDER\_REVIEW",
+
+    "errors": \[ "VR\-07a: Use\-case UC\-01 missing preconditions\.", "VR\-03: At least one actor is required\." \]
+
+  \}
+
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
 
 404 Not Found
 
-409 Conflict \(already approved, or no requirements exist\)
-
-422 Unprocessable Entity
+422 Unprocessable Entity \(one or more validation rules VR\-01\.\.VR\-07c failed\)
 
 __FR Covered__
 
@@ -1590,13 +1900,61 @@ JWT required
 
 __Idempotent__
 
-No
+Yes
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/requirements/change\-request__
+__/api/v1/requirements/\{projectId\}/approve__
 
-__API\-REQ\-04__
+__API\-REQ\-08__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response Schema \(example\)__
+
+\{
+
+  "status": 200,
+
+  "message": "Requirements approved\. PCSF is being indexed into the RAG knowledge base\.",
+
+  "data": \{ "status": "APPROVED", "message": "Requirements approved\. PCSF is being indexed\.\.\." \}
+
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(pcsfStatus is not VALIDATED\)
+
+__FR Covered__
+
+FR\-11
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No \(second call on an already\-APPROVED requirement returns 409\)
+
+__POST__
+
+__/api/v1/requirements/\{projectId\}/change\-request__
+
+__API\-REQ\-09__
 
 __Path Parameters__
 
@@ -1614,11 +1972,7 @@ Content\-Type: application/json
 
 __Request Schema \(example\)__
 
-\{
-
-  "instructions": "Add a non\-functional requirement specifying GDPR\-compliant data retention of 24 months\."
-
-\}
+\{ "instructions": "Add a notification module for SMS alerts when loan status changes\." \}
 
 __Response Schema \(example\)__
 
@@ -1626,15 +1980,9 @@ __Response Schema \(example\)__
 
   "status": 200,
 
-  "message": "Change request recorded\.",
+  "message": "Change request recorded\. Call /regenerate to re\-run AI inference with your instructions\.",
 
-  "data": \{
-
-    "status": "PENDING\_APPROVAL",
-
-    "changeRequestId": "uuid"
-
-  \}
+  "data": \{ "changeRequestId": "uuid", "status": "CHANGE\_REQUESTED", "message": "\.\.\." \}
 
 \}
 
@@ -1648,9 +1996,7 @@ __Status Codes__
 
 404 Not Found
 
-409 Conflict \(requirements already approved and locked\)
-
-422 Unprocessable Entity
+409 Conflict \(pcsfStatus is APPROVED — create a new project revision instead\)
 
 __FR Covered__
 
@@ -1666,67 +2012,31 @@ No
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/requirements/regenerate__
+__/api/v1/requirements/\{projectId\}/regenerate__
 
-__API\-REQ\-05__
+__API\-REQ\-10__
 
 __Path Parameters__
 
 projectId \(uuid, required\)
 
-__Body Parameters__
-
-changeRequestId \(uuid, optional\)
-
 __Required Headers__
 
 Authorization: Bearer <token>
 
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "changeRequestId": "uuid"
-
-\}
-
 __Response Schema \(example\)__
 
-\{
-
-  "status": 200,
-
-  "message": "Requirements regenerated\.",
-
-  "data": \{
-
-    "requirementsId": "uuid",
-
-    "status": "PENDING\_APPROVAL",
-
-    "version": 2,
-
-    "previousVersionId": "req\-version\-1"
-
-  \}
-
-\}
+\{ "status": 202, "message": "Regeneration started\. Poll /pcsf/status for updates\." \}
 
 __Status Codes__
 
-200 OK
+202 Accepted
 
 401 Unauthorized
 
 404 Not Found
 
-422 Unprocessable Entity \(AI failed after retries\)
-
-500 Internal Server Error
+409 Conflict \(no change instructions recorded — submit a change\-request first\)
 
 __FR Covered__
 
@@ -1739,6 +2049,362 @@ JWT required
 __Idempotent__
 
 No
+
+__POST__
+
+__/api/v1/requirements/\{projectId\}/retry__
+
+__API\-REQ\-11__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response Schema \(example\)__
+
+\{ "status": 202, "message": "Retry started\. Poll /pcsf/status for updates\." \}
+
+__Status Codes__
+
+202 Accepted
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(pcsfStatus is not FAILED, or the PCSF was never created — document\-extraction\-\.\.\.
+
+__FR Covered__
+
+FR\-13
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+__GET__
+
+__/api/v1/requirements/template__
+
+__API\-REQ\-12__
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Response__
+
+Binary \.docx file \(Content\-Type: application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(template resource missing\)
+
+__FR Covered__
+
+FR\-09
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+## <a id="_Toc232406900"></a>__RAG Service__
+
+__Note:__ the RAG Service is an internal, non\-user\-facing microservice — it is not routed through the API Gateway's JWT filter and is called service\-to\-service only \(currently by the Requirement Service, via a Feign client\)\. It supports FR\-09/FR\-13 by supplying semantically relevant context to AI generation calls, and has no functional/use\-case/user\-story traceability of its own\.
+
+__API Code__
+
+__Method__
+
+__Path__
+
+__Description__
+
+API\-RAG\-01
+
+POST
+
+/api/v1/rag/index
+
+Indexes a single content chunk into the vector store\.
+
+API\-RAG\-02
+
+POST
+
+/api/v1/rag/index/batch
+
+Indexes a batch of content chunks for one project in a single call\.
+
+API\-RAG\-03
+
+GET
+
+/api/v1/rag/context
+
+Returns the concatenated top\-K matching chunks as a plain string \(shape expected by the AI Orchestrator's client\)\.
+
+API\-RAG\-04
+
+GET
+
+/api/v1/rag/sources
+
+Returns the source\-section names of the top\-K matching chunks \(shape expected by the AI Orchestrator's client\)\.
+
+API\-RAG\-05
+
+GET
+
+/api/v1/rag/retrieve
+
+Returns the full scored retrieval result \(context, chunks, sources, scores\), with an optional source\-type filter\.
+
+API\-RAG\-06
+
+DELETE
+
+/api/v1/rag/\{projectId\}
+
+Deletes all indexed chunks for a project\.
+
+API\-RAG\-07
+
+POST
+
+/api/v1/rag/\{projectId\}/rebuild
+
+Clears the index for a project\. Re\-indexing must be re\-triggered by the owning service \(e\.g\. re\-approving requirements\)\.
+
+### <a id="_Toc232406901"></a>__Endpoint Detail — RAG Service__
+
+__POST__
+
+__/api/v1/rag/index__
+
+__API\-RAG\-01__
+
+__Body Parameters__
+
+projectId \(uuid, required\)
+
+sourceType \(string, required — free\-form, e\.g\. "REQUIREMENT"; not constrained by an enum\)
+
+sourceId \(uuid, optional\)
+
+content \(string, required\)
+
+metadata \(map<string,string>, optional\)
+
+__Request Schema \(example\)__
+
+\{
+
+  "projectId": "uuid",
+
+  "sourceType": "REQUIREMENT",
+
+  "sourceId": "uuid",
+
+  "content": "\.\.\.",
+
+  "metadata": \{ "section": "actors" \}
+
+\}
+
+__Status Codes__
+
+204 No Content
+
+400 Bad Request
+
+500 Internal Server Error
+
+__Idempotent__
+
+No \(each call inserts a new vector\-store entry with a fresh id\)
+
+__POST__
+
+__/api/v1/rag/index/batch__
+
+__API\-RAG\-02__
+
+__Body Parameters__
+
+projectId \(uuid, required\)
+
+sourceType \(string, required\)
+
+items \(array of IndexRequestDTO, required\)
+
+__Status Codes__
+
+204 No Content
+
+400 Bad Request
+
+500 Internal Server Error
+
+__Idempotent__
+
+No
+
+__GET__
+
+__/api/v1/rag/context__
+
+__API\-RAG\-03__
+
+__Query Parameters__
+
+projectId \(uuid, required\)
+
+query \(string, required\)
+
+topK \(int, optional, default 5\)
+
+__Response__
+
+Plain string body \(the concatenated context, not wrapped in a JSON envelope\)
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__Idempotent__
+
+Yes
+
+__GET__
+
+__/api/v1/rag/sources__
+
+__API\-RAG\-04__
+
+__Query Parameters__
+
+projectId \(uuid, required\)
+
+query \(string, required\)
+
+__Response Schema \(example\)__
+
+\["actors", "module\-MOD\-01"\]
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__Idempotent__
+
+Yes
+
+__GET__
+
+__/api/v1/rag/retrieve__
+
+__API\-RAG\-05__
+
+__Query Parameters__
+
+projectId \(uuid, required\)
+
+query \(string, required\)
+
+topK \(int, optional, default 5\)
+
+sourceTypeFilter \(string, optional\)
+
+__Response Schema \(example\)__
+
+\{
+
+  "context": "\.\.\.",
+
+  "chunks": \["\.\.\."\],
+
+  "sources": \["actors"\],
+
+  "scores": \[0\.12\]
+
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__Idempotent__
+
+Yes
+
+__DELETE__
+
+__/api/v1/rag/\{projectId\}__
+
+__API\-RAG\-06__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Status Codes__
+
+204 No Content
+
+__Idempotent__
+
+Yes
+
+__POST__
+
+__/api/v1/rag/\{projectId\}/rebuild__
+
+__API\-RAG\-07__
+
+__Path Parameters__
+
+projectId \(uuid, required\)
+
+__Response Schema \(example\)__
+
+\{
+
+  "status": "INDEX\_CLEARED",
+
+  "message": "Index cleared for project \{projectId\}\. Re\-trigger via POST /api/v1/requirements/\{projectId\}/approve"
+
+\}
+
+__Status Codes__
+
+200 OK
+
+__Idempotent__
+
+Yes
 
 ## <a id="_Toc232406770"></a>__UML Diagrams__
 
@@ -4146,7 +4812,7 @@ US\-PROJ\-01
 
 API\-REQ\-01
 
-POST /api/v1/projects/\{projectId\}/requirements/generate
+POST /api/v1/requirements/\{projectId\}/initialize
 
 FR\-09
 
@@ -4154,9 +4820,9 @@ UC\-CDC\-01
 
 US\-CDC\-01
 
-API\-REQ\-02
+API\-REQ\-05
 
-GET /api/v1/projects/\{projectId\}/requirements
+GET /api/v1/requirements/\{projectId\}/pcsf
 
 FR\-10
 
@@ -4164,9 +4830,9 @@ UC\-CDC\-02
 
 US\-CDC\-02
 
-API\-REQ\-03
+API\-REQ\-08
 
-POST /api/v1/projects/\{projectId\}/requirements/approve
+POST /api/v1/requirements/\{projectId\}/approve
 
 FR\-11
 
@@ -4174,9 +4840,9 @@ UC\-CDC\-04
 
 US\-CDC\-04
 
-API\-REQ\-04
+API\-REQ\-09
 
-POST /api/v1/projects/\{projectId\}/requirements/change\-request
+POST /api/v1/requirements/\{projectId\}/change\-request
 
 FR\-12
 
@@ -4184,15 +4850,17 @@ UC\-CDC\-05
 
 US\-CDC\-05
 
-API\-REQ\-05
+API\-REQ\-10
 
-POST /api/v1/projects/\{projectId\}/requirements/regenerate
+POST /api/v1/requirements/\{projectId\}/regenerate
 
 FR\-13
 
 UC\-CDC\-06
 
 US\-CDC\-06
+
+__Note:__ API\-REQ\-02/03/04/06/07/11/12 \(status polling, clarification Q&A, inline field edit, validation, and inference retry\) are supporting endpoints for the same functional area \(FR\-09\.\.FR\-13\) introduced when the Requirements Engineering module was implemented around the PCSF; they are documented in §Functional Specifications \(Requirements\) above but not separately traced here for lack of dedicated UC/US identifiers\.
 
 API\-DIAG\-01
 

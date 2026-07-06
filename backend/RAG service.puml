@@ -7,93 +7,61 @@ skinparam classAttributeIconSize 0
 
 package "controller" {
   class RAGController {
-    -ragService : IRAGService
+    -ragService : RAGService
     +indexDocument(dto : IndexRequestDTO) : ResponseEntity<Void>
     +indexBatch(dto : BatchIndexRequestDTO) : ResponseEntity<Void>
-    +retrieveContext(dto : RetrievalRequestDTO) : ResponseEntity<RetrievalResponseDTO>
+    +getContext(projectId : UUID, query : String, topK : int) : ResponseEntity<String>
+    +getSources(projectId : UUID, query : String) : ResponseEntity<List<String>>
+    +retrieve(projectId : UUID, query : String, topK : int, sourceTypeFilter : String) : ResponseEntity<RetrievalResponseDTO>
     +deleteIndex(projectId : UUID) : ResponseEntity<Void>
-    +rebuildIndex(projectId : UUID) : ResponseEntity<Void>
+    +rebuildIndex(projectId : UUID) : ResponseEntity<Map<String,String>>
   }
+
+  note bottom of RAGController
+    getContext/getSources return shapes matched to what
+    AIOrchestrator's RAGServiceClient expects (plain string /
+    plain list). retrieve() returns the full scored DTO.
+  end note
 }
 
 package "service" {
-  interface IRAGService {
-    +indexDocument(request : IndexRequestDTO) : void
-    +indexBatch(request : BatchIndexRequestDTO) : void
-    +retrieveContext(request : RetrievalRequestDTO) : RetrievalResponseDTO
+  interface RAGService {
+    +indexDocument(dto : IndexRequestDTO) : void
+    +indexBatch(dto : BatchIndexRequestDTO) : void
+    +retrieveContext(projectId : UUID, query : String, topK : int, sourceTypeFilter : String) : RetrievalResponseDTO
     +deleteIndex(projectId : UUID) : void
     +rebuildIndex(projectId : UUID) : void
   }
 
   class RAGServiceImpl {
-    -embeddingService : EmbeddingService
-    -vectorRepository : VectorRepository
-    -chunkingService : ChunkingService
-    -storageReader : StorageReaderService
-    +indexDocument(request : IndexRequestDTO) : void
-    +indexBatch(request : BatchIndexRequestDTO) : void
-    +retrieveContext(request : RetrievalRequestDTO) : RetrievalResponseDTO
+    -vectorStore : VectorStore
+    +indexDocument(dto : IndexRequestDTO) : void
+    +indexBatch(dto : BatchIndexRequestDTO) : void
+    +retrieveContext(projectId : UUID, query : String, topK : int, sourceTypeFilter : String) : RetrievalResponseDTO
     +deleteIndex(projectId : UUID) : void
     +rebuildIndex(projectId : UUID) : void
+    -toDocument(item : IndexRequestDTO) : Document
+    -buildFilter(projectId : UUID, sourceTypeFilter : String) : String
   }
 
-  class EmbeddingService {
-    -providerName : String
-    -modelName : String
-    +embed(text : String) : float[]
-    +embedBatch(texts : List<String>) : List<float[]>
-  }
-
-  class ChunkingService {
-    -chunkSize : int
-    -chunkOverlap : int
-    +chunk(content : String) : List<String>
-    +chunkWithMetadata(content : String, metadata : Map<String,String>) : List<Chunk>
-  }
-}
-
-package "domain" {
-  class VectorEntry {
-    -entryId : UUID
-    -projectId : UUID
-    -sourceType : SourceType
-    -sourceId : UUID
-    -content : String
-    -vector : float[]
-    -metadata : Map<String, String>
-    -indexedDate : LocalDateTime
-  }
-
-  class Chunk {
-    -chunkId : UUID
-    -content : String
-    -metadata : Map<String, String>
-    -sequenceNumber : int
-  }
-
-  enum SourceType {
-    REQUIREMENT
-    DOCUMENT
-    DIAGRAM
-    CODE
-    TEMPLATE
-  }
-}
-
-package "repository" {
-  interface VectorRepository {
-    +insert(entry : VectorEntry) : void
-    +insertBatch(entries : List<VectorEntry>) : void
-    +similaritySearch(projectId : UUID, queryVector : float[], topK : int) : List<VectorEntry>
-    +deleteByProjectId(projectId : UUID) : void
-    +deleteBySourceId(sourceId : UUID) : void
-  }
+  note right of RAGServiceImpl
+    No custom EmbeddingService / ChunkingService /
+    VectorRepository / StorageReaderService exist.
+    Embedding, chunking upstream, and similarity search
+    are delegated entirely to Spring AI's VectorStore bean.
+    Backend: ChromaDB (spring-ai-starter-vector-store-chroma)
+    Embedding model: Ollama (spring-ai-starter-model-ollama)
+    deleteIndex() works around the lack of a native
+    "delete by metadata filter" op: it similarity-searches
+    up to 500 chunks matching the project filter, then
+    deletes them by the returned document IDs.
+  end note
 }
 
 package "dto" {
   class IndexRequestDTO {
     +projectId : UUID
-    +sourceType : SourceType
+    +sourceType : String
     +sourceId : UUID
     +content : String
     +metadata : Map<String, String>
@@ -101,15 +69,8 @@ package "dto" {
 
   class BatchIndexRequestDTO {
     +projectId : UUID
-    +sourceType : SourceType
+    +sourceType : String
     +items : List<IndexRequestDTO>
-  }
-
-  class RetrievalRequestDTO {
-    +projectId : UUID
-    +query : String
-    +topK : int
-    +sourceTypeFilter : SourceType
   }
 
   class RetrievalResponseDTO {
@@ -118,26 +79,56 @@ package "dto" {
     +sources : List<String>
     +scores : List<Double>
   }
+
+  note bottom of IndexRequestDTO
+    sourceType is a plain String (e.g. "REQUIREMENT"),
+    not an enum — the RAG Service does not constrain or
+    interpret it; callers define their own vocabulary.
+  end note
 }
 
-package "client" {
-  class StorageReaderService {
-    +readRequirements(projectId : UUID) : List<String>
-    +readDocuments(projectId : UUID) : List<String>
-    +readDiagrams(projectId : UUID) : List<String>
-    +readCode(projectId : UUID) : List<String>
-    +readTemplates() : List<String>
+package "exception" {
+  class GlobalExceptionHandler {
+    +handleBadRequest(ex : IllegalArgumentException) : ResponseEntity<Map<String,String>>
+    +handleGeneric(ex : Exception) : ResponseEntity<Map<String,String>>
   }
 }
 
-RAGController       ..>  IRAGService
-RAGServiceImpl       ..|> IRAGService
-RAGServiceImpl       ..>  EmbeddingService
-RAGServiceImpl       ..>  VectorRepository
-RAGServiceImpl       ..>  ChunkingService
-RAGServiceImpl       ..>  StorageReaderService
-ChunkingService      ..>  Chunk
-VectorRepository     ..>  VectorEntry
-VectorEntry          ..>  SourceType
+package "config" {
+  class SecurityConfig {
+    +filterChain(http : HttpSecurity) : SecurityFilterChain
+  }
+
+  note right of SecurityConfig
+    All routes permitAll(), stateless session — this
+    service is internal-only; auth is enforced upstream
+    at the API Gateway, not here.
+  end note
+}
+
+interface VectorStore <<Spring AI>> {
+}
+
+note bottom of VectorStore
+  Not part of this codebase — provided by the
+  Spring AI framework and auto-configured against
+  ChromaDB + the Ollama embedding model.
+end note
+
+RAGController        ..>  RAGService
+RAGServiceImpl        ..|> RAGService
+RAGServiceImpl        ..>  VectorStore
+RAGController         ..>  IndexRequestDTO
+RAGController         ..>  BatchIndexRequestDTO
+RAGController         ..>  RetrievalResponseDTO
+BatchIndexRequestDTO  "1" *-- "*" IndexRequestDTO
+
+note as N1
+  Consumed cross-service by RequirementService's
+  RAGServiceClient (Feign) — see RequirementServiceClass.puml.
+  RequirementService's RagIndexingService decides what to
+  chunk (one chunk per PCSF section) and calls
+  POST /api/v1/rag/index/batch after requirements approval.
+end note
 
 @enduml
