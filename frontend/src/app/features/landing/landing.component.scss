@@ -36,10 +36,19 @@ $slate-200: #e2e8f0;
 }
 
 .landing__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.125rem;
   letter-spacing: -0.015em;
   color: $slate-900;
   text-decoration: none;
+}
+
+.landing__brand-icon {
+  height: 54px;
+  width: 54px;
+  object-fit: contain;
 }
 
 .landing__login-btn {
@@ -59,8 +68,6 @@ $slate-200: #e2e8f0;
 
 .landing__hero {
   position: relative;
-  flex: 1;
-  padding: 0 2.5rem 5rem;
 }
 
 .spark {

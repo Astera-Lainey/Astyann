@@ -117,38 +117,6 @@ public class ProjectController {
                         .build());
     }
 
-    /**
-     * GET /api/v1/projects/{projectId}/guided-questions
-     * Get the AI-generated guided questions for a project.
-     */
-    @GetMapping("/{projectId}/guided-questions")
-    public ResponseEntity<ApiResponse<List<GuidedQuestionDTO>>> getGuidedQuestions(
-            @PathVariable UUID projectId) {
-        List<GuidedQuestionDTO> data = projectService.getGuidedQuestions(projectId);
-        return ResponseEntity.ok(ApiResponse.<List<GuidedQuestionDTO>>builder()
-                .status(200)
-                .message("Guided questions retrieved successfully.")
-                .data(data)
-                .build());
-    }
-
-    /**
-     * POST /api/v1/projects/{projectId}/guided-questions/answers
-     * Submit answers to guided questions. AI merges them with the document context
-     * to produce the complete project description.
-     */
-    @PostMapping("/{projectId}/guided-questions/answers")
-    public ResponseEntity<ApiResponse<ProjectDTO>> submitGuidedAnswers(
-            @PathVariable UUID projectId,
-            @RequestBody SubmitAnswersDTO dto) {
-        ProjectDTO data = projectService.submitGuidedAnswers(projectId, dto);
-        return ResponseEntity.ok(ApiResponse.<ProjectDTO>builder()
-                .status(200)
-                .message("Answers submitted. Project context updated.")
-                .data(data)
-                .build());
-    }
-
     private UUID parseUserId(String rawUserId) {
         if (rawUserId == null || rawUserId.isBlank()) {
             throw new IllegalArgumentException("X-User-Id header is missing");

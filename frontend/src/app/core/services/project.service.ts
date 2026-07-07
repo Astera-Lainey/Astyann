@@ -21,9 +21,13 @@ import {
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
   private readonly baseUrl = `${environment.apiBaseUrl}/projects`;
+  private readonly requirementsBaseUrl = `${environment.apiBaseUrl}/requirements`;
 
   private readonly _projectDeleted = new Subject<string>();
   readonly projectDeleted$ = this._projectDeleted.asObservable();
+
+  private readonly _projectCreated = new Subject<ProjectSummary>();
+  readonly projectCreated$ = this._projectCreated.asObservable();
 
   constructor(private readonly http: HttpClient) {}
 
@@ -52,7 +56,10 @@ export class ProjectService {
     formData.append('document', request.specificationFile);
     return this.http
       .post<ApiEnvelope<Project>>(this.baseUrl, formData)
-      .pipe(map((res) => res.data));
+      .pipe(
+        map((res) => res.data),
+        tap((project) => this._projectCreated.next(project)),
+      );
   }
 
   /**
@@ -131,17 +138,17 @@ export class ProjectService {
   // ── PCSF Clarification Questions ────────────────────────────────────────────
 
   /**
-   * GET /api/v1/projects/{projectId}/questions
+   * GET /api/v1/requirements/{projectId}/questions
    * Returns pending PCSF clarification questions sorted by priority.
    */
   getQuestions(projectId: string): Observable<ClarificationQuestion[]> {
     return this.http
-      .get<ApiEnvelope<ClarificationQuestion[]>>(`${this.baseUrl}/${projectId}/questions`)
+      .get<ApiEnvelope<ClarificationQuestion[]>>(`${this.requirementsBaseUrl}/${projectId}/questions`)
       .pipe(map((res) => res.data));
   }
 
   /**
-   * POST /api/v1/projects/{projectId}/questions/answers
+   * POST /api/v1/requirements/{projectId}/questions/answers
    * Submits answers to PCSF clarification questions and triggers completeness re-analysis.
    */
   submitAnswers(
@@ -150,7 +157,7 @@ export class ProjectService {
   ): Observable<SubmitAnswersResponseData> {
     return this.http
       .post<ApiEnvelope<SubmitAnswersResponseData>>(
-        `${this.baseUrl}/${projectId}/questions/answers`,
+        `${this.requirementsBaseUrl}/${projectId}/questions/answers`,
         request,
       )
       .pipe(map((res) => res.data));
@@ -159,56 +166,66 @@ export class ProjectService {
   // ── PCSF Lifecycle ───────────────────────────────────────────────────────────
 
   /**
-   * GET /api/v1/projects/{projectId}/pcsf/status
+   * GET /api/v1/requirements/{projectId}/pcsf/status
    * Lightweight polling endpoint returning pcsfStatus, completenessScore, pendingQuestionsCount.
    * Poll this while pcsfStatus is INFERRING.
    */
   getPcsfStatus(projectId: string): Observable<PcsfStatusResponse> {
     return this.http
-      .get<ApiEnvelope<PcsfStatusResponse>>(`${this.baseUrl}/${projectId}/pcsf/status`)
+      .get<ApiEnvelope<PcsfStatusResponse>>(`${this.requirementsBaseUrl}/${projectId}/pcsf/status`)
       .pipe(map((res) => res.data));
   }
 
   /**
-   * GET /api/v1/projects/{projectId}/pcsf
+   * GET /api/v1/requirements/{projectId}/pcsf
    * Returns the full PCSF object for the review screen.
    */
   getPcsf(projectId: string): Observable<unknown> {
     return this.http
-      .get<ApiEnvelope<unknown>>(`${this.baseUrl}/${projectId}/pcsf`)
+      .get<ApiEnvelope<unknown>>(`${this.requirementsBaseUrl}/${projectId}/pcsf`)
       .pipe(map((res) => res.data));
   }
 
   /**
-   * PATCH /api/v1/projects/{projectId}/pcsf/fields
+   * PATCH /api/v1/requirements/{projectId}/pcsf/fields
    * Edits a single PCSF field during the review screen.
    */
   patchPcsfField(projectId: string, request: PatchFieldRequest): Observable<void> {
     return this.http
-      .patch<ApiEnvelope<void>>(`${this.baseUrl}/${projectId}/pcsf/fields`, request)
+      .patch<ApiEnvelope<void>>(`${this.requirementsBaseUrl}/${projectId}/pcsf/fields`, request)
       .pipe(map(() => undefined));
   }
 
   /**
-   * POST /api/v1/projects/{projectId}/pcsf/validate
+   * POST /api/v1/requirements/{projectId}/pcsf/validate
    * Runs all PCSF validation rules and locks the PCSF if they pass.
    */
   validatePcsf(projectId: string): Observable<PcsfValidateResponse> {
     return this.http
       .post<ApiEnvelope<PcsfValidateResponse>>(
-        `${this.baseUrl}/${projectId}/pcsf/validate`,
+        `${this.requirementsBaseUrl}/${projectId}/pcsf/validate`,
         {},
       )
       .pipe(map((res) => res.data));
   }
 
+  /**
+   * POST /api/v1/requirements/{projectId}/retry
+   * Retries the AI-inference pipeline after pcsfStatus === FAILED.
+   */
+  retryInference(projectId: string): Observable<void> {
+    return this.http
+      .post<ApiEnvelope<void>>(`${this.requirementsBaseUrl}/${projectId}/retry`, {})
+      .pipe(map(() => undefined));
+  }
+
   // ── Template Download ────────────────────────────────────────────────────────
 
   /**
-   * GET /api/v1/projects/template
+   * GET /api/v1/requirements/template
    * Downloads the Astyann project specification template DOCX from the backend.
    */
   downloadTemplate(): Observable<Blob> {
-    return this.http.get(`${this.baseUrl}/template`, { responseType: 'blob' });
+    return this.http.get(`${this.requirementsBaseUrl}/template`, { responseType: 'blob' });
   }
 }

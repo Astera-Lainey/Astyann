@@ -1,0 +1,150 @@
+' ============================================================
+' 11. VERSION MANAGEMENT SERVICE — Design Class Diagram
+' ============================================================
+@startuml VersionService_DesignClass
+left to right direction
+skinparam classAttributeIconSize 0
+
+package "controller" {
+  class VersionController {
+    -versionService : IVersionService
+    +getTimeline(projectId : UUID) : ResponseEntity<TimelineDTO>
+    +createSnapshot(dto : CreateSnapshotDTO) : ResponseEntity<SnapshotDTO>
+    +getSnapshot(snapId : UUID) : ResponseEntity<SnapshotDTO>
+    +restoreSnapshot(snapId : UUID) : ResponseEntity<Void>
+    +downloadSnapshot(snapId : UUID) : ResponseEntity<Resource>
+    +listSnapshots(projectId : UUID) : ResponseEntity<List<SnapshotDTO>>
+  }
+}
+
+package "service" {
+  interface IVersionService {
+    +getTimeline(projectId : UUID) : TimelineDTO
+    +createSnapshot(dto : CreateSnapshotDTO) : SnapshotDTO
+    +getSnapshot(snapId : UUID) : SnapshotDTO
+    +restoreSnapshot(snapId : UUID) : void
+    +downloadSnapshot(snapId : UUID) : byte[]
+    +listSnapshots(projectId : UUID) : List<SnapshotDTO>
+  }
+
+  class VersionServiceImpl {
+    -timelineRepository : TimelineRepository
+    -snapshotRepository : SnapshotRepository
+    -storageService : VersionStorageService
+    +getTimeline(projectId : UUID) : TimelineDTO
+    +createSnapshot(dto : CreateSnapshotDTO) : SnapshotDTO
+    +getSnapshot(snapId : UUID) : SnapshotDTO
+    +restoreSnapshot(snapId : UUID) : void
+    +downloadSnapshot(snapId : UUID) : byte[]
+    +listSnapshots(projectId : UUID) : List<SnapshotDTO>
+  }
+}
+
+package "domain" {
+  class Timeline {
+    -timelineId : UUID
+    -projectId : UUID
+    -creationDate : LocalDateTime
+  }
+
+  abstract class Snapshot {
+    -snapId : UUID
+    -timelineId : UUID
+    -versionName : String
+    -versionNumber : String
+    -snapDate : LocalDateTime
+    -entrySource : String
+    -artifactPath : String
+    -artifactType : ArtifactType
+  }
+
+  class DocumentSnapshot {
+    -documentId : UUID
+    -documentType : String
+  }
+
+  class DiagramSnapshot {
+    -diagramId : UUID
+    -diagramType : String
+  }
+
+  class CodeSnapshot {
+    -codeId : UUID
+    -codeLayer : String
+  }
+
+  class DeploymentSnapshot {
+    -packageId : UUID
+  }
+
+  enum ArtifactType {
+    DOCUMENT
+    DIAGRAM
+    CODE
+    DEPLOYMENT
+  }
+}
+
+package "repository" {
+  interface TimelineRepository {
+    +findByProjectId(projectId : UUID) : Optional<Timeline>
+    +save(timeline : Timeline) : Timeline
+  }
+
+  interface SnapshotRepository {
+    +findBySnapId(snapId : UUID) : Optional<Snapshot>
+    +findByTimelineId(timelineId : UUID) : List<Snapshot>
+    +findByTimelineIdAndArtifactType(timelineId : UUID, type : ArtifactType) : List<Snapshot>
+    +save(snapshot : Snapshot) : Snapshot
+  }
+}
+
+package "dto" {
+  class TimelineDTO {
+    +timelineId : UUID
+    +projectId : UUID
+    +creationDate : LocalDateTime
+    +snapshots : List<SnapshotDTO>
+  }
+
+  class SnapshotDTO {
+    +snapId : UUID
+    +versionName : String
+    +versionNumber : String
+    +snapDate : LocalDateTime
+    +entrySource : String
+    +artifactType : ArtifactType
+  }
+
+  class CreateSnapshotDTO {
+    +projectId : UUID
+    +artifactId : UUID
+    +artifactType : ArtifactType
+    +versionName : String
+    +entrySource : String
+  }
+}
+
+package "client" {
+  class VersionStorageService {
+    +archiveArtifact(artifactPath : String, snapId : UUID) : String
+    +restoreArtifact(snapId : UUID, targetPath : String) : void
+    +downloadArtifact(snapId : UUID) : byte[]
+  }
+}
+
+VersionController    ..>  IVersionService
+VersionServiceImpl    ..|> IVersionService
+VersionServiceImpl    ..>  TimelineRepository
+VersionServiceImpl    ..>  SnapshotRepository
+VersionServiceImpl    ..>  VersionStorageService
+TimelineRepository   ..>  Timeline
+SnapshotRepository   ..>  Snapshot
+Snapshot             <|-- DocumentSnapshot
+Snapshot             <|-- DiagramSnapshot
+Snapshot             <|-- CodeSnapshot
+Snapshot             <|-- DeploymentSnapshot
+Snapshot             ..>  ArtifactType
+Timeline             "1" o-- "0..*" Snapshot
+
+@enduml

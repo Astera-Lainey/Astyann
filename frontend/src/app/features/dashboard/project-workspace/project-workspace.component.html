@@ -23,12 +23,11 @@
             (input)="onTextareaInput($event)"></textarea>
         } @else if (currentQuestion.type === 'YES_NO') {
           <div class="modal__yesno">
-            <button type="button" class="modal__yesno-btn"
-              [class.modal__yesno-btn--active]="currentAnswer === 'No'"
-              (click)="setAnswer('No')">No</button>
-            <button type="button" class="modal__yesno-btn"
-              [class.modal__yesno-btn--active]="currentAnswer === 'Yes'"
-              (click)="setAnswer('Yes')">Yes</button>
+            @for (option of currentQuestion.options; track option) {
+              <button type="button" class="modal__yesno-btn"
+                [class.modal__yesno-btn--active]="currentAnswer === option"
+                (click)="setAnswer(option)">{{ option }}</button>
+            }
           </div>
         } @else if (currentQuestion.type === 'SINGLE_SELECT') {
           <div class="modal__select-group">
@@ -126,14 +125,27 @@
           <h2 class="workspace__placeholder-title">Unknown section</h2>
           <p class="workspace__placeholder-text">"{{ section() }}" isn't a recognized workspace section.</p>
         </div>
-      } @else if (section() === 'requirements') {
-        @if (pcsfStatus() === 'VALIDATED') {
-          <app-requirements-view [projectId]="project.projectId" />
-        } @else if (pcsfStatus() === 'FAILED') {
+      } @else if (section() === 'requirements' || section() === 'review') {
+        @if (pcsfStatus() === 'FAILED') {
           <div class="workspace__placeholder">
             <h2 class="workspace__placeholder-title">Analysis failed</h2>
-            <p class="workspace__placeholder-text">We could not analyse your document. Please create a new project and try again.</p>
+            <p class="workspace__placeholder-text">We could not analyse your document.</p>
+            <button type="button" class="workspace__retry-btn" [disabled]="isRetrying()" (click)="retryInference()">
+              @if (isRetrying()) {
+                <span class="workspace__btn-spinner"></span> Retrying…
+              } @else {
+                Retry analysis
+              }
+            </button>
+            @if (retryError()) {
+              <p class="workspace__error" role="alert">{{ retryError() }}</p>
+            }
           </div>
+        } @else if (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED') {
+          <app-requirements-view
+            [projectId]="project.projectId"
+            [pcsfStatus]="pcsfStatus()"
+            (restartPolling)="onRestartPolling()" />
         } @else {
           <div class="workspace__placeholder">
             <div class="workspace__spinner"></div>
