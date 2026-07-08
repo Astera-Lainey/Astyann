@@ -9,8 +9,7 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     @Bean
-    public RestClient krokiRestClient(RestClient.Builder builder,
-                                       @Value("${services.kroki.url:https://kroki.io}") String krokiUrl) {
-        return builder.baseUrl(krokiUrl).build();
+    public RestClient krokiRestClient(@Value("${services.kroki.url:https://kroki.io}") String krokiUrl) {
+        return RestClient.builder().baseUrl(krokiUrl).build();
     }
 }

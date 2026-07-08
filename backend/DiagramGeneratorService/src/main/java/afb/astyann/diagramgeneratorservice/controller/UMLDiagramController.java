@@ -28,11 +28,11 @@ public class UMLDiagramController {
 
     @PostMapping("/{projectId}/generate")
     public ResponseEntity<ApiResponse<GenerateDiagramsData>> generate(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @RequestBody(required = false) GenerateDiagramsRequest body) {
         List<UMLDiagram> diagrams = service.generateDiagrams(
-                projectId, body != null ? body : new GenerateDiagramsRequest());
-        List<DiagramSummaryDTO> dtos = diagrams.stream().map(d -> toSummary(projectId, d)).toList();
+                parseId(projectId), body != null ? body : new GenerateDiagramsRequest());
+        List<DiagramSummaryDTO> dtos = diagrams.stream().map(d -> toSummary(parseId(projectId), d)).toList();
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.<GenerateDiagramsData>builder()
                         .status(201)
@@ -43,10 +43,10 @@ public class UMLDiagramController {
 
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResponse<DiagramListData>> list(
-            @PathVariable UUID projectId,
+            @PathVariable String projectId,
             @RequestParam(required = false) DiagramType type,
             @RequestParam(required = false) DiagramStatus status) {
-        List<DiagramListItemDTO> dtos = service.getDiagrams(projectId, type, status).stream()
+        List<DiagramListItemDTO> dtos = service.getDiagrams(parseId(projectId), type, status).stream()
                 .map(this::toListItem)
                 .toList();
         return ResponseEntity.ok(ApiResponse.<DiagramListData>builder()
@@ -58,10 +58,10 @@ public class UMLDiagramController {
 
     @GetMapping("/{projectId}/{diagramId}/render")
     public ResponseEntity<byte[]> render(
-            @PathVariable UUID projectId,
-            @PathVariable UUID diagramId,
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
             @RequestParam(defaultValue = "SVG") String format) {
-        byte[] bytes = service.renderDiagram(projectId, diagramId, format);
+        byte[] bytes = service.renderDiagram(parseId(projectId), parseId(diagramId), format);
         MediaType mediaType = "PNG".equalsIgnoreCase(format)
                 ? MediaType.IMAGE_PNG
                 : MediaType.valueOf("image/svg+xml");
@@ -84,5 +84,23 @@ public class UMLDiagramController {
                 .status(diagram.getStatus())
                 .updatedAt(diagram.getUpdatedAt())
                 .build();
+    }
+
+    private UUID parseId(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new IllegalArgumentException("X-User-Id header is missing");
+        }
+        String s = rawId.trim();
+        // Strip 0x prefix if present
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        // Insert dashes if raw 32-char hex (no dashes)
+        if (s.length() == 32 && !s.contains("-")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-"
+                    + s.substring(12, 16) + "-" + s.substring(16, 20) + "-"
+                    + s.substring(20);
+        }
+        return UUID.fromString(s);
     }
 }
