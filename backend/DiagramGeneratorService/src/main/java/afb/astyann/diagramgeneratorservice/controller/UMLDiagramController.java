@@ -10,6 +10,7 @@ import afb.astyann.diagramgeneratorservice.dto.DiagramListItemDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramSummaryDTO;
 import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsData;
 import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsRequest;
+import afb.astyann.diagramgeneratorservice.dto.RegenerateDiagramRequest;
 import afb.astyann.diagramgeneratorservice.service.DiagramGenerationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,8 +37,12 @@ public class UMLDiagramController {
                 id, body != null ? body : new GenerateDiagramsRequest());
 
         List<DiagramSummaryDTO> dtos = outcome.succeeded().stream().map(d -> toSummary(id, d)).toList();
-        List<DiagramFailureDTO> failureDtos = outcome.failures().entrySet().stream()
-                .map(e -> DiagramFailureDTO.builder().type(e.getKey()).reason(e.getValue()).build())
+        List<DiagramFailureDTO> failureDtos = outcome.failed().stream()
+                .map(d -> DiagramFailureDTO.builder()
+                        .diagramId(d.getDiagramId())
+                        .type(d.getType())
+                        .reason(d.getLastError())
+                        .build())
                 .toList();
         String message = failureDtos.isEmpty()
                 ? "Diagrams generated."
@@ -66,6 +71,25 @@ public class UMLDiagramController {
                 .build());
     }
 
+    @PostMapping("/{projectId}/{diagramId}/regenerate")
+    public ResponseEntity<ApiResponse<DiagramSummaryDTO>> regenerate(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @RequestBody(required = false) RegenerateDiagramRequest body) {
+        UUID pId = parseId(projectId);
+        UUID dId = parseId(diagramId);
+        String formatOverride = body != null ? body.getRenderFormat() : null;
+        UMLDiagram diagram = service.regenerateDiagram(pId, dId, formatOverride);
+        String message = diagram.getStatus() == DiagramStatus.FAILED
+                ? "Diagram regeneration failed."
+                : "Diagram regenerated.";
+        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
+                .status(200)
+                .message(message)
+                .data(toSummary(pId, diagram))
+                .build());
+    }
+
     @GetMapping("/{projectId}/{diagramId}/render")
     public ResponseEntity<byte[]> render(
             @PathVariable String projectId,
@@ -84,6 +108,7 @@ public class UMLDiagramController {
                 .type(diagram.getType())
                 .status(diagram.getStatus())
                 .renderUrl("/api/v1/uml/" + projectId + "/" + diagram.getDiagramId() + "/render")
+                .lastError(diagram.getLastError())
                 .build();
     }
 
@@ -93,6 +118,7 @@ public class UMLDiagramController {
                 .type(diagram.getType())
                 .status(diagram.getStatus())
                 .updatedAt(diagram.getUpdatedAt())
+                .lastError(diagram.getLastError())
                 .build();
     }
 

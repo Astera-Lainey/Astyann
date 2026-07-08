@@ -16,4 +16,5 @@ public class DiagramListItemDTO {
     private DiagramType type;
     private DiagramStatus status;
     private LocalDateTime updatedAt;
+    private String lastError;
 }

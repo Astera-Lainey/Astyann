@@ -44,6 +44,9 @@ public class UMLDiagram {
     @Column(columnDefinition = "TEXT")
     private String feedback;
 
+    @Column(name = "last_error", columnDefinition = "TEXT")
+    private String lastError;
+
     @Column(name = "generated_date", updatable = false)
     private LocalDateTime generatedDate;
 

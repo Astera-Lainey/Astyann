@@ -15,4 +15,5 @@ public class DiagramSummaryDTO {
     private DiagramType type;
     private DiagramStatus status;
     private String renderUrl;
+    private String lastError;
 }

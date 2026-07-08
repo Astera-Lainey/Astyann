@@ -20,10 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -48,7 +46,7 @@ public class DiagramGenerationService {
     @Qualifier("diagramExecutor")
     private final Executor diagramExecutor;
 
-    public record GenerationOutcome(List<UMLDiagram> succeeded, Map<DiagramType, String> failures) {}
+    public record GenerationOutcome(List<UMLDiagram> succeeded, List<UMLDiagram> failed) {}
 
     public GenerationOutcome generateDiagrams(UUID projectId, GenerateDiagramsRequest request) {
         verifyPcsfApproved(projectId);
@@ -75,21 +73,44 @@ public class DiagramGenerationService {
                 .join();
 
         List<UMLDiagram> succeeded = new ArrayList<>();
-        Map<DiagramType, String> failures = new LinkedHashMap<>();
+        List<UMLDiagram> failed = new ArrayList<>();
         for (TypedFuture task : tasks) {
             try {
-                succeeded.add(task.future().join());
+                UMLDiagram diagram = task.future().join();
+                if (diagram.getStatus() == DiagramStatus.FAILED) {
+                    failed.add(diagram);
+                } else {
+                    succeeded.add(diagram);
+                }
             } catch (CompletionException ex) {
+                // generateOne() persists its own failures below; this only catches something
+                // truly unexpected that slipped past its internal handling (e.g. a bug), so
+                // there's no persisted row/diagramId to report here.
                 Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                log.warn("Diagram generation failed for type {}: {}", task.type(), cause.getMessage());
-                failures.put(task.type(), cause.getMessage());
+                log.error("Unexpected failure generating diagram type {}: {}", task.type(), cause.getMessage(), cause);
             }
         }
 
-        if (succeeded.isEmpty() && !failures.isEmpty()) {
-            throw new DownstreamServiceException("All diagram generations failed: " + failures);
+        if (succeeded.isEmpty() && !failed.isEmpty()) {
+            throw new DownstreamServiceException("All diagram generations failed.");
         }
-        return new GenerationOutcome(succeeded, failures);
+        return new GenerationOutcome(succeeded, failed);
+    }
+
+    /**
+     * Re-runs generation for a single, already-existing diagram (by id) — used to retry a
+     * diagram that previously ended up FAILED, or simply to refresh any existing diagram.
+     * Reuses generateOne()'s upsert-by-type logic, keyed off the existing row's type.
+     */
+    public UMLDiagram regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
+        UMLDiagram existing = repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        verifyPcsfApproved(projectId);
+
+        String format = normalizeFormat(formatOverride != null ? formatOverride : existing.getRenderFormat());
+        return generateOne(projectId, existing.getType(), format);
     }
 
     public List<UMLDiagram> getDiagrams(UUID projectId, DiagramType type, DiagramStatus status) {
@@ -113,27 +134,47 @@ public class DiagramGenerationService {
     }
 
     private UMLDiagram generateOne(UUID projectId, DiagramType type, String format) {
+        UMLDiagram diagram = repository.findByProjectIdAndType(projectId, type).orElseGet(UMLDiagram::new);
+        diagram.setProjectId(projectId);
+        diagram.setType(type);
+        diagram.setRenderFormat(format);
+
         String context;
         try {
             context = ragServiceClient.getContext(projectId, DiagramPromptTemplates.ragQuery(type), 10);
         } catch (Exception ex) {
-            throw new DownstreamServiceException("Could not retrieve RAG context for " + type, ex);
+            return markFailed(diagram, "Could not retrieve RAG context: " + ex.getMessage());
         }
 
-        String initialSource = inferPlantUml(type, DiagramPromptTemplates.userPrompt(type, context));
-        RenderResult result = renderWithSelfCorrection(type, initialSource, format);
+        String initialSource;
+        try {
+            initialSource = inferPlantUml(type, DiagramPromptTemplates.userPrompt(type, context));
+        } catch (Exception ex) {
+            return markFailed(diagram, ex.getMessage());
+        }
 
-        UMLDiagram diagram = repository.findByProjectIdAndType(projectId, type).orElseGet(UMLDiagram::new);
-        diagram.setProjectId(projectId);
-        diagram.setType(type);
+        RenderResult result;
+        try {
+            result = renderWithSelfCorrection(type, initialSource, format);
+        } catch (Exception ex) {
+            diagram.setSourceCode(initialSource); // keep the last-attempted source for debugging
+            return markFailed(diagram, ex.getMessage());
+        }
+
         diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
         diagram.setSourceCode(result.source());
-        diagram.setRenderFormat(format);
+        diagram.setLastError(null);
         UMLDiagram saved = repository.save(diagram);
 
         String path = storageService.saveImage(projectId, saved.getDiagramId(), format, result.image());
         saved.setGeneratedImagePath(path);
         return repository.save(saved);
+    }
+
+    private UMLDiagram markFailed(UMLDiagram diagram, String error) {
+        diagram.setStatus(DiagramStatus.FAILED);
+        diagram.setLastError(error);
+        return repository.save(diagram);
     }
 
     private String inferPlantUml(DiagramType type, String userPrompt) {
