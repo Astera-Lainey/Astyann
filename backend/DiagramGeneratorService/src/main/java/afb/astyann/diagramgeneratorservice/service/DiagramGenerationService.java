@@ -20,10 +20,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 @Service
@@ -32,6 +36,7 @@ import java.util.concurrent.Executor;
 public class DiagramGenerationService {
 
     private static final Set<String> VALID_FORMATS = Set.of("SVG", "PNG");
+    private static final int MAX_RENDER_ATTEMPTS = 2;
 
     private final UMLDiagramRepository repository;
     private final RequirementServiceClient requirementServiceClient;
@@ -43,7 +48,9 @@ public class DiagramGenerationService {
     @Qualifier("diagramExecutor")
     private final Executor diagramExecutor;
 
-    public List<UMLDiagram> generateDiagrams(UUID projectId, GenerateDiagramsRequest request) {
+    public record GenerationOutcome(List<UMLDiagram> succeeded, Map<DiagramType, String> failures) {}
+
+    public GenerationOutcome generateDiagrams(UUID projectId, GenerateDiagramsRequest request) {
         verifyPcsfApproved(projectId);
 
         String format = normalizeFormat(request.getRenderFormat());
@@ -51,11 +58,38 @@ public class DiagramGenerationService {
                 ? List.of(DiagramType.values())
                 : request.getDiagramTypes();
 
-        List<CompletableFuture<UMLDiagram>> futures = types.stream()
-                .map(type -> CompletableFuture.supplyAsync(() -> generateOne(projectId, type, format), diagramExecutor))
+        record TypedFuture(DiagramType type, CompletableFuture<UMLDiagram> future) {}
+
+        List<TypedFuture> tasks = types.stream()
+                .map(type -> new TypedFuture(type, CompletableFuture.supplyAsync(
+                        () -> generateOne(projectId, type, format), diagramExecutor)))
                 .toList();
 
-        return futures.stream().map(CompletableFuture::join).toList();
+        // Wait for EVERY task to finish (success or failure) before inspecting any of them.
+        // Inspecting results one-by-one via .join() in list order would throw on the first
+        // failure and abandon the stream — but the still-running tasks were already dispatched
+        // to the executor and keep mutating the DB/filesystem in the background regardless,
+        // landing writes well after this method (and the HTTP response) has already returned.
+        CompletableFuture.allOf(tasks.stream().map(TypedFuture::future).toArray(CompletableFuture[]::new))
+                .exceptionally(ex -> null)
+                .join();
+
+        List<UMLDiagram> succeeded = new ArrayList<>();
+        Map<DiagramType, String> failures = new LinkedHashMap<>();
+        for (TypedFuture task : tasks) {
+            try {
+                succeeded.add(task.future().join());
+            } catch (CompletionException ex) {
+                Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                log.warn("Diagram generation failed for type {}: {}", task.type(), cause.getMessage());
+                failures.put(task.type(), cause.getMessage());
+            }
+        }
+
+        if (succeeded.isEmpty() && !failures.isEmpty()) {
+            throw new DownstreamServiceException("All diagram generations failed: " + failures);
+        }
+        return new GenerationOutcome(succeeded, failures);
     }
 
     public List<UMLDiagram> getDiagrams(UUID projectId, DiagramType type, DiagramStatus status) {
@@ -86,38 +120,59 @@ public class DiagramGenerationService {
             throw new DownstreamServiceException("Could not retrieve RAG context for " + type, ex);
         }
 
-        String userPrompt = DiagramPromptTemplates.userPrompt(type, context);
-        String rawContent;
-        try {
-            var response = aiServiceClient.infer(new AIServiceClient.InferBody(
-                    DiagramPromptTemplates.MODEL, DiagramPromptTemplates.SYSTEM_PROMPT, userPrompt));
-            rawContent = response.content();
-        } catch (Exception ex) {
-            throw new DownstreamServiceException("AI generation failed for " + type, ex);
-        }
-
-        String source = PlantUmlCleaner.clean(rawContent);
-
-        byte[] image;
-        try {
-            image = krokiClient.render(source, format);
-        } catch (DownstreamServiceException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new DownstreamServiceException("Rendering failed for " + type, ex);
-        }
+        String initialSource = inferPlantUml(type, DiagramPromptTemplates.userPrompt(type, context));
+        RenderResult result = renderWithSelfCorrection(type, initialSource, format);
 
         UMLDiagram diagram = repository.findByProjectIdAndType(projectId, type).orElseGet(UMLDiagram::new);
         diagram.setProjectId(projectId);
         diagram.setType(type);
         diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
-        diagram.setSourceCode(source);
+        diagram.setSourceCode(result.source());
         diagram.setRenderFormat(format);
         UMLDiagram saved = repository.save(diagram);
 
-        String path = storageService.saveImage(projectId, saved.getDiagramId(), format, image);
+        String path = storageService.saveImage(projectId, saved.getDiagramId(), format, result.image());
         saved.setGeneratedImagePath(path);
         return repository.save(saved);
+    }
+
+    private String inferPlantUml(DiagramType type, String userPrompt) {
+        try {
+            var response = aiServiceClient.infer(new AIServiceClient.InferBody(
+                    DiagramPromptTemplates.MODEL, DiagramPromptTemplates.SYSTEM_PROMPT, userPrompt));
+            return PlantUmlCleaner.clean(response.content());
+        } catch (Exception ex) {
+            throw new DownstreamServiceException("AI generation failed for " + type, ex);
+        }
+    }
+
+    private record RenderResult(String source, byte[] image) {}
+
+    /**
+     * On a Kroki rejection, feeds the exact renderer error back to the model and asks it to
+     * fix just the syntax, then retries once — a small local model occasionally hallucinates
+     * a nonexistent keyword or drops a relationship connector, and this self-corrects those
+     * cases without failing the whole diagram type outright. Returns the source that actually
+     * rendered successfully, since a retry may have changed it.
+     */
+    private RenderResult renderWithSelfCorrection(DiagramType type, String source, String format) {
+        String currentSource = source;
+        DownstreamServiceException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt++) {
+            try {
+                byte[] image = krokiClient.render(currentSource, format);
+                return new RenderResult(currentSource, image);
+            } catch (DownstreamServiceException ex) {
+                lastFailure = ex;
+            } catch (Exception ex) {
+                lastFailure = new DownstreamServiceException("Rendering failed for " + type, ex);
+            }
+            if (attempt < MAX_RENDER_ATTEMPTS) {
+                log.info("Retrying {} generation after Kroki rejection (attempt {}): {}", type, attempt, lastFailure.getMessage());
+                currentSource = inferPlantUml(type, DiagramPromptTemplates.fixPrompt(type, currentSource, lastFailure.getMessage()));
+            }
+        }
+        throw lastFailure;
     }
 
     private void verifyPcsfApproved(UUID projectId) {

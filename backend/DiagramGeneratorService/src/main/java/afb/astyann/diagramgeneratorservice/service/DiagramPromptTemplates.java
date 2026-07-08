@@ -14,6 +14,11 @@ public final class DiagramPromptTemplates {
             You are a senior software architect generating PlantUML diagrams for enterprise applications.
             Return ONLY the PlantUML source code, starting with @startuml and ending with @enduml.
             Do not include markdown code fences, explanations, or any text outside the @startuml/@enduml block.
+            Use only real PlantUML keywords: package, namespace, folder, class, interface, abstract, enum, component,
+            node, database, actor, usecase, participant, state, object, artifact. Never invent a keyword that does
+            not exist in PlantUML (for example, there is no "module" keyword — use "package" or "component" instead).
+            Every relationship line between two elements must include an explicit connector such as --, -->, ..>, or
+            ..|> — never place two element names on the same line without a connector between them.
             """;
 
     private static final Map<DiagramType, String> HINTS = Map.ofEntries(
@@ -23,9 +28,9 @@ public final class DiagramPromptTemplates {
             Map.entry(DiagramType.ACTIVITY, "Model the primary business process flow as an activity diagram with decision points."),
             Map.entry(DiagramType.BUSINESS_SEQUENCE, "Model a business-level sequence diagram for the primary use case, showing actor-to-system interactions."),
             Map.entry(DiagramType.DESIGN_SEQUENCE, "Model a technical sequence diagram showing controller/service/repository interactions for the primary use case."),
-            Map.entry(DiagramType.COMPONENT, "Model the system's components/modules and their dependencies."),
+            Map.entry(DiagramType.COMPONENT, "Model the system's components and their dependencies using PlantUML's `component \"Name\"` declarations or [Name] bracket syntax. Group related components with `package \"Name\" { ... }` if needed — do not use a \"module\" keyword, it does not exist in PlantUML."),
             Map.entry(DiagramType.DEPLOYMENT, "Model the deployment topology: nodes, artifacts, and communication protocols."),
-            Map.entry(DiagramType.PACKAGE, "Model the package/module structure and their dependencies."),
+            Map.entry(DiagramType.PACKAGE, "Model the package structure and their dependencies using `package \"Name\" { ... }` blocks — do not use a \"module\" keyword, it does not exist in PlantUML."),
             Map.entry(DiagramType.ENTITY_RELATIONSHIP, "Model the entity-relationship diagram using PlantUML's entity syntax, showing tables, columns, and cardinalities.")
     );
 
@@ -37,5 +42,14 @@ public final class DiagramPromptTemplates {
         return "Diagram type: " + type + "\n" + HINTS.get(type)
                 + "\n\nProject context:\n" + context
                 + "\n\nGenerate the PlantUML diagram now. Return only the PlantUML code.";
+    }
+
+    public static String fixPrompt(DiagramType type, String brokenSource, String rendererError) {
+        return "The following PlantUML source for a " + type + " diagram failed to render with this error "
+                + "from the PlantUML renderer:\n" + rendererError
+                + "\n\nPlantUML source:\n" + brokenSource
+                + "\n\nFix the syntax error and return ONLY the corrected, complete PlantUML source (starting "
+                + "with @startuml and ending with @enduml). Do not change the diagram's content or intent — "
+                + "only fix the syntax.";
     }
 }

@@ -4,6 +4,7 @@ import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import afb.astyann.diagramgeneratorservice.dto.ApiResponse;
+import afb.astyann.diagramgeneratorservice.dto.DiagramFailureDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListData;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListItemDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramSummaryDTO;
@@ -30,14 +31,23 @@ public class UMLDiagramController {
     public ResponseEntity<ApiResponse<GenerateDiagramsData>> generate(
             @PathVariable String projectId,
             @RequestBody(required = false) GenerateDiagramsRequest body) {
-        List<UMLDiagram> diagrams = service.generateDiagrams(
-                parseId(projectId), body != null ? body : new GenerateDiagramsRequest());
-        List<DiagramSummaryDTO> dtos = diagrams.stream().map(d -> toSummary(parseId(projectId), d)).toList();
+        UUID id = parseId(projectId);
+        DiagramGenerationService.GenerationOutcome outcome = service.generateDiagrams(
+                id, body != null ? body : new GenerateDiagramsRequest());
+
+        List<DiagramSummaryDTO> dtos = outcome.succeeded().stream().map(d -> toSummary(id, d)).toList();
+        List<DiagramFailureDTO> failureDtos = outcome.failures().entrySet().stream()
+                .map(e -> DiagramFailureDTO.builder().type(e.getKey()).reason(e.getValue()).build())
+                .toList();
+        String message = failureDtos.isEmpty()
+                ? "Diagrams generated."
+                : "Diagrams generated with " + failureDtos.size() + " failure(s).";
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.<GenerateDiagramsData>builder()
                         .status(201)
-                        .message("Diagrams generated.")
-                        .data(GenerateDiagramsData.builder().diagrams(dtos).build())
+                        .message(message)
+                        .data(GenerateDiagramsData.builder().diagrams(dtos).failures(failureDtos).build())
                         .build());
     }
 

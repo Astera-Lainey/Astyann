@@ -1,14 +1,13 @@
 package afb.astyann.diagramgeneratorservice.dto;
 
+import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data @Builder @AllArgsConstructor @NoArgsConstructor
-public class GenerateDiagramsData {
-    private List<DiagramSummaryDTO> diagrams;
-    private List<DiagramFailureDTO> failures;
+public class DiagramFailureDTO {
+    private DiagramType type;
+    private String reason;
 }
