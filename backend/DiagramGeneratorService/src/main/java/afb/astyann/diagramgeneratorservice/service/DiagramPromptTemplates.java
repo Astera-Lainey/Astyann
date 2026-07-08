@@ -52,4 +52,14 @@ public final class DiagramPromptTemplates {
                 + "with @startuml and ending with @enduml). Do not change the diagram's content or intent — "
                 + "only fix the syntax.";
     }
+
+    public static String changeRequestPrompt(DiagramType type, String currentSource, String context, String instructions) {
+        return "You are revising an existing PlantUML " + type + " diagram based on requested changes.\n\n"
+                + "Current PlantUML source:\n" + currentSource
+                + "\n\nRequested changes:\n" + instructions
+                + "\n\nProject context (for reference, may include information relevant to the change):\n" + context
+                + "\n\nApply the requested changes to the diagram while preserving everything else that is still "
+                + "correct and relevant. Return ONLY the complete, corrected PlantUML source (starting with "
+                + "@startuml and ending with @enduml).";
+    }
 }

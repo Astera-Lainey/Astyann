@@ -41,8 +41,8 @@ public class UMLDiagram {
     @Column(name = "generated_image_path")
     private String generatedImagePath;
 
-    @Column(columnDefinition = "TEXT")
-    private String feedback;
+    @Column(name = "change_instructions", columnDefinition = "TEXT")
+    private String changeInstructions;
 
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;

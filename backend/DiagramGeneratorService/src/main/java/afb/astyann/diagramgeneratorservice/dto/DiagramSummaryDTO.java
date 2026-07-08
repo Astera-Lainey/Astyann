@@ -16,4 +16,5 @@ public class DiagramSummaryDTO {
     private DiagramStatus status;
     private String renderUrl;
     private String lastError;
+    private UUID previousVersionId;
 }

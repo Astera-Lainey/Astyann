@@ -4,6 +4,10 @@ import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import afb.astyann.diagramgeneratorservice.dto.ApiResponse;
+import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsRequest;
+import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsResponse;
+import afb.astyann.diagramgeneratorservice.dto.ChangeRequestBody;
+import afb.astyann.diagramgeneratorservice.dto.ChangeRequestResponse;
 import afb.astyann.diagramgeneratorservice.dto.DiagramFailureDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListData;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListItemDTO;
@@ -12,6 +16,7 @@ import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsData;
 import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsRequest;
 import afb.astyann.diagramgeneratorservice.dto.RegenerateDiagramRequest;
 import afb.astyann.diagramgeneratorservice.service.DiagramGenerationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -79,14 +84,52 @@ public class UMLDiagramController {
         UUID pId = parseId(projectId);
         UUID dId = parseId(diagramId);
         String formatOverride = body != null ? body.getRenderFormat() : null;
-        UMLDiagram diagram = service.regenerateDiagram(pId, dId, formatOverride);
+        DiagramGenerationService.RegenerateResult result = service.regenerateDiagram(pId, dId, formatOverride);
+        UMLDiagram diagram = result.diagram();
         String message = diagram.getStatus() == DiagramStatus.FAILED
                 ? "Diagram regeneration failed."
                 : "Diagram regenerated.";
+        DiagramSummaryDTO dto = toSummary(pId, diagram);
+        dto.setPreviousVersionId(result.previousVersionId());
         return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
                 .status(200)
                 .message(message)
-                .data(toSummary(pId, diagram))
+                .data(dto)
+                .build());
+    }
+
+    @PostMapping("/{projectId}/approve")
+    public ResponseEntity<ApiResponse<ApproveDiagramsResponse>> approve(
+            @PathVariable String projectId,
+            @RequestBody(required = false) ApproveDiagramsRequest body) {
+        UUID pId = parseId(projectId);
+        List<UUID> diagramIds = body != null ? body.getDiagramIds() : null;
+        String approvalComment = body != null ? body.getApprovalComment() : null;
+        DiagramGenerationService.ApproveOutcome outcome = service.approve(pId, diagramIds, approvalComment);
+        return ResponseEntity.ok(ApiResponse.<ApproveDiagramsResponse>builder()
+                .status(200)
+                .message("Diagrams approved.")
+                .data(ApproveDiagramsResponse.builder()
+                        .snapshotIds(outcome.snapshotIds())
+                        .updatedCount(outcome.updatedCount())
+                        .allDiagramsApproved(outcome.allDiagramsApproved())
+                        .build())
+                .build());
+    }
+
+    @PostMapping("/{projectId}/{diagramId}/change-request")
+    public ResponseEntity<ApiResponse<ChangeRequestResponse>> changeRequest(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @Valid @RequestBody ChangeRequestBody body) {
+        UMLDiagram diagram = service.submitChangeRequest(parseId(projectId), parseId(diagramId), body.getInstructions());
+        return ResponseEntity.ok(ApiResponse.<ChangeRequestResponse>builder()
+                .status(200)
+                .message("Change request recorded. Call regenerate to apply it.")
+                .data(ChangeRequestResponse.builder()
+                        .changeRequestId(UUID.randomUUID())
+                        .status(diagram.getStatus().name())
+                        .build())
                 .build());
     }
 

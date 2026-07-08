@@ -4,6 +4,7 @@ import afb.astyann.diagramgeneratorservice.client.AIServiceClient;
 import afb.astyann.diagramgeneratorservice.client.KrokiClient;
 import afb.astyann.diagramgeneratorservice.client.RAGServiceClient;
 import afb.astyann.diagramgeneratorservice.client.RequirementServiceClient;
+import afb.astyann.diagramgeneratorservice.client.VersionServiceClient;
 import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
@@ -19,6 +20,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -42,6 +46,8 @@ public class DiagramGenerationService {
     private final AIServiceClient aiServiceClient;
     private final KrokiClient krokiClient;
     private final StorageService storageService;
+    private final VersionServiceClient versionServiceClient;
+    private final RagIndexingService ragIndexingService;
 
     @Qualifier("diagramExecutor")
     private final Executor diagramExecutor;
@@ -97,12 +103,15 @@ public class DiagramGenerationService {
         return new GenerationOutcome(succeeded, failed);
     }
 
+    public record RegenerateResult(UMLDiagram diagram, UUID previousVersionId) {}
+
     /**
      * Re-runs generation for a single, already-existing diagram (by id) — used to retry a
      * diagram that previously ended up FAILED, or simply to refresh any existing diagram.
-     * Reuses generateOne()'s upsert-by-type logic, keyed off the existing row's type.
+     * If the diagram has stored change-request instructions, applies them (feedback-driven
+     * regeneration) instead of a plain from-scratch regeneration, and clears them on success.
      */
-    public UMLDiagram regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
+    public RegenerateResult regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
         UMLDiagram existing = repository.findById(diagramId)
                 .filter(d -> d.getProjectId().equals(projectId))
                 .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
@@ -110,7 +119,127 @@ public class DiagramGenerationService {
         verifyPcsfApproved(projectId);
 
         String format = normalizeFormat(formatOverride != null ? formatOverride : existing.getRenderFormat());
-        return generateOne(projectId, existing.getType(), format);
+        UUID previousVersionId = findActiveSnapshotId(projectId, diagramId);
+
+        String instructions = existing.getChangeInstructions();
+        UMLDiagram result = (instructions != null && !instructions.isBlank())
+                ? generateWithFeedback(projectId, existing, format, instructions)
+                : generateOne(projectId, existing.getType(), format);
+
+        return new RegenerateResult(result, previousVersionId);
+    }
+
+    public record ApproveOutcome(List<UUID> snapshotIds, int updatedCount, boolean allDiagramsApproved) {}
+
+    /**
+     * Approves the given diagrams (or all of the project's diagrams if none specified),
+     * recording one version snapshot per approved diagram and asynchronously indexing each
+     * approved diagram's content into RAG for later stages to retrieve as context.
+     */
+    @Transactional
+    public ApproveOutcome approve(UUID projectId, List<UUID> diagramIds, String approvalComment) {
+        List<UMLDiagram> projectDiagrams = repository.findByProjectId(projectId);
+        if (projectDiagrams.isEmpty()) {
+            throw new DiagramNotFoundException(projectId);
+        }
+
+        List<UMLDiagram> targets = (diagramIds == null || diagramIds.isEmpty())
+                ? projectDiagrams
+                : projectDiagrams.stream().filter(d -> diagramIds.contains(d.getDiagramId())).toList();
+
+        List<UMLDiagram> approvable = targets.stream()
+                .filter(d -> d.getStatus() == DiagramStatus.PENDING_APPROVAL)
+                .toList();
+        if (approvable.isEmpty()) {
+            throw new IllegalStateException(
+                    "No diagrams in PENDING_APPROVAL state to approve for project " + projectId);
+        }
+
+        approvable.forEach(d -> {
+            d.setStatus(DiagramStatus.APPROVED);
+            d.setChangeInstructions(null);
+        });
+        repository.saveAll(approvable);
+
+        // Synchronous: this is a pure outbound POST carrying in-memory diagram fields, not a
+        // read of this service's own DB, so there's no pre-commit staleness risk to defer for.
+        List<UUID> snapshotIds = new ArrayList<>();
+        for (UMLDiagram d : approvable) {
+            try {
+                var snap = versionServiceClient.createSnapshot(projectId, new VersionServiceClient.CreateSnapshotRequest(
+                        "DIAGRAM",
+                        d.getType().name(),
+                        null,
+                        (approvalComment != null && !approvalComment.isBlank()) ? approvalComment : "Diagram approved",
+                        d.getGeneratedImagePath(),
+                        d.getDiagramId(),
+                        d.getType().name()));
+                if (snap != null && snap.getData() != null) {
+                    snapshotIds.add(snap.getData().snapId());
+                }
+            } catch (Exception ex) {
+                log.error("Snapshot creation failed for diagramId={} — approval still recorded: {}",
+                        d.getDiagramId(), ex.getMessage());
+            }
+        }
+
+        // Deliberately not calling ProjectService to update project status here — ProjectStatus
+        // (ANALYZING/GENERATING/COMPLETED/FAILED) has no per-stage "diagrams approved" value and
+        // no granularity for it.
+
+        // Async, afterCommit-deferred RAG indexing (mirrors RequirementService.approve()) — this
+        // DOES read back diagram state from this service's DB, so it must wait for the commit.
+        List<UUID> idsForIndexing = approvable.stream().map(UMLDiagram::getDiagramId).toList();
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    idsForIndexing.forEach(ragIndexingService::indexApprovedDiagramAsync);
+                }
+            });
+        } else {
+            idsForIndexing.forEach(ragIndexingService::indexApprovedDiagramAsync);
+        }
+
+        boolean allApproved = repository.findByProjectId(projectId).stream()
+                .allMatch(d -> d.getStatus() == DiagramStatus.APPROVED);
+
+        return new ApproveOutcome(snapshotIds, approvable.size(), allApproved);
+    }
+
+    /**
+     * Records free-text change instructions for a diagram, resetting it to PENDING_APPROVAL
+     * (undoing FAILED if applicable) so it's ready to be regenerated with that feedback.
+     */
+    @Transactional
+    public UMLDiagram submitChangeRequest(UUID projectId, UUID diagramId, String instructions) {
+        UMLDiagram diagram = repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        if (diagram.getStatus() == DiagramStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Cannot request changes on an APPROVED diagram. Regenerate a new version via a new project revision instead.");
+        }
+
+        diagram.setChangeInstructions(instructions);
+        diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
+        return repository.save(diagram);
+    }
+
+    private UUID findActiveSnapshotId(UUID projectId, UUID diagramId) {
+        try {
+            var response = versionServiceClient.listSnapshots(projectId);
+            if (response == null || response.getData() == null) return null;
+            return response.getData().stream()
+                    .filter(s -> diagramId.equals(s.diagramId()) && s.active())
+                    .map(VersionServiceClient.SnapshotDTO::snapId)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception ex) {
+            log.warn("Could not look up previous version for diagramId={}: {}", diagramId, ex.getMessage());
+            return null;
+        }
     }
 
     public List<UMLDiagram> getDiagrams(UUID projectId, DiagramType type, DiagramStatus status) {
@@ -146,9 +275,33 @@ public class DiagramGenerationService {
             return markFailed(diagram, "Could not retrieve RAG context: " + ex.getMessage());
         }
 
+        return generateAndPersist(diagram, type, format, DiagramPromptTemplates.userPrompt(type, context), null);
+    }
+
+    /**
+     * Regenerates an existing diagram using its stored change-request instructions, feeding the
+     * current source + fresh RAG context + the requested changes into one prompt, and clearing
+     * the instructions on success (they're consumed) while leaving them intact on failure.
+     */
+    private UMLDiagram generateWithFeedback(UUID projectId, UMLDiagram existing, String format, String instructions) {
+        String context;
+        try {
+            context = ragServiceClient.getContext(projectId, DiagramPromptTemplates.ragQuery(existing.getType()), 10);
+        } catch (Exception ex) {
+            return markFailed(existing, "Could not retrieve RAG context: " + ex.getMessage());
+        }
+
+        String prompt = DiagramPromptTemplates.changeRequestPrompt(
+                existing.getType(), existing.getSourceCode(), context, instructions);
+        existing.setRenderFormat(format);
+        return generateAndPersist(existing, existing.getType(), format, prompt, () -> existing.setChangeInstructions(null));
+    }
+
+    private UMLDiagram generateAndPersist(UMLDiagram diagram, DiagramType type, String format,
+                                           String userPrompt, Runnable onSuccess) {
         String initialSource;
         try {
-            initialSource = inferPlantUml(type, DiagramPromptTemplates.userPrompt(type, context));
+            initialSource = inferPlantUml(type, userPrompt);
         } catch (Exception ex) {
             return markFailed(diagram, ex.getMessage());
         }
@@ -164,9 +317,10 @@ public class DiagramGenerationService {
         diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
         diagram.setSourceCode(result.source());
         diagram.setLastError(null);
+        if (onSuccess != null) onSuccess.run();
         UMLDiagram saved = repository.save(diagram);
 
-        String path = storageService.saveImage(projectId, saved.getDiagramId(), format, result.image());
+        String path = storageService.saveImage(diagram.getProjectId(), saved.getDiagramId(), format, result.image());
         saved.setGeneratedImagePath(path);
         return repository.save(saved);
     }
