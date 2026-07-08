@@ -2408,6 +2408,8 @@ Yes
 
 ## <a id="_Toc232406770"></a>__UML Diagrams__
 
+__Note:__ this module is implemented as the DiagramGeneratorService and is reached through the API Gateway at base path /api/v1/uml \(note the base path is /uml/\{projectId\}/\.\.\., not /projects/\{projectId\}/diagrams/\.\.\. as originally specified\)\. Additionally, GET \.\.\./\{diagramId\}/render takes format as a query parameter, not a path segment, as documented below\. Only API\-DIAG\-01 \(generate\), API\-DIAG\-02 \(list\), and API\-DIAG\-06 \(render\) are currently implemented; API\-DIAG\-03/04/05 \(approve, change\-request, regenerate\) are planned for a follow\-up implementation pass alongside the Version Service\.
+
 __API Code__
 
 __Method__
