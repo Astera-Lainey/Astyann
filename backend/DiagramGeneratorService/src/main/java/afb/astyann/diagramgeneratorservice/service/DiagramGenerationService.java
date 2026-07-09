@@ -249,6 +249,12 @@ public class DiagramGenerationService {
                 .toList();
     }
 
+    public UMLDiagram getDiagram(UUID projectId, UUID diagramId) {
+        return repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+    }
+
     public byte[] renderDiagram(UUID projectId, UUID diagramId, String format) {
         String normalized = normalizeFormat(format);
         UMLDiagram diagram = repository.findById(diagramId)
