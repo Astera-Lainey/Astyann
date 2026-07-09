@@ -107,14 +107,21 @@ public class DiagramGenerationService {
 
     /**
      * Re-runs generation for a single, already-existing diagram (by id) — used to retry a
-     * diagram that previously ended up FAILED, or simply to refresh any existing diagram.
+     * diagram that previously ended up FAILED, or to apply feedback recorded via change-request.
      * If the diagram has stored change-request instructions, applies them (feedback-driven
      * regeneration) instead of a plain from-scratch regeneration, and clears them on success.
+     * Rejects APPROVED diagrams outright — a change-request must be submitted first, which
+     * resets the diagram to PENDING_APPROVAL and is what actually allows this to proceed.
      */
     public RegenerateResult regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
         UMLDiagram existing = repository.findById(diagramId)
                 .filter(d -> d.getProjectId().equals(projectId))
                 .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        if (existing.getStatus() == DiagramStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Cannot regenerate an APPROVED diagram directly. Submit a change-request first.");
+        }
 
         verifyPcsfApproved(projectId);
 
@@ -209,18 +216,15 @@ public class DiagramGenerationService {
 
     /**
      * Records free-text change instructions for a diagram, resetting it to PENDING_APPROVAL
-     * (undoing FAILED if applicable) so it's ready to be regenerated with that feedback.
+     * (undoing APPROVED or FAILED) so it's ready to be regenerated with that feedback. This is
+     * the only way to move an APPROVED diagram back into an editable state — regenerate()
+     * rejects APPROVED diagrams outright, so callers must come through here first.
      */
     @Transactional
     public UMLDiagram submitChangeRequest(UUID projectId, UUID diagramId, String instructions) {
         UMLDiagram diagram = repository.findById(diagramId)
                 .filter(d -> d.getProjectId().equals(projectId))
                 .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
-
-        if (diagram.getStatus() == DiagramStatus.APPROVED) {
-            throw new IllegalStateException(
-                    "Cannot request changes on an APPROVED diagram. Regenerate a new version via a new project revision instead.");
-        }
 
         diagram.setChangeInstructions(instructions);
         diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
@@ -247,6 +251,12 @@ public class DiagramGenerationService {
                 .filter(d -> type == null || d.getType() == type)
                 .filter(d -> status == null || d.getStatus() == status)
                 .toList();
+    }
+
+    public UMLDiagram getDiagram(UUID projectId, UUID diagramId) {
+        return repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
     }
 
     public byte[] renderDiagram(UUID projectId, UUID diagramId, String format) {

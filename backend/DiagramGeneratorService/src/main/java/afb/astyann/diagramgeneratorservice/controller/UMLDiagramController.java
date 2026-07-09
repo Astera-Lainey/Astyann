@@ -4,6 +4,7 @@ import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import afb.astyann.diagramgeneratorservice.dto.ApiResponse;
+import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramRequest;
 import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsRequest;
 import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsResponse;
 import afb.astyann.diagramgeneratorservice.dto.ChangeRequestBody;
@@ -114,6 +115,24 @@ public class UMLDiagramController {
                         .updatedCount(outcome.updatedCount())
                         .allDiagramsApproved(outcome.allDiagramsApproved())
                         .build())
+                .build());
+    }
+
+    @PostMapping("/{projectId}/{diagramId}/approve")
+    public ResponseEntity<ApiResponse<DiagramSummaryDTO>> approveOne(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @RequestBody(required = false) ApproveDiagramRequest body) {
+        UUID pId = parseId(projectId);
+        UUID dId = parseId(diagramId);
+        service.getDiagram(pId, dId); // 404 up front if the diagram doesn't belong to this project
+        String approvalComment = body != null ? body.getApprovalComment() : null;
+        service.approve(pId, List.of(dId), approvalComment);
+        UMLDiagram approved = service.getDiagram(pId, dId);
+        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
+                .status(200)
+                .message("Diagram approved.")
+                .data(toSummary(pId, approved))
                 .build());
     }
 

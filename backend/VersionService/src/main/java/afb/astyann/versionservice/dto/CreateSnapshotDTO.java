@@ -12,7 +12,8 @@ import java.util.UUID;
 @Data @Builder @AllArgsConstructor @NoArgsConstructor
 public class CreateSnapshotDTO {
 
-    @NotNull
+    // Set by the controller from the path variable, not supplied by the client — must not be
+    // @NotNull, since @Valid runs before the controller body has a chance to set it.
     private UUID projectId;
 
     @NotNull

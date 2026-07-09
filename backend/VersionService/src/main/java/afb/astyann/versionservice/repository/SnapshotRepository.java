@@ -11,9 +11,9 @@ import java.util.UUID;
 public interface SnapshotRepository extends JpaRepository<Snapshot, UUID> {
     List<Snapshot> findByTimelineIdOrderBySnapDateAsc(UUID timelineId);
 
-    Optional<Snapshot> findTopByTimelineIdAndArtifactTypeOrderByVersionNumberDesc(
-            UUID timelineId, ArtifactType artifactType);
+    Optional<Snapshot> findTopByTimelineIdAndArtifactTypeAndArtifactIdOrderByVersionNumberDesc(
+            UUID timelineId, ArtifactType artifactType, UUID artifactId);
 
-    Optional<Snapshot> findByTimelineIdAndArtifactTypeAndActiveTrue(
-            UUID timelineId, ArtifactType artifactType);
+    Optional<Snapshot> findByTimelineIdAndArtifactTypeAndArtifactIdAndActiveTrue(
+            UUID timelineId, ArtifactType artifactType, UUID artifactId);
 }

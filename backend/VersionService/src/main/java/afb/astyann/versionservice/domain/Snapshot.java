@@ -49,6 +49,12 @@ public abstract class Snapshot {
     @Column(name = "artifact_type", nullable = false)
     private ArtifactType artifactType;
 
+    /** Which concrete artifact instance (a specific diagram/document/code-module/deployment
+     * package) this version belongs to — scopes version numbering and the active-snapshot
+     * flag per artifact, not per artifactType category. */
+    @Column(name = "artifact_id", nullable = false)
+    private UUID artifactId;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;
