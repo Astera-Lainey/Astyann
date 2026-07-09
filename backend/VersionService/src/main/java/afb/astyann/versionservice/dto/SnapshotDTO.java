@@ -20,6 +20,7 @@ public class SnapshotDTO {
     private String triggerReason;
     private String artifactPath;
     private ArtifactType artifactType;
+    private UUID artifactId;
     private boolean active;
 
     private UUID diagramId;

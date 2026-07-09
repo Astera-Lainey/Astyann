@@ -31,22 +31,55 @@ public class VersionService {
                 .orElseGet(() -> timelineRepository.save(
                         Timeline.builder().projectId(dto.getProjectId()).build()));
 
+        UUID artifactId = resolveArtifactId(dto);
+
         int nextVersion = snapshotRepository
-                .findTopByTimelineIdAndArtifactTypeOrderByVersionNumberDesc(timeline.getTimelineId(), dto.getArtifactType())
+                .findTopByTimelineIdAndArtifactTypeAndArtifactIdOrderByVersionNumberDesc(
+                        timeline.getTimelineId(), dto.getArtifactType(), artifactId)
                 .map(s -> s.getVersionNumber() + 1)
                 .orElse(1);
 
-        snapshotRepository.findByTimelineIdAndArtifactTypeAndActiveTrue(timeline.getTimelineId(), dto.getArtifactType())
+        snapshotRepository.findByTimelineIdAndArtifactTypeAndArtifactIdAndActiveTrue(
+                        timeline.getTimelineId(), dto.getArtifactType(), artifactId)
                 .ifPresent(prev -> {
                     prev.setActive(false);
                     snapshotRepository.save(prev);
                 });
 
-        Snapshot snapshot = buildSnapshot(dto, timeline.getTimelineId(), nextVersion);
+        Snapshot snapshot = buildSnapshot(dto, timeline.getTimelineId(), nextVersion, artifactId);
         Snapshot saved = snapshotRepository.save(snapshot);
-        log.info("Snapshot created: projectId={} artifactType={} versionNumber={}",
-                dto.getProjectId(), dto.getArtifactType(), nextVersion);
+        log.info("Snapshot created: projectId={} artifactType={} artifactId={} versionNumber={}",
+                dto.getProjectId(), dto.getArtifactType(), artifactId, nextVersion);
         return toDto(saved);
+    }
+
+    private UUID resolveArtifactId(CreateSnapshotDTO dto) {
+        return switch (dto.getArtifactType()) {
+            case DIAGRAM -> {
+                if (dto.getDiagramId() == null) {
+                    throw new InvalidSnapshotRequestException("diagramId is required for artifactType DIAGRAM");
+                }
+                yield dto.getDiagramId();
+            }
+            case DOCUMENT -> {
+                if (dto.getDocumentId() == null) {
+                    throw new InvalidSnapshotRequestException("documentId is required for artifactType DOCUMENT");
+                }
+                yield dto.getDocumentId();
+            }
+            case CODE -> {
+                if (dto.getCodeId() == null) {
+                    throw new InvalidSnapshotRequestException("codeId is required for artifactType CODE");
+                }
+                yield dto.getCodeId();
+            }
+            case DEPLOYMENT -> {
+                if (dto.getPackageId() == null) {
+                    throw new InvalidSnapshotRequestException("packageId is required for artifactType DEPLOYMENT");
+                }
+                yield dto.getPackageId();
+            }
+        };
     }
 
     public TimelineDTO getTimeline(UUID projectId) {
@@ -75,7 +108,7 @@ public class VersionService {
                 .orElseThrow(() -> new SnapshotNotFoundException(snapId));
     }
 
-    private Snapshot buildSnapshot(CreateSnapshotDTO dto, UUID timelineId, int versionNumber) {
+    private Snapshot buildSnapshot(CreateSnapshotDTO dto, UUID timelineId, int versionNumber, UUID artifactId) {
         Snapshot snapshot = switch (dto.getArtifactType()) {
             case DIAGRAM -> {
                 if (dto.getDiagramId() == null) {
@@ -121,6 +154,7 @@ public class VersionService {
         snapshot.setTriggerReason(dto.getTriggerReason());
         snapshot.setArtifactPath(dto.getArtifactPath());
         snapshot.setArtifactType(dto.getArtifactType());
+        snapshot.setArtifactId(artifactId);
         snapshot.setActive(true);
         return snapshot;
     }
@@ -136,6 +170,7 @@ public class VersionService {
                 .triggerReason(s.getTriggerReason())
                 .artifactPath(s.getArtifactPath())
                 .artifactType(s.getArtifactType())
+                .artifactId(s.getArtifactId())
                 .active(s.isActive());
 
         if (s instanceof DiagramSnapshot d) {
