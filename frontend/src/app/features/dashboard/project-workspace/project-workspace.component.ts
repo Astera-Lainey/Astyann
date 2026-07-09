@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
-import { Router, ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription, timer, switchMap, takeWhile, catchError, of } from 'rxjs';
 import { ProjectService } from '../../../core/services/project.service';
 import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../../../core/models/project.models';
 import { ToastService } from '../../../core/services/toast.service';
 import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
+import { SystemDesignComponent } from './system-design/system-design.component';
 
 export type WorkspaceSection =
   | 'requirements'
@@ -29,7 +30,7 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
 @Component({
   selector: 'app-project-workspace-page',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RequirementsViewComponent],
+  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-workspace.component.html',
   styleUrl: './project-workspace.component.scss',
@@ -39,11 +40,6 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   readonly section = signal<WorkspaceSection | null>(null);
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
-
-  readonly sectionLabels = SECTION_LABELS;
-  readonly sectionOrder: WorkspaceSection[] = [
-    'requirements', 'design', 'documents', 'code', 'versions', 'deploy',
-  ];
 
   readonly pcsfStatus = signal<string>('DRAFT');
   readonly pendingQuestionsCount = signal(0);
@@ -103,6 +99,11 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   get currentSectionLabel(): string {
     const section = this.section();
     return section ? SECTION_LABELS[section] : '';
+  }
+
+  get showPageHeading(): boolean {
+    const section = this.section();
+    return this.isKnownSection && section !== 'requirements' && section !== 'review';
   }
 
   get breadcrumbSectionLabel(): string {

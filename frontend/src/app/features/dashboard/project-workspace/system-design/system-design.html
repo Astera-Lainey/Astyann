@@ -1,0 +1,190 @@
+<div class="sd">
+
+  @if (isLoadingList()) {
+    <div class="sd__placeholder">
+      <div class="sd__spinner"></div>
+      <p class="sd__placeholder-text">Loading your diagrams…</p>
+    </div>
+  } @else if (listError()) {
+    <div class="sd__placeholder">
+      <p class="sd__placeholder-text sd__placeholder-text--error">{{ listError() }}</p>
+      <button type="button" class="sd__retry-btn" (click)="retryLoadDiagrams()">Try again</button>
+    </div>
+  } @else if (!pcsfApproved && !hasAnyDiagrams()) {
+    <div class="sd__placeholder">
+      <h3 class="sd__placeholder-title">Requirements aren't approved yet</h3>
+      <p class="sd__placeholder-text">System design diagrams are generated from your approved requirements. Approve them first from the Requirements tab.</p>
+    </div>
+  } @else if (!hasAnyDiagrams()) {
+
+    <!-- Empty state -->
+    <div class="sd__empty">
+      <div class="sd__empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"/></svg>
+      </div>
+      <h3 class="sd__empty-title">No diagrams yet</h3>
+      <p class="sd__empty-text">Generate the full set of UML diagrams from your approved requirements — use case, class, sequence, component, and more.</p>
+      @if (generateError()) {
+        <p class="sd__inline-error" role="alert">{{ generateError() }}</p>
+      }
+      <button type="button" class="sd__generate-btn" [disabled]="isGenerating()" (click)="generateSystemDesign()">
+        @if (isGenerating()) {
+          <span class="sd__btn-spinner"></span> Generating system design…
+        } @else {
+          Generate System Design
+        }
+      </button>
+    </div>
+
+  } @else {
+
+    @if (partialFailureNotice()) {
+      <div class="sd__notice" role="status">{{ partialFailureNotice() }}</div>
+    }
+
+    <!-- Diagram tabs -->
+    <div class="sd__tabs-row">
+      <div class="sd__tabs" role="tablist">
+        @for (d of diagrams(); track d.diagramId) {
+          <button type="button" role="tab" class="sd__tab"
+            [class.sd__tab--active]="selectedId() === d.diagramId"
+            [attr.aria-selected]="selectedId() === d.diagramId"
+            (click)="selectTab(d.diagramId)">
+            @if (selectedId() === d.diagramId) {
+              <span class="sd__tab-dot"
+                [class.sd__tab-dot--approved]="d.status === 'APPROVED'"
+                [class.sd__tab-dot--failed]="d.status === 'FAILED'"></span>
+            }
+            {{ diagramTypeLabels[d.type] }}
+          </button>
+        }
+      </div>
+
+      <div class="sd__tabs-actions">
+        @if (approveError()) {
+          <p class="sd__inline-error" role="alert">{{ approveError() }}</p>
+        }
+        <button type="button" class="sd__approve-all-btn"
+          [disabled]="!hasPendingApproval() || isApprovingAll()"
+          (click)="approveAll()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {{ isApprovingAll() ? 'Approving…' : 'Approve design' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="sd__workspace">
+
+      <!-- Viewer -->
+      <div class="sd__viewer">
+        @if (selectedDiagram(); as diagram) {
+          @if (diagram.status === 'FAILED') {
+            <div class="sd__viewer-empty">
+              <p class="sd__viewer-empty-title">Generation failed</p>
+              @if (diagram.lastError) {
+                <p class="sd__viewer-empty-text">{{ diagram.lastError }}</p>
+              }
+              @if (regenerateError()) {
+                <p class="sd__inline-error" role="alert">{{ regenerateError() }}</p>
+              }
+              <button type="button" class="sd__retry-btn" [disabled]="isRegenerating()" (click)="retryDiagram(diagram.diagramId)">
+                @if (isRegenerating()) {
+                  <span class="sd__btn-spinner"></span> Retrying…
+                } @else {
+                  Retry
+                }
+              </button>
+            </div>
+          } @else {
+            <div class="sd__viewer-toolbar">
+              <button type="button" class="sd__zoom-btn" aria-label="Zoom out" (click)="zoomOut()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              </button>
+              <button type="button" class="sd__zoom-pct" (click)="resetZoom()" title="Reset zoom">{{ zoomPercent() }}</button>
+              <button type="button" class="sd__zoom-btn" aria-label="Zoom in" (click)="zoomIn()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              </button>
+              <button type="button" class="sd__zoom-btn sd__zoom-btn--fit" aria-label="Fit to screen" (click)="fitToScreen()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
+            </div>
+
+            <div class="sd__viewer-scroll" #scrollContainer
+              [class.sd__viewer-scroll--grabbing]="isPanning()"
+              (wheel)="onWheel($event)"
+              (mousedown)="onViewerMouseDown($event)">
+              @if (isImageLoading()) {
+                <div class="sd__viewer-loading"><div class="sd__spinner"></div></div>
+              } @else if (imageError()) {
+                <div class="sd__viewer-empty">
+                  <p class="sd__viewer-empty-text">{{ imageError() }}</p>
+                  <button type="button" class="sd__retry-btn" (click)="retryImageLoad()">Try again</button>
+                </div>
+              } @else if (currentImageUrl(); as url) {
+                <img #diagramImg class="sd__viewer-image"
+                  [src]="url"
+                  [alt]="diagramTypeLabels[diagram.type] + ' diagram'"
+                  draggable="false"
+                  [style.width.px]="imageWidth()"
+                  [style.height.px]="imageHeight()"
+                  (load)="onImageLoad($event)" />
+              }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Request changes -->
+      <aside class="sd__panel">
+        <div class="sd__panel-heading">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Request changes
+        </div>
+
+        @if (selectedDiagram(); as diagram) {
+          @if (diagram.status === 'APPROVED') {
+            <p class="sd__panel-desc">This diagram is approved and locked. Changes are no longer accepted.</p>
+          } @else if (diagram.status === 'FAILED') {
+            <p class="sd__panel-desc">This diagram failed to generate. Use Retry in the viewer before requesting changes.</p>
+          } @else {
+            <p class="sd__panel-desc">
+              Describe what should change on the <strong>{{ diagramTypeLabels[diagram.type] }}</strong>. Regeneration is only available once an instruction is provided.
+            </p>
+
+            <span class="sd__panel-label">Instruction for {{ diagramTypeLabels[diagram.type] }}</span>
+            <textarea class="sd__panel-textarea" rows="6"
+              placeholder="e.g. Split Pipeline into Pipeline and Stage classes; add audit log relation."
+              [value]="instructions()"
+              [disabled]="isRegenerating()"
+              (input)="onInstructionInput($event)"></textarea>
+
+            @if (regenerateError()) {
+              <p class="sd__inline-error" role="alert">{{ regenerateError() }}</p>
+            }
+
+            <button type="button" class="sd__regenerate-btn"
+              [class.sd__regenerate-btn--active]="canSubmitChange()"
+              [disabled]="!canSubmitChange() || isRegenerating()"
+              (click)="submitAndRegenerate()">
+              @if (isRegenerating()) {
+                <span class="sd__btn-spinner"></span> Regenerating…
+              } @else {
+                Submit &amp; regenerate diagram
+              }
+            </button>
+
+            @if (diagram.status === 'PENDING_APPROVAL') {
+              <button type="button" class="sd__approve-current-btn" [disabled]="isApproving()" (click)="approveCurrent()">
+                @if (isApproving()) {
+                  <span class="sd__btn-spinner"></span> Approving…
+                } @else {
+                  Approve this diagram
+                }
+              </button>
+            }
+          }
+        }
+      </aside>
+    </div>
+  }
+</div>
