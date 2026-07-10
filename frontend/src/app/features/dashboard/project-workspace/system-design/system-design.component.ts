@@ -95,9 +95,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   readonly instructions = signal('');
   readonly isRegenerating = signal(false);
   readonly regenerateError = signal<string | null>(null);
-  readonly canSubmitChange = computed(
-    () => this.instructions().trim().length > 0 && this.selectedDiagram()?.status !== 'APPROVED',
-  );
+  readonly canSubmitChange = computed(() => this.instructions().trim().length > 0);
 
   // ── Approve ───────────────────────────────────────────────────────────────
   readonly isApproving = signal(false);

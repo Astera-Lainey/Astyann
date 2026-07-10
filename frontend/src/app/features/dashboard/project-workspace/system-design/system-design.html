@@ -142,14 +142,18 @@
         </div>
 
         @if (selectedDiagram(); as diagram) {
-          @if (diagram.status === 'APPROVED') {
-            <p class="sd__panel-desc">This diagram is approved and locked. Changes are no longer accepted.</p>
-          } @else if (diagram.status === 'FAILED') {
+          @if (diagram.status === 'FAILED') {
             <p class="sd__panel-desc">This diagram failed to generate. Use Retry in the viewer before requesting changes.</p>
           } @else {
-            <p class="sd__panel-desc">
-              Describe what should change on the <strong>{{ diagramTypeLabels[diagram.type] }}</strong>. Regeneration is only available once an instruction is provided.
-            </p>
+            @if (diagram.status === 'APPROVED') {
+              <p class="sd__panel-desc">
+                This diagram is approved. Submitting an instruction will reopen it for editing and reset it to pending approval.
+              </p>
+            } @else {
+              <p class="sd__panel-desc">
+                Describe what should change on the <strong>{{ diagramTypeLabels[diagram.type] }}</strong>. Regeneration is only available once an instruction is provided.
+              </p>
+            }
 
             <span class="sd__panel-label">Instruction for {{ diagramTypeLabels[diagram.type] }}</span>
             <textarea class="sd__panel-textarea" rows="6"
