@@ -43,6 +43,8 @@ public class ProjectBackgroundService {
                 analysis = aiServiceClient.analyzeProjectInformation(projectId, syntheticFile);
             } catch (Exception ex) {
                 log.warn("AI analysis call failed for project={}: {}", projectId, ex.getMessage());
+                project.setStatus(ProjectStatus.FAILED);
+                projectRepository.save(project);
             }
 
             String extractedContext = analysis != null ? analysis.getExtractedContext() : null;
@@ -62,6 +64,8 @@ public class ProjectBackgroundService {
                 log.info("Requirements pipeline initialized for project={}", projectId);
             } catch (Exception ex) {
                 log.warn("RequirementService unavailable for project={}: {}", projectId, ex.getMessage());
+                project.setStatus(ProjectStatus.FAILED);
+                projectRepository.save(project);
             }
 
             log.info("Background processing completed for project={}", projectId);

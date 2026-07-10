@@ -6,7 +6,6 @@ import { ApiEnvelope } from '../models/auth.models';
 import {
   ClarificationQuestion,
   CreateProjectRequest,
-  GuidedQuestion,
   PatchFieldRequest,
   PcsfStatusResponse,
   PcsfValidateResponse,
@@ -14,8 +13,6 @@ import {
   ProjectSummary,
   SubmitAnswersRequest,
   SubmitAnswersResponseData,
-  SubmitGuidedQuestionsRequest,
-  SubmitGuidedQuestionsResponseData,
 } from '../models/project.models';
 
 @Injectable({ providedIn: 'root' })
@@ -95,44 +92,6 @@ export class ProjectService {
         map(() => undefined),
         tap(() => this._projectDeleted.next(projectId)),
       );
-  }
-
-  /**
-   * POST /api/v1/projects/{projectId}/generate
-   * Triggers a generation pipeline (REQUIREMENTS | DOCUMENTS | UML | CODE | DEPLOYMENT | FULL).
-   */
-  triggerGeneration(projectId: string, type: string): Observable<void> {
-    return this.http
-      .post<ApiEnvelope<void>>(`${this.baseUrl}/${projectId}/generate`, { type })
-      .pipe(map(() => undefined));
-  }
-
-  // ── Legacy Guided Questions (Sprint 2) ──────────────────────────────────────
-
-  /**
-   * GET /api/v1/projects/{projectId}/guided-questions
-   * Returns legacy AI-generated guided questions. Fallback when PCSF has no pending questions.
-   */
-  getGuidedQuestions(projectId: string): Observable<GuidedQuestion[]> {
-    return this.http
-      .get<ApiEnvelope<GuidedQuestion[]>>(`${this.baseUrl}/${projectId}/guided-questions`)
-      .pipe(map((res) => res.data));
-  }
-
-  /**
-   * POST /api/v1/projects/{projectId}/guided-questions/answers
-   * Submits answers to legacy guided questions.
-   */
-  submitGuidedQuestions(
-    projectId: string,
-    request: SubmitGuidedQuestionsRequest,
-  ): Observable<SubmitGuidedQuestionsResponseData> {
-    return this.http
-      .post<ApiEnvelope<SubmitGuidedQuestionsResponseData>>(
-        `${this.baseUrl}/${projectId}/guided-questions/answers`,
-        request,
-      )
-      .pipe(map((res) => res.data));
   }
 
   // ── PCSF Clarification Questions ────────────────────────────────────────────
@@ -219,13 +178,11 @@ export class ProjectService {
       .pipe(map(() => undefined));
   }
 
-  // ── Template Download ────────────────────────────────────────────────────────
-
   /**
-   * GET /api/v1/requirements/template
-   * Downloads the Astyann project specification template DOCX from the backend.
+   * POST /api/v1/projects/{projectId}/retry-analysis
+   * Resets the Project's own status back to ANALYZING after a FAILED background run.
    */
-  downloadTemplate(): Observable<Blob> {
-    return this.http.get(`${this.requirementsBaseUrl}/template`, { responseType: 'blob' });
+  resetProjectStatus(projectId: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${projectId}/retry-analysis`, {});
   }
 }

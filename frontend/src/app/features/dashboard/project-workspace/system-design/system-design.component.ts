@@ -11,12 +11,12 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
 import { DiagramService } from '../../../../core/services/diagram.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import {
   ALL_DIAGRAM_TYPES,
   DIAGRAM_TYPE_LABELS,
-  DiagramFailure,
   DiagramListItem,
   DiagramStatus,
   DiagramSummary,
@@ -105,6 +105,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   readonly approveError = signal<string | null>(null);
 
   private lastLoadedProjectId: string | null = null;
+  private pollSub: Subscription | null = null;
 
   constructor(
     private readonly diagramService: DiagramService,
@@ -122,6 +123,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.pollSub?.unsubscribe();
     this.blobUrlCache.forEach((url) => URL.revokeObjectURL(url));
     this.blobUrlCache.clear();
     this.stopPanning();
@@ -138,6 +140,12 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
         this.diagrams.set(vms);
         this.isLoadingList.set(false);
         if (vms.length > 0) this.selectTab(vms[0].diagramId);
+        // Generation may already be in progress from an earlier visit (e.g.
+        // the user reloaded the page mid-generation) — resume polling.
+        if (vms.some((d) => d.status === 'GENERATING')) {
+          this.isGenerating.set(true);
+          this.pollGenerationUntilSettled();
+        }
       },
       error: () => {
         this.isLoadingList.set(false);
@@ -150,11 +158,11 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.loadDiagrams();
   }
 
-  private toVm = (item: DiagramListItem | DiagramSummary | DiagramFailure): DiagramVm => ({
+  private toVm = (item: DiagramListItem | DiagramSummary): DiagramVm => ({
     diagramId: item.diagramId,
     type: item.type,
-    status: 'status' in item ? item.status : 'FAILED',
-    lastError: 'lastError' in item ? item.lastError : (item as DiagramFailure).reason,
+    status: item.status,
+    lastError: item.lastError,
   });
 
   // ── Generate (empty-state flow) ──────────────────────────────────────────
@@ -167,19 +175,56 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
 
     this.diagramService.generate(this.projectId, { diagramTypes: ALL_DIAGRAM_TYPES, renderFormat: 'SVG' }).subscribe({
       next: (data) => {
-        const succeeded = data.diagrams.map(this.toVm);
-        const failed = data.failures.map(this.toVm);
-        const merged = [...succeeded, ...failed].sort(byCanonicalOrder);
-        this.diagrams.set(merged);
-        this.isGenerating.set(false);
-        this.partialFailureNotice.set(this.describePartialResult(succeeded.length, failed, merged));
-        if (merged.length > 0) this.selectTab(merged[0].diagramId);
+        const placeholders = data.diagrams.map(this.toVm).sort(byCanonicalOrder);
+        this.diagrams.set(placeholders);
+        if (placeholders.length > 0) this.selectTab(placeholders[0].diagramId);
+        this.pollGenerationUntilSettled();
       },
       error: (err: HttpErrorResponse) => {
         this.isGenerating.set(false);
         this.generateError.set(this.describeGenerateError(err));
       },
     });
+  }
+
+  /**
+   * Generation runs in the background on the server — this polls the list
+   * endpoint until no diagram is left in GENERATING status, refreshing tabs
+   * (and the viewer, once the selected diagram settles) on every tick.
+   */
+  private pollGenerationUntilSettled(): void {
+    this.pollSub?.unsubscribe();
+    this.pollSub = timer(0, 2500)
+      .pipe(
+        switchMap(() => this.diagramService.list(this.projectId)),
+        takeWhile((items) => items.some((d) => d.status === 'GENERATING'), true),
+      )
+      .subscribe({
+        next: (items) => {
+          const vms = items.map(this.toVm).sort(byCanonicalOrder);
+          this.diagrams.set(vms);
+
+          const stillGenerating = vms.some((d) => d.status === 'GENERATING');
+          if (!stillGenerating) {
+            this.isGenerating.set(false);
+            const failed = vms.filter((d) => d.status === 'FAILED');
+            this.partialFailureNotice.set(
+              this.describePartialResult(vms.length - failed.length, failed, vms),
+            );
+          }
+
+          // Once the selected tab's diagram leaves GENERATING, load its
+          // rendered image so the viewer doesn't stay stuck on the empty state.
+          const selected = vms.find((d) => d.diagramId === this.selectedId());
+          if (selected && selected.status !== 'GENERATING' && selected.status !== 'FAILED' && !this.currentImageUrl()) {
+            this.loadImageFor(selected.diagramId, false);
+          }
+        },
+        error: () => {
+          this.isGenerating.set(false);
+          this.generateError.set('Lost track of generation progress. Please refresh and try again.');
+        },
+      });
   }
 
   private describeGenerateError(err: HttpErrorResponse): string {
@@ -189,11 +234,9 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * The generate response only lists types that either succeeded or came
-   * back as an explicit failure — a type can also silently not come back
-   * at all (a downstream save/render error the backend didn't attribute to
-   * any diagram). Surface that gap too, not just the failures[] the backend
-   * reported, so a shorter tab list is never left unexplained.
+   * Every requested type gets a GENERATING placeholder up front, so a type
+   * silently not coming back at all should no longer happen under normal
+   * operation — this check is kept as a defensive safety net regardless.
    */
   private describePartialResult(succeededCount: number, failed: DiagramVm[], merged: DiagramVm[]): string | null {
     const returnedTypes = new Set(merged.map((d) => d.type));
@@ -219,9 +262,10 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.resetZoomState();
 
     const diagram = this.diagrams().find((d) => d.diagramId === diagramId);
-    if (!diagram || diagram.status === 'FAILED') {
-      // A FAILED diagram has no reliable rendered image server-side — show
-      // the failure state instead of issuing a render call we expect to fail.
+    if (!diagram || diagram.status === 'FAILED' || diagram.status === 'GENERATING') {
+      // A FAILED diagram has no reliable rendered image server-side, and a
+      // GENERATING one doesn't have one yet — show the appropriate state
+      // instead of issuing a render call we expect to fail.
       this.currentImageUrl.set(null);
       this.imageError.set(null);
       return;
@@ -412,7 +456,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
 
     this.isApproving.set(true);
     this.approveError.set(null);
-    this.diagramService.approve(this.projectId, { diagramIds: [diagram.diagramId] }).subscribe({
+    this.diagramService.approveOne(this.projectId, diagram.diagramId).subscribe({
       next: () => {
         this.isApproving.set(false);
         this.markApproved([diagram.diagramId]);

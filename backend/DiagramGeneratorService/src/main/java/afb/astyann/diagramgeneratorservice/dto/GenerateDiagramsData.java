@@ -10,5 +10,4 @@ import java.util.List;
 @Data @Builder @AllArgsConstructor @NoArgsConstructor
 public class GenerateDiagramsData {
     private List<DiagramSummaryDTO> diagrams;
-    private List<DiagramFailureDTO> failures;
 }

@@ -13,7 +13,7 @@ export type DiagramType =
   | 'PACKAGE'
   | 'ENTITY_RELATIONSHIP';
 
-export type DiagramStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'FAILED';
+export type DiagramStatus = 'GENERATING' | 'PENDING_APPROVAL' | 'APPROVED' | 'FAILED';
 
 export type RenderFormat = 'SVG' | 'PNG';
 
@@ -56,22 +56,18 @@ export interface DiagramListItem {
   lastError: string | null;
 }
 
-/** Mirrors DiagramFailureDTO. */
-export interface DiagramFailure {
-  diagramId: string;
-  type: DiagramType;
-  reason: string;
-}
-
 export interface GenerateDiagramsRequest {
   diagramTypes?: DiagramType[];
   renderFormat?: RenderFormat;
 }
 
-/** Mirrors GenerateDiagramsData. */
+/**
+ * Mirrors GenerateDiagramsData. The endpoint responds immediately (202) with
+ * every requested type as a GENERATING placeholder — it does not wait for
+ * generation to finish. Poll DiagramService.list() until none are GENERATING.
+ */
 export interface GenerateDiagramsData {
   diagrams: DiagramSummary[];
-  failures: DiagramFailure[];
 }
 
 export interface RegenerateDiagramRequest {

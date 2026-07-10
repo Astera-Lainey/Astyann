@@ -102,11 +102,14 @@
     &:hover { color: shared.$slate-900; }
   }
 }
+@keyframes sd-pulse { 50% { opacity: 0.35; } }
+
 .sd__tab-dot {
   width: 0.4375rem; height: 0.4375rem; border-radius: 50%; flex-shrink: 0;
-  background-color: #d97706; // pending — amber
-  &--approved { background-color: #16a34a; }
-  &--failed   { background-color: #dc2626; }
+  background-color: #d97706; // pending approval — amber
+  &--approved   { background-color: #16a34a; }
+  &--failed     { background-color: #dc2626; }
+  &--generating { background-color: shared.$slate-400; animation: sd-pulse 1.2s ease-in-out infinite; }
 }
 
 // ── Workspace layout ──────────────────────────────────────────────────────

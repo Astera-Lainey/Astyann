@@ -1,7 +1,5 @@
 package afb.astyann.aiorchestrator.service.impl;
 
-import afb.astyann.aiorchestrator.client.MetaModelServiceClient;
-import afb.astyann.aiorchestrator.client.RAGServiceClient;
 import afb.astyann.aiorchestrator.domain.AIRequest;
 import afb.astyann.aiorchestrator.domain.AIResponse;
 import afb.astyann.aiorchestrator.domain.AITaskType;
@@ -19,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,66 +38,10 @@ public class AIServiceImpl implements IAIService {
             Respond ONLY with valid JSON — no markdown, no explanation outside the JSON.
             """;
 
-    private final RAGServiceClient        ragClient;
-    private final MetaModelServiceClient  metaModelClient;
     private final AIProviderRouter        providerRouter;
     private final OllamaProvider          ollamaProvider;
     private final DocumentParserService   documentParserService;
     private final ObjectMapper            objectMapper;
-
-    // ── Generate Content ──────────────────────────────────────────────────────
-
-    @Override
-    public AIResponseDTO generateContent(AIRequestDTO request) {
-        log.info("generateContent projectId={} taskType={}", request.getProjectId(), request.getTaskType());
-
-        String context  = fetchContext(request.getProjectId(), request.getPrompt());
-        String template = fetchTemplate(request.getTaskType());
-        String fullPrompt = buildPrompt(template, request.getPrompt(), context);
-
-        AIResponse response = route(request.getProjectId(), request.getTaskType(), fullPrompt,
-                ProviderConfig.builder().build());
-        return toDTO(response);
-    }
-
-    // ── Analyze Requirements ──────────────────────────────────────────────────
-
-    @Override
-    public AIResponseDTO analyzeRequirements(AnalyzeRequestDTO request) {
-        log.info("analyzeRequirements projectId={}", request.getProjectId());
-        String prompt = "Analyze the following project information and extract structured software requirements:\n\n"
-                + request.getRawInput();
-        AIResponse response = route(request.getProjectId(), AITaskType.ANALYZE_REQUIREMENTS, prompt,
-                ProviderConfig.builder().build());
-        return toDTO(response);
-    }
-
-    // ── Validate Content ─────────────────────────────────────────────────────
-
-    @Override
-    public AIResponseDTO validateContent(ValidateRequestDTO request) {
-        log.info("validateContent projectId={}", request.getProjectId());
-        String rules  = request.getRules() != null ? request.getRules() : "standard software quality rules";
-        String prompt = "Validate the following content against these rules: " + rules
-                + "\n\nContent to validate:\n" + request.getContent();
-        AIResponse response = route(request.getProjectId(), AITaskType.VALIDATE_CONTENT, prompt,
-                ProviderConfig.builder().build());
-        return toDTO(response);
-    }
-
-    // ── Retrieve Context ──────────────────────────────────────────────────────
-
-    @Override
-    public ContextResponseDTO retrieveContext(ContextRequestDTO request) {
-        log.info("retrieveContext projectId={} query={}", request.getProjectId(), request.getQuery());
-        String context = safeCall("RAG context",
-                () -> ragClient.retrieveContext(request.getProjectId(), request.getQuery(), request.getTopK()),
-                "");
-        List<String> sources = safeCall("RAG sources",
-                () -> ragClient.getSources(request.getProjectId(), request.getQuery()),
-                Collections.emptyList());
-        return ContextResponseDTO.builder().context(context).sources(sources).build();
-    }
 
     // ── Analyze Project Document ──────────────────────────────────────────────
 
@@ -198,30 +139,6 @@ public class AIServiceImpl implements IAIService {
         return providerRouter.route(request);
     }
 
-    private AIResponseDTO toDTO(AIResponse response) {
-        return AIResponseDTO.builder()
-                .responseId(response.getResponseId())
-                .content(response.getContent())
-                .providerName(response.getProviderName())
-                .tokensUsed(response.getTokensUsed())
-                .build();
-    }
-
-    private String fetchContext(UUID projectId, String query) {
-        return safeCall("RAG context", () -> ragClient.retrieveContext(projectId, query, 5), "");
-    }
-
-    private String fetchTemplate(AITaskType taskType) {
-        return safeCall("MetaModel template", () -> metaModelClient.getPromptTemplate(taskType), "");
-    }
-
-    private String buildPrompt(String template, String userPrompt, String context) {
-        if (template == null || template.isBlank()) {
-            return context.isBlank() ? userPrompt : userPrompt + "\n\nContext:\n" + context;
-        }
-        return template.replace("{prompt}", userPrompt).replace("{context}", context);
-    }
-
     private ProjectAnalysisResponseDTO parseAnalysisResponse(UUID projectId, String llmContent,
                                                                String documentText) {
         try {
@@ -260,16 +177,6 @@ public class AIServiceImpl implements IAIService {
                             "What are the most important features?"))
                     .documentText(documentText)
                     .build();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T safeCall(String name, java.util.concurrent.Callable<T> call, T fallback) {
-        try {
-            return call.call();
-        } catch (Exception ex) {
-            log.warn("{} unavailable: {}", name, ex.getMessage());
-            return fallback;
         }
     }
 }

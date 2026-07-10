@@ -1,0 +1,80 @@
+<div class="vh">
+  @if (isLoadingList()) {
+    <div class="vh__placeholder">
+      <div class="vh__spinner"></div>
+      <p class="vh__placeholder-text">Loading version history…</p>
+    </div>
+  } @else if (listError()) {
+    <div class="vh__placeholder">
+      <p class="vh__placeholder-text vh__placeholder-text--error">{{ listError() }}</p>
+      <button type="button" class="vh__retry-btn" (click)="retryLoadTimeline()">Try again</button>
+    </div>
+  } @else if (snapshots().length === 0) {
+    <div class="vh__placeholder">
+      <h3 class="vh__placeholder-title">No versions yet</h3>
+      <p class="vh__placeholder-text">Snapshots appear here once diagrams or requirements are approved.</p>
+    </div>
+  } @else {
+    <div class="vh__layout">
+      <ul class="vh__list">
+        @for (snap of snapshots(); track snap.snapId) {
+          <li>
+            <button
+              type="button"
+              class="vh__list-item"
+              [class.vh__list-item--active]="snap.snapId === selectedSnapId()"
+              (click)="selectSnapshot(snap.snapId)"
+            >
+              <span class="vh__list-item__version">v{{ snap.versionNumber }}</span>
+              <span class="vh__list-item__name">{{ snap.versionName || snap.artifactType }}</span>
+              <span class="vh__list-item__date">{{ snap.snapDate | date: 'medium' }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+
+      <div class="vh__detail">
+        @if (isLoadingDetail()) {
+          <div class="vh__placeholder">
+            <div class="vh__spinner"></div>
+            <p class="vh__placeholder-text">Loading snapshot…</p>
+          </div>
+        } @else if (detailError()) {
+          <div class="vh__placeholder">
+            <p class="vh__placeholder-text vh__placeholder-text--error">{{ detailError() }}</p>
+            <button type="button" class="vh__retry-btn" (click)="retryLoadDetail()">Try again</button>
+          </div>
+        } @else if (selectedSnapshot(); as snap) {
+          <div class="vh__detail-header">
+            <h3 class="vh__detail-title">{{ snap.versionName || ('Version ' + snap.versionNumber) }}</h3>
+            @if (snap.active) {
+              <span class="vh__badge">Active</span>
+            }
+          </div>
+          <dl class="vh__detail-fields">
+            <dt>Type</dt>
+            <dd>{{ snap.artifactType }}</dd>
+            <dt>Snapshot date</dt>
+            <dd>{{ snap.snapDate | date: 'medium' }}</dd>
+            @if (snap.triggerReason) {
+              <dt>Trigger</dt>
+              <dd>{{ snap.triggerReason }}</dd>
+            }
+            @if (snap.diagramType) {
+              <dt>Diagram type</dt>
+              <dd>{{ snap.diagramType }}</dd>
+            }
+            @if (snap.documentType) {
+              <dt>Document type</dt>
+              <dd>{{ snap.documentType }}</dd>
+            }
+            @if (snap.codeLayer) {
+              <dt>Code layer</dt>
+              <dd>{{ snap.codeLayer }}</dd>
+            }
+          </dl>
+        }
+      </div>
+    </div>
+  }
+</div>

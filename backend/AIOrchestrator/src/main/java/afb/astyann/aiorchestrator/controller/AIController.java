@@ -18,38 +18,6 @@ public class AIController {
 
     private final IAIService aiService;
 
-    @PostMapping("/generate")
-    public ResponseEntity<ApiResponse<AIResponseDTO>> generateContent(
-            @Valid @RequestBody AIRequestDTO dto) {
-        AIResponseDTO data = aiService.generateContent(dto);
-        return ResponseEntity.ok(ApiResponse.<AIResponseDTO>builder()
-                .status(200).message("Content generated successfully.").data(data).build());
-    }
-
-    @PostMapping("/analyze")
-    public ResponseEntity<ApiResponse<AIResponseDTO>> analyzeRequirements(
-            @Valid @RequestBody AnalyzeRequestDTO dto) {
-        AIResponseDTO data = aiService.analyzeRequirements(dto);
-        return ResponseEntity.ok(ApiResponse.<AIResponseDTO>builder()
-                .status(200).message("Requirements analyzed successfully.").data(data).build());
-    }
-
-    @PostMapping("/validate")
-    public ResponseEntity<ApiResponse<AIResponseDTO>> validateContent(
-            @Valid @RequestBody ValidateRequestDTO dto) {
-        AIResponseDTO data = aiService.validateContent(dto);
-        return ResponseEntity.ok(ApiResponse.<AIResponseDTO>builder()
-                .status(200).message("Content validated successfully.").data(data).build());
-    }
-
-    @PostMapping("/context")
-    public ResponseEntity<ApiResponse<ContextResponseDTO>> retrieveContext(
-            @Valid @RequestBody ContextRequestDTO dto) {
-        ContextResponseDTO data = aiService.retrieveContext(dto);
-        return ResponseEntity.ok(ApiResponse.<ContextResponseDTO>builder()
-                .status(200).message("Context retrieved successfully.").data(data).build());
-    }
-
     @PostMapping(value = "/projects/{projectId}/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProjectAnalysisResponseDTO> analyzeProjectDocument(
             @PathVariable UUID projectId,

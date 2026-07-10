@@ -15,10 +15,7 @@ import afb.astyann.requirementservice.util.PcsfFieldWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -234,29 +231,6 @@ public class RequirementController {
         return ResponseEntity.accepted()
                 .body(ApiResponse.<Void>builder()
                         .status(202).message("Retry started. Poll /pcsf/status for updates.").build());
-    }
-
-    // ── Template download ──────────────────────────────────────────────────────
-
-    /**
-     * GET /api/v1/requirements/template
-     */
-    @GetMapping("/template")
-    public ResponseEntity<byte[]> downloadTemplate() {
-        try {
-            ClassPathResource resource = new ClassPathResource(
-                    "templates/Astyann_Project_Specification_Template.docx");
-            if (!resource.exists()) return ResponseEntity.notFound().build();
-            byte[] bytes = resource.getInputStream().readAllBytes();
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"Astyann_Project_Specification_Template.docx\"")
-                    .contentType(MediaType.parseMediaType(
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-                    .body(bytes);
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

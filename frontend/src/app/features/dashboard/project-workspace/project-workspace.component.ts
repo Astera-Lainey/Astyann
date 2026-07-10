@@ -7,6 +7,7 @@ import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../..
 import { ToastService } from '../../../core/services/toast.service';
 import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
 import { SystemDesignComponent } from './system-design/system-design.component';
+import { VersionHistoryComponent } from './version-history/version-history.component';
 
 export type WorkspaceSection =
   | 'requirements'
@@ -30,7 +31,7 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
 @Component({
   selector: 'app-project-workspace-page',
   standalone: true,
-  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent],
+  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent, VersionHistoryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-workspace.component.html',
   styleUrl: './project-workspace.component.scss',
@@ -127,19 +128,21 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     const pid = this.projectId;
     this.isRetrying.set(true);
     this.retryError.set(null);
-    this.projectService.retryInference(pid).subscribe({
-      next: () => {
-        this.isRetrying.set(false);
-        this.pcsfStatus.set('INFERRING');
-        this.startStatusPolling();
-      },
-      error: (error: HttpErrorResponse) => {
-        this.isRetrying.set(false);
-        this.retryError.set(
-          error.error?.error ?? 'Could not retry analysis. Please try again.',
-        );
-      },
-    });
+    this.projectService
+      .resetProjectStatus(pid)
+      .pipe(switchMap(() => this.projectService.retryInference(pid)))
+      .subscribe({
+        next: () => {
+          this.isRetrying.set(false);
+          this.startStatusPolling();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.isRetrying.set(false);
+          this.retryError.set(
+            error.error?.error ?? 'Could not retry analysis. Please try again.',
+          );
+        },
+      });
   }
 
   // ── Status polling ──────────────────────────────────────────────────────────

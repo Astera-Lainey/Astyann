@@ -50,11 +50,10 @@
             [class.sd__tab--active]="selectedId() === d.diagramId"
             [attr.aria-selected]="selectedId() === d.diagramId"
             (click)="selectTab(d.diagramId)">
-            @if (selectedId() === d.diagramId) {
-              <span class="sd__tab-dot"
-                [class.sd__tab-dot--approved]="d.status === 'APPROVED'"
-                [class.sd__tab-dot--failed]="d.status === 'FAILED'"></span>
-            }
+            <span class="sd__tab-dot"
+              [class.sd__tab-dot--approved]="d.status === 'APPROVED'"
+              [class.sd__tab-dot--failed]="d.status === 'FAILED'"
+              [class.sd__tab-dot--generating]="d.status === 'GENERATING'"></span>
             {{ diagramTypeLabels[d.type] }}
           </button>
         }
@@ -78,7 +77,13 @@
       <!-- Viewer -->
       <div class="sd__viewer">
         @if (selectedDiagram(); as diagram) {
-          @if (diagram.status === 'FAILED') {
+          @if (diagram.status === 'GENERATING') {
+            <div class="sd__viewer-empty">
+              <div class="sd__spinner"></div>
+              <p class="sd__viewer-empty-title">Generating {{ diagramTypeLabels[diagram.type] }}…</p>
+              <p class="sd__viewer-empty-text">This can take a moment. The other tabs will keep updating as they finish.</p>
+            </div>
+          } @else if (diagram.status === 'FAILED') {
             <div class="sd__viewer-empty">
               <p class="sd__viewer-empty-title">Generation failed</p>
               @if (diagram.lastError) {
@@ -142,7 +147,9 @@
         </div>
 
         @if (selectedDiagram(); as diagram) {
-          @if (diagram.status === 'APPROVED') {
+          @if (diagram.status === 'GENERATING') {
+            <p class="sd__panel-desc">This diagram is still generating. Changes can be requested once it finishes.</p>
+          } @else if (diagram.status === 'APPROVED') {
             <p class="sd__panel-desc">This diagram is approved and locked. Changes are no longer accepted.</p>
           } @else if (diagram.status === 'FAILED') {
             <p class="sd__panel-desc">This diagram failed to generate. Use Retry in the viewer before requesting changes.</p>

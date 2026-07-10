@@ -1432,14 +1432,6 @@ POST
 
 Retries the AI\-inference stage after a FAILED status, without requiring a new project\.
 
-API\-REQ\-12
-
-GET
-
-/api/v1/requirements/template
-
-Downloads the Astyann project specification template \(\.docx\)\.
-
 ### <a id="_Toc232406769"></a>__Endpoint Detail — Functional Specifications \(Requirements\)__
 
 __POST__
@@ -2089,40 +2081,6 @@ JWT required
 __Idempotent__
 
 No
-
-__GET__
-
-__/api/v1/requirements/template__
-
-__API\-REQ\-12__
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response__
-
-Binary \.docx file \(Content\-Type: application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found \(template resource missing\)
-
-__FR Covered__
-
-FR\-09
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
 
 ## <a id="_Toc232406900"></a>__RAG Service__
 

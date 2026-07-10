@@ -129,7 +129,7 @@
               <p class="workspace__error" role="alert">{{ retryError() }}</p>
             }
           </div>
-        } @else if (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED') {
+        } @else if (pendingQuestionsCount() === 0 && (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED')) {
           <app-requirements-view
             [projectId]="project.projectId"
             [pcsfStatus]="pcsfStatus()"
@@ -140,6 +140,8 @@
             <p class="workspace__placeholder-text">
               @if (pcsfStatus() === 'INFERRING') {
                 Running AI analysis on your project…
+              } @else if (pcsfStatus() === 'UNDER_REVIEW' && pendingQuestionsCount() > 0) {
+                Waiting for your answers to the clarification questions…
               } @else {
                 Analysing your document…
               }
@@ -150,6 +152,8 @@
         <app-system-design
           [projectId]="project.projectId"
           [pcsfApproved]="pcsfStatus() === 'APPROVED'" />
+      } @else if (section() === 'versions') {
+        <app-version-history [projectId]="project.projectId" />
       } @else {
         <div class="workspace__placeholder">
           <p class="workspace__placeholder-text">This view is coming soon.</p>

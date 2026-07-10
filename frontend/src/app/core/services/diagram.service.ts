@@ -34,9 +34,10 @@ export class DiagramService {
 
   /**
    * POST /api/v1/uml/{projectId}/generate
-   * Synchronous and blocking — resolves only once every requested diagram
-   * type has succeeded or exhausted retries. No polling counterpart exists.
-   * Requires PCSF status APPROVED (422 otherwise).
+   * Asynchronous — responds immediately (202) with every requested type
+   * saved as a GENERATING placeholder; it does not wait for the AI+Kroki
+   * pipelines to finish. Callers must poll list() until no diagram is left
+   * in GENERATING status. Requires PCSF status APPROVED (422 otherwise).
    */
   generate(projectId: string, request: GenerateDiagramsRequest = {}): Observable<GenerateDiagramsData> {
     return this.http
@@ -85,6 +86,17 @@ export class DiagramService {
   approve(projectId: string, request: ApproveDiagramsRequest = {}): Observable<ApproveDiagramsResponse> {
     return this.http
       .post<ApiEnvelope<ApproveDiagramsResponse>>(`${this.baseUrl}/${projectId}/approve`, request)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * POST /api/v1/uml/{projectId}/{diagramId}/approve
+   * Approves a single diagram directly via its dedicated endpoint (distinct
+   * from the bulk approve() above, which this call does not use).
+   */
+  approveOne(projectId: string, diagramId: string): Observable<DiagramSummary> {
+    return this.http
+      .post<ApiEnvelope<DiagramSummary>>(`${this.baseUrl}/${projectId}/${diagramId}/approve`, {})
       .pipe(map((res) => res.data));
   }
 

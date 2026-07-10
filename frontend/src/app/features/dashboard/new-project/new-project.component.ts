@@ -1,13 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ProjectService } from '../../../core/services/project.service';
 import { ToastService } from '../../../core/services/toast.service';
-import {
-  ClarificationQuestion,
-  GuidedQuestion,
-} from '../../../core/models/project.models';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { SparkleIconComponent } from '../../../shared/components/sparkle-icon/sparkle-icon.component';
 
@@ -31,20 +27,16 @@ export class NewProjectComponent {
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
 
-  readonly step = signal<'brief' | 'questions'>('brief');
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly selectedFile = signal<File | null>(null);
   readonly fileError = signal<string | null>(null);
   readonly projectId = signal<string | null>(null);
-  readonly guidedQuestions = signal<GuidedQuestion[]>([]);
 
   readonly briefForm = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.minLength(2)]],
     description: ['', [Validators.required, Validators.minLength(10)]],
   });
-
-  questionControls: Record<string, FormControl<string>> = {};
 
   // ── Template download ──
   downloadTemplate(): void {
@@ -52,102 +44,6 @@ export class NewProjectComponent {
     a.href = '/assets/AstyannTemplate.docx';
     a.download = 'AstyannTemplate.docx';
     a.click();
-  }
-
-  // ── Q&A Modal (PCSF clarification questions) ──
-  readonly showQuestionsModal = signal(false);
-  readonly submittingAnswers = signal(false);
-  readonly submitError = signal<string | null>(null);
-
-  questions: ClarificationQuestion[] = [];
-  currentIndex = 0;
-  answers = new Map<string, string>();
-
-  get currentQuestion(): ClarificationQuestion {
-    return this.questions[this.currentIndex];
-  }
-
-  get isFirst(): boolean {
-    return this.currentIndex === 0;
-  }
-
-  get isLast(): boolean {
-    return this.currentIndex === this.questions.length - 1;
-  }
-
-  get currentAnswer(): string {
-    return this.answers.get(this.currentQuestion.id) ?? '';
-  }
-
-  get progressPercent(): number {
-    return ((this.currentIndex + 1) / this.questions.length) * 100;
-  }
-
-  setAnswer(value: string): void {
-    this.answers.set(this.currentQuestion.id, value);
-  }
-
-  onInput(event: Event): void {
-    this.setAnswer((event.target as HTMLInputElement).value);
-  }
-
-  onTextareaInput(event: Event): void {
-    this.setAnswer((event.target as HTMLTextAreaElement).value);
-  }
-
-  goBack(): void {
-    if (!this.isFirst) this.currentIndex--;
-  }
-
-  goNext(): void {
-    if (!this.isLast) this.currentIndex++;
-  }
-
-  toggleMultiSelect(option: string): void {
-    const current = this.getMultiSelectOptions();
-    const idx = current.indexOf(option);
-    if (idx >= 0) {
-      current.splice(idx, 1);
-    } else {
-      current.push(option);
-    }
-    this.answers.set(this.currentQuestion.id, current.join(','));
-  }
-
-  getMultiSelectOptions(): string[] {
-    return (this.answers.get(this.currentQuestion.id) ?? '').split(',').filter(Boolean);
-  }
-
-  isMultiSelected(option: string): boolean {
-    return this.getMultiSelectOptions().includes(option);
-  }
-
-  submitAnswers(): void {
-    this.submitError.set(null);
-    this.submittingAnswers.set(true);
-    const currentProjectId = this.projectId();
-    if (!currentProjectId) {
-      this.submitError.set('Something went wrong — please start over.');
-      this.submittingAnswers.set(false);
-      return;
-    }
-    const payload = {
-      answers: Array.from(this.answers.entries()).map(([questionId, answer]) => ({
-        questionId,
-        answer,
-      })),
-    };
-    this.projectService.submitAnswers(currentProjectId, payload).subscribe({
-      next: () => {
-        this.submittingAnswers.set(false);
-        this.showQuestionsModal.set(false);
-        this.router.navigate(['/app/projects', currentProjectId, 'review']);
-      },
-      error: () => {
-        this.submittingAnswers.set(false);
-        this.submitError.set('Something went wrong. Please try again.');
-      },
-    });
   }
 
   // ── Getters ──
@@ -208,65 +104,6 @@ export class NewProjectComponent {
         } else {
           this.errorMessage.set('Something went wrong. Please try again later.');
         }
-      },
-    });
-  }
-
-  onSubmitQuestions(): void {
-    this.errorMessage.set(null);
-    const currentProjectId = this.projectId();
-    if (!currentProjectId) { this.errorMessage.set('Something went wrong — please start over.'); return; }
-    const controls = Object.values(this.questionControls);
-    if (!controls.every((c) => c.valid)) { controls.forEach((c) => c.markAsTouched()); return; }
-    this.isSubmitting.set(true);
-    const answers = Object.entries(this.questionControls).map(([gqId, control]) => ({ gqId, answer: control.value }));
-    this.projectService.submitGuidedQuestions(currentProjectId, { answers }).subscribe({
-      next: () => {
-        this.isSubmitting.set(false);
-        this.router.navigate(['/app/projects', currentProjectId, 'requirements']);
-      },
-      error: () => {
-        this.isSubmitting.set(false);
-        this.errorMessage.set('Something went wrong. Please try again later.');
-      },
-    });
-  }
-
-  private openQuestionsModal(projectId: string): void {
-    this.showQuestionsModal.set(true);
-    this.projectService.getQuestions(projectId).subscribe({
-      next: (questions) => {
-        this.questions = questions;
-        this.currentIndex = 0;
-        this.answers = new Map<string, string>();
-        this.submitError.set(null);
-      },
-      error: () => {
-        this.showQuestionsModal.set(false);
-        this.errorMessage.set('Failed to load questions. Please try again.');
-      },
-    });
-  }
-
-  private loadGuidedQuestions(projectId: string): void {
-    this.projectService.getGuidedQuestions(projectId).subscribe({
-      next: (questions) => {
-        if (questions.length > 0) {
-          this.guidedQuestions.set(questions);
-          this.questionControls = Object.fromEntries(
-            questions.map((q) => [
-              q.gqId,
-              new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-            ]),
-          );
-          this.step.set('questions');
-        } else {
-          this.router.navigate(['/app/projects', projectId, 'requirements']);
-        }
-      },
-      error: () => {
-        // No guided questions available — navigate directly to workspace.
-        this.router.navigate(['/app/projects', projectId, 'requirements']);
       },
     });
   }

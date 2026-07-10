@@ -9,7 +9,6 @@ import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsRequest;
 import afb.astyann.diagramgeneratorservice.dto.ApproveDiagramsResponse;
 import afb.astyann.diagramgeneratorservice.dto.ChangeRequestBody;
 import afb.astyann.diagramgeneratorservice.dto.ChangeRequestResponse;
-import afb.astyann.diagramgeneratorservice.dto.DiagramFailureDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListData;
 import afb.astyann.diagramgeneratorservice.dto.DiagramListItemDTO;
 import afb.astyann.diagramgeneratorservice.dto.DiagramSummaryDTO;
@@ -34,31 +33,27 @@ public class UMLDiagramController {
 
     private final DiagramGenerationService service;
 
+    /**
+     * Starts generation and returns immediately with every requested diagram type in
+     * GENERATING status — it does not wait for the AI+Kroki pipelines to finish. Poll
+     * GET /{projectId} until no diagram is left in GENERATING to find out how each one
+     * turned out (PENDING_APPROVAL or FAILED, with lastError set on failure).
+     */
     @PostMapping("/{projectId}/generate")
     public ResponseEntity<ApiResponse<GenerateDiagramsData>> generate(
             @PathVariable String projectId,
             @RequestBody(required = false) GenerateDiagramsRequest body) {
         UUID id = parseId(projectId);
-        DiagramGenerationService.GenerationOutcome outcome = service.generateDiagrams(
+        List<UMLDiagram> placeholders = service.startGeneration(
                 id, body != null ? body : new GenerateDiagramsRequest());
 
-        List<DiagramSummaryDTO> dtos = outcome.succeeded().stream().map(d -> toSummary(id, d)).toList();
-        List<DiagramFailureDTO> failureDtos = outcome.failed().stream()
-                .map(d -> DiagramFailureDTO.builder()
-                        .diagramId(d.getDiagramId())
-                        .type(d.getType())
-                        .reason(d.getLastError())
-                        .build())
-                .toList();
-        String message = failureDtos.isEmpty()
-                ? "Diagrams generated."
-                : "Diagrams generated with " + failureDtos.size() + " failure(s).";
+        List<DiagramSummaryDTO> dtos = placeholders.stream().map(d -> toSummary(id, d)).toList();
 
-        return ResponseEntity.status(HttpStatus.CREATED)
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.<GenerateDiagramsData>builder()
-                        .status(201)
-                        .message(message)
-                        .data(GenerateDiagramsData.builder().diagrams(dtos).failures(failureDtos).build())
+                        .status(202)
+                        .message("Diagram generation started.")
+                        .data(GenerateDiagramsData.builder().diagrams(dtos).build())
                         .build());
     }
 
