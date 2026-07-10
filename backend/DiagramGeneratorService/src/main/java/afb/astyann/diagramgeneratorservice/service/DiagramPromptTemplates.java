@@ -8,7 +8,7 @@ public final class DiagramPromptTemplates {
 
     private DiagramPromptTemplates() {}
 
-    public static final String MODEL = "qwen2.5-coder:7b";
+    public static final String MODEL = "qwen3-coder:480b-cloud";
 
     public static final String SYSTEM_PROMPT = """
             You are a senior software architect generating PlantUML diagrams for enterprise applications.
