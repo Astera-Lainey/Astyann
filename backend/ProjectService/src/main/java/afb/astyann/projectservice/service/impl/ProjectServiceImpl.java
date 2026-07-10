@@ -56,6 +56,8 @@ public class ProjectServiceImpl implements IProjectService {
     private final UMLServiceClient           umlClient;
     private final CodeGenServiceClient       codeGenClient;
     private final DeploymentServiceClient    deploymentClient;
+    private final VersionServiceClient       versionClient;
+    private final RAGServiceClient           ragClient;
     private final ProjectBackgroundService   projectBackgroundService;
 
     // ── Create ────────────────────────────────────────────────────────────────
@@ -125,9 +127,29 @@ public class ProjectServiceImpl implements IProjectService {
     public void deleteProject(UUID projectId) {
         log.info("Deleting project id={}", projectId);
         Project project = findOrThrow(projectId);
+
+        // Best-effort fan-out to downstream services first, so a project only
+        // disappears locally once cleanup elsewhere has at least been attempted.
+        // Failures are logged and swallowed by callClient(), same as triggerGeneration().
+        callClient("requirements", () -> requirementsClient.deleteRequirements(projectId));
+        callClient("uml",          () -> umlClient.deleteDiagrams(projectId));
+        callClient("versions",     () -> versionClient.deleteVersions(projectId));
+        callClient("rag",          () -> ragClient.deleteIndex(projectId));
+
+        deleteDocumentIfPresent(project.getDocPath());
+
         clarificationQuestionRepository.deleteByProject(project);
         guidedQuestionRepository.deleteByProjectId(projectId);
         projectRepository.deleteByProjectId(projectId);
+    }
+
+    private void deleteDocumentIfPresent(String docPath) {
+        if (docPath == null || docPath.isBlank()) return;
+        try {
+            Files.deleteIfExists(Paths.get(docPath));
+        } catch (IOException ex) {
+            log.warn("Could not delete stored document at {}: {}", docPath, ex.getMessage());
+        }
     }
 
     // ── Search ────────────────────────────────────────────────────────────────

@@ -108,6 +108,18 @@ public class VersionService {
                 .orElseThrow(() -> new SnapshotNotFoundException(snapId));
     }
 
+    /**
+     * Called by ProjectService when a project is deleted, to clean up this
+     * service's own data. Idempotent — a no-op if no timeline exists.
+     */
+    @Transactional
+    public void deleteProjectData(UUID projectId) {
+        timelineRepository.findByProjectId(projectId).ifPresent(timeline -> {
+            snapshotRepository.deleteByTimelineId(timeline.getTimelineId());
+            timelineRepository.delete(timeline);
+        });
+    }
+
     private Snapshot buildSnapshot(CreateSnapshotDTO dto, UUID timelineId, int versionNumber, UUID artifactId) {
         Snapshot snapshot = switch (dto.getArtifactType()) {
             case DIAGRAM -> {

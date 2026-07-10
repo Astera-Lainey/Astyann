@@ -164,6 +164,12 @@ public class UMLDiagramController {
         return ResponseEntity.ok().contentType(mediaType).body(bytes);
     }
 
+    @DeleteMapping("/{projectId}")
+    public ResponseEntity<Void> delete(@PathVariable String projectId) {
+        service.deleteAllForProject(parseId(projectId));
+        return ResponseEntity.noContent().build();
+    }
+
     private DiagramSummaryDTO toSummary(UUID projectId, UMLDiagram diagram) {
         return DiagramSummaryDTO.builder()
                 .diagramId(diagram.getDiagramId())

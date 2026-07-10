@@ -2,6 +2,7 @@ package afb.astyann.projectservice.client;
 
 import afb.astyann.projectservice.dto.RequirementInitRequest;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,4 +15,7 @@ public interface RequirementsServiceClient {
     @PostMapping("/api/v1/requirements/{projectId}/initialize")
     void initializePipeline(@PathVariable UUID projectId,
                             @RequestBody RequirementInitRequest body);
+
+    @DeleteMapping("/api/v1/requirements/{projectId}")
+    void deleteRequirements(@PathVariable UUID projectId);
 }

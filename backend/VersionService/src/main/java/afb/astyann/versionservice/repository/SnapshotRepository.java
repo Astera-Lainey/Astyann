@@ -16,4 +16,6 @@ public interface SnapshotRepository extends JpaRepository<Snapshot, UUID> {
 
     Optional<Snapshot> findByTimelineIdAndArtifactTypeAndArtifactIdAndActiveTrue(
             UUID timelineId, ArtifactType artifactType, UUID artifactId);
+
+    void deleteByTimelineId(UUID timelineId);
 }

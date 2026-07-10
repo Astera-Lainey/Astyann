@@ -54,6 +54,12 @@ public class VersionController {
                 .status(200).message("Snapshot retrieved.").data(result).build());
     }
 
+    @DeleteMapping("/{projectId}")
+    public ResponseEntity<Void> delete(@PathVariable String projectId) {
+        versionService.deleteProjectData(parseId(projectId));
+        return ResponseEntity.noContent().build();
+    }
+
     private UUID parseId(String rawId) {
         if (rawId == null || rawId.isBlank()) {
             throw new IllegalArgumentException("Id is missing");

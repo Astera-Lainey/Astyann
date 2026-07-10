@@ -54,6 +54,16 @@ public class DiagramGenerationService {
 
     public record GenerationOutcome(List<UMLDiagram> succeeded, List<UMLDiagram> failed) {}
 
+    /**
+     * Called by ProjectService when a project is deleted, to clean up this
+     * service's own DB rows and rendered image files.
+     */
+    @Transactional
+    public void deleteAllForProject(UUID projectId) {
+        repository.deleteByProjectId(projectId);
+        storageService.deleteProjectDirectory(projectId);
+    }
+
     public GenerationOutcome generateDiagrams(UUID projectId, GenerateDiagramsRequest request) {
         verifyPcsfApproved(projectId);
 
