@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 @Service
@@ -50,17 +52,19 @@ public class DiagramGenerationService {
     @Qualifier("diagramExecutor")
     private final Executor diagramExecutor;
 
+    public record GenerationOutcome(List<UMLDiagram> succeeded, List<UMLDiagram> failed) {}
+
     /**
-     * Kicks off generation for each requested diagram type and returns immediately — it does
-     * NOT wait for the AI+Kroki pipelines to finish. Each type's row is upserted to GENERATING
-     * synchronously before dispatch, so it's visible via getDiagrams()/list the instant this
-     * method returns; callers poll that endpoint until no diagram is left in GENERATING.
-     * (Previously this blocked on CompletableFuture.allOf(...).join() until every type
-     * succeeded or failed, which could run for minutes across 10 types and routinely outlived
-     * the gateway's response-timeout, aborting the client connection before the response could
-     * be flushed.)
+     * Called by ProjectService when a project is deleted, to clean up this
+     * service's own DB rows and rendered image files.
      */
-    public List<UMLDiagram> startGeneration(UUID projectId, GenerateDiagramsRequest request) {
+    @Transactional
+    public void deleteAllForProject(UUID projectId) {
+        repository.deleteByProjectId(projectId);
+        storageService.deleteProjectDirectory(projectId);
+    }
+
+    public GenerationOutcome generateDiagrams(UUID projectId, GenerateDiagramsRequest request) {
         verifyPcsfApproved(projectId);
 
         String format = normalizeFormat(request.getRenderFormat());
@@ -68,33 +72,45 @@ public class DiagramGenerationService {
                 ? List.of(DiagramType.values())
                 : request.getDiagramTypes();
 
-        List<UMLDiagram> placeholders = types.stream()
-                .map(type -> startOne(projectId, type, format))
+        record TypedFuture(DiagramType type, CompletableFuture<UMLDiagram> future) {}
+
+        List<TypedFuture> tasks = types.stream()
+                .map(type -> new TypedFuture(type, CompletableFuture.supplyAsync(
+                        () -> generateOne(projectId, type, format), diagramExecutor)))
                 .toList();
 
-        placeholders.forEach(placeholder -> diagramExecutor.execute(() -> {
+        // Wait for EVERY task to finish (success or failure) before inspecting any of them.
+        // Inspecting results one-by-one via .join() in list order would throw on the first
+        // failure and abandon the stream — but the still-running tasks were already dispatched
+        // to the executor and keep mutating the DB/filesystem in the background regardless,
+        // landing writes well after this method (and the HTTP response) has already returned.
+        CompletableFuture.allOf(tasks.stream().map(TypedFuture::future).toArray(CompletableFuture[]::new))
+                .exceptionally(ex -> null)
+                .join();
+
+        List<UMLDiagram> succeeded = new ArrayList<>();
+        List<UMLDiagram> failed = new ArrayList<>();
+        for (TypedFuture task : tasks) {
             try {
-                generateOne(projectId, placeholder.getType(), format);
-            } catch (Exception ex) {
-                // generateOne() persists its own failures internally; this only catches
-                // something truly unexpected that slipped past that handling (e.g. a bug).
-                log.error("Unexpected failure generating diagram type {}: {}",
-                        placeholder.getType(), ex.getMessage(), ex);
-                markFailed(placeholder, ex.getMessage());
+                UMLDiagram diagram = task.future().join();
+                if (diagram.getStatus() == DiagramStatus.FAILED) {
+                    failed.add(diagram);
+                } else {
+                    succeeded.add(diagram);
+                }
+            } catch (CompletionException ex) {
+                // generateOne() persists its own failures below; this only catches something
+                // truly unexpected that slipped past its internal handling (e.g. a bug), so
+                // there's no persisted row/diagramId to report here.
+                Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                log.error("Unexpected failure generating diagram type {}: {}", task.type(), cause.getMessage(), cause);
             }
-        }));
+        }
 
-        return placeholders;
-    }
-
-    private UMLDiagram startOne(UUID projectId, DiagramType type, String format) {
-        UMLDiagram diagram = repository.findByProjectIdAndType(projectId, type).orElseGet(UMLDiagram::new);
-        diagram.setProjectId(projectId);
-        diagram.setType(type);
-        diagram.setRenderFormat(format);
-        diagram.setStatus(DiagramStatus.GENERATING);
-        diagram.setLastError(null);
-        return repository.save(diagram);
+        if (succeeded.isEmpty() && !failed.isEmpty()) {
+            throw new DownstreamServiceException("All diagram generations failed.");
+        }
+        return new GenerationOutcome(succeeded, failed);
     }
 
     public record RegenerateResult(UMLDiagram diagram, UUID previousVersionId) {}
@@ -115,9 +131,6 @@ public class DiagramGenerationService {
         if (existing.getStatus() == DiagramStatus.APPROVED) {
             throw new IllegalStateException(
                     "Cannot regenerate an APPROVED diagram directly. Submit a change-request first.");
-        }
-        if (existing.getStatus() == DiagramStatus.GENERATING) {
-            throw new IllegalStateException("Diagram is still generating. Please wait for it to finish.");
         }
 
         verifyPcsfApproved(projectId);

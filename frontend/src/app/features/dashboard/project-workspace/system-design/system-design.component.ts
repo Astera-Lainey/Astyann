@@ -95,9 +95,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   readonly instructions = signal('');
   readonly isRegenerating = signal(false);
   readonly regenerateError = signal<string | null>(null);
-  readonly canSubmitChange = computed(
-    () => this.instructions().trim().length > 0 && this.selectedDiagram()?.status !== 'APPROVED',
-  );
+  readonly canSubmitChange = computed(() => this.instructions().trim().length > 0);
 
   // ── Approve ───────────────────────────────────────────────────────────────
   readonly isApproving = signal(false);
@@ -173,7 +171,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.generateError.set(null);
     this.partialFailureNotice.set(null);
 
-    this.diagramService.generate(this.projectId, { diagramTypes: ALL_DIAGRAM_TYPES, renderFormat: 'SVG' }).subscribe({
+    this.diagramService.generate(this.projectId, { diagramTypes: ALL_DIAGRAM_TYPES, renderFormat: 'PNG' }).subscribe({
       next: (data) => {
         const placeholders = data.diagrams.map(this.toVm).sort(byCanonicalOrder);
         this.diagrams.set(placeholders);
@@ -426,7 +424,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   }
 
   private runRegenerate(diagramId: string): void {
-    this.diagramService.regenerate(this.projectId, diagramId, {}).subscribe({
+    this.diagramService.regenerate(this.projectId, diagramId, { renderFormat: 'PNG' }).subscribe({
       next: (dto) => {
         this.isRegenerating.set(false);
         this.instructions.set('');

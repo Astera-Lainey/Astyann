@@ -107,7 +107,7 @@ export class DiagramService {
    * Callers own the resulting Blob's lifecycle: wrap with URL.createObjectURL()
    * and revoke it when no longer needed.
    */
-  renderBlob(projectId: string, diagramId: string, format: RenderFormat = 'SVG'): Observable<Blob> {
+  renderBlob(projectId: string, diagramId: string, format: RenderFormat = 'PNG'): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${projectId}/${diagramId}/render`, {
       params: { format },
       responseType: 'blob',

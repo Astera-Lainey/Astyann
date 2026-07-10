@@ -19,7 +19,7 @@ public class OllamaProvider implements AIProvider {
 
     private final OllamaChatModel chatModel;
 
-    @Value("${spring.ai.ollama.chat.options.model:qwen2.5-coder:7b}")
+    @Value("${spring.ai.ollama.chat.options.model:qwen3-coder:480b-cloud}")
     private String modelName;
 
     public OllamaProvider(OllamaChatModel chatModel) {
@@ -40,12 +40,10 @@ public class OllamaProvider implements AIProvider {
         messages.add(new UserMessage(prompt));
 
         int maxTokens = config.getMaxTokens() > 0 ? config.getMaxTokens() : 4096;
-        Prompt p = effectiveModel.equals(modelName)
-                ? new Prompt(messages)
-                : new Prompt(messages, OllamaChatOptions.builder()
-                        .model(effectiveModel)
-                        .numPredict(maxTokens)
-                        .build());
+        Prompt p = new Prompt(messages, OllamaChatOptions.builder()
+                .model(effectiveModel)
+                .numPredict(maxTokens)
+                .build());
 
         var generation = chatModel.call(p).getResult();
         if (generation == null || generation.getOutput() == null) return null;

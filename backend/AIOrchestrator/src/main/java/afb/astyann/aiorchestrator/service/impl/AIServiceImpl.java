@@ -120,7 +120,7 @@ public class AIServiceImpl implements IAIService {
         log.debug("Direct inference model={}", model);
         ProviderConfig config = ProviderConfig.builder()
                 .systemPrompt(systemPrompt)
-                .maxTokens(4096)
+                .maxTokens(16384)
                 .modelOverride(model)
                 .build();
         return ollamaProvider.complete(userPrompt, config);

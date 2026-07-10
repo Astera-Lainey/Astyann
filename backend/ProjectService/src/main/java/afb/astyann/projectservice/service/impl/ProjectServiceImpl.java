@@ -1,6 +1,7 @@
 package afb.astyann.projectservice.service.impl;
 
 import afb.astyann.projectservice.client.*;
+import afb.astyann.projectservice.domain.GenerationType;
 import afb.astyann.projectservice.domain.GuidedQuestion;
 import afb.astyann.projectservice.domain.Project;
 import afb.astyann.projectservice.domain.ProjectStatus;
@@ -51,7 +52,12 @@ public class ProjectServiceImpl implements IProjectService {
     private final ClarificationQuestionRepository clarificationQuestionRepository;
     private final AIServiceClient                 aiServiceClient;
     private final RequirementsServiceClient  requirementsClient;
-    private final RAGServiceClient           ragServiceClient;
+    private final DocumentServiceClient      documentClient;
+    private final UMLServiceClient           umlClient;
+    private final CodeGenServiceClient       codeGenClient;
+    private final DeploymentServiceClient    deploymentClient;
+    private final VersionServiceClient       versionClient;
+    private final RAGServiceClient           ragClient;
     private final ProjectBackgroundService   projectBackgroundService;
 
     // ── Create ────────────────────────────────────────────────────────────────
@@ -121,14 +127,28 @@ public class ProjectServiceImpl implements IProjectService {
     public void deleteProject(UUID projectId) {
         log.info("Deleting project id={}", projectId);
         Project project = findOrThrow(projectId);
+
+        // Best-effort fan-out to downstream services first, so a project only
+        // disappears locally once cleanup elsewhere has at least been attempted.
+        // Failures are logged and swallowed by callClient(), same as triggerGeneration().
+        callClient("requirements", () -> requirementsClient.deleteRequirements(projectId));
+        callClient("uml",          () -> umlClient.deleteDiagrams(projectId));
+        callClient("versions",     () -> versionClient.deleteVersions(projectId));
+        callClient("rag",          () -> ragClient.deleteIndex(projectId));
+
+        deleteDocumentIfPresent(project.getDocPath());
+
         clarificationQuestionRepository.deleteByProject(project);
         guidedQuestionRepository.deleteByProjectId(projectId);
         projectRepository.deleteByProjectId(projectId);
+    }
 
+    private void deleteDocumentIfPresent(String docPath) {
+        if (docPath == null || docPath.isBlank()) return;
         try {
-            ragServiceClient.deleteIndex(projectId);
-        } catch (Exception ex) {
-            log.warn("Could not delete RAG index for project={}: {}", projectId, ex.getMessage());
+            Files.deleteIfExists(Paths.get(docPath));
+        } catch (IOException ex) {
+            log.warn("Could not delete stored document at {}: {}", docPath, ex.getMessage());
         }
     }
 
@@ -150,6 +170,34 @@ public class ProjectServiceImpl implements IProjectService {
     @Transactional(readOnly = true)
     public ProjectDTO getProjectById(UUID projectId) {
         return toDTO(findOrThrow(projectId));
+    }
+
+    // ── Trigger Generation ────────────────────────────────────────────────────
+
+    @Override
+    public void triggerGeneration(UUID projectId, GenerationType type) {
+        log.info("Triggering generation type={} for project id={}", type, projectId);
+        Project project = findOrThrow(projectId);
+        project.setStatus(ProjectStatus.GENERATING);
+        projectRepository.save(project);
+
+        switch (type) {
+            case REQUIREMENTS -> log.info("Requirements pipeline is auto-initiated on project creation.");
+            case DOCUMENTS    -> callClient("documents",    () ->
+                    documentClient.triggerDocumentGeneration(projectId));
+            case UML          -> callClient("uml",          () ->
+                    umlClient.triggerUMLGeneration(projectId));
+            case CODE         -> callClient("codegen",      () ->
+                    codeGenClient.triggerCodeGeneration(projectId));
+            case DEPLOYMENT   -> callClient("deployment",   () ->
+                    deploymentClient.triggerDeploymentGeneration(projectId));
+            case FULL -> {
+                callClient("documents",  () -> documentClient.triggerDocumentGeneration(projectId));
+                callClient("uml",        () -> umlClient.triggerUMLGeneration(projectId));
+                callClient("codegen",    () -> codeGenClient.triggerCodeGeneration(projectId));
+                callClient("deployment", () -> deploymentClient.triggerDeploymentGeneration(projectId));
+            }
+        }
     }
 
     // ── File Helpers ──────────────────────────────────────────────────────────
@@ -201,5 +249,22 @@ public class ProjectServiceImpl implements IProjectService {
                 .creationDate(p.getCreationDate())
                 .updatedDate(p.getUpdatedDate())
                 .build();
+    }
+
+    private <T> T callClient(String name, java.util.concurrent.Callable<T> call) {
+        try {
+            return call.call();
+        } catch (Exception ex) {
+            log.warn("Could not reach {} service: {}", name, ex.getMessage());
+            return null;
+        }
+    }
+
+    private void callClient(String name, Runnable call) {
+        try {
+            call.run();
+        } catch (Exception ex) {
+            log.warn("Could not reach {} service: {}", name, ex.getMessage());
+        }
     }
 }
