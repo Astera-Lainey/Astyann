@@ -252,8 +252,11 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     private <T> T callClient(String name, java.util.concurrent.Callable<T> call) {
+        log.info("Calling downstream service: {}", name);
         try {
-            return call.call();
+            T result = call.call();
+            log.info("Downstream call to {} succeeded", name);
+            return result;
         } catch (Exception ex) {
             log.warn("Could not reach {} service: {}", name, ex.getMessage());
             return null;
@@ -261,8 +264,10 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     private void callClient(String name, Runnable call) {
+        log.info("Calling downstream service: {}", name);
         try {
             call.run();
+            log.info("Downstream call to {} succeeded", name);
         } catch (Exception ex) {
             log.warn("Could not reach {} service: {}", name, ex.getMessage());
         }
