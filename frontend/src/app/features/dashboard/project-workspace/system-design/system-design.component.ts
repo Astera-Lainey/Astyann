@@ -165,7 +165,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.generateError.set(null);
     this.partialFailureNotice.set(null);
 
-    this.diagramService.generate(this.projectId, { diagramTypes: ALL_DIAGRAM_TYPES, renderFormat: 'SVG' }).subscribe({
+    this.diagramService.generate(this.projectId, { diagramTypes: ALL_DIAGRAM_TYPES, renderFormat: 'PNG' }).subscribe({
       next: (data) => {
         const succeeded = data.diagrams.map(this.toVm);
         const failed = data.failures.map(this.toVm);
@@ -382,7 +382,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   }
 
   private runRegenerate(diagramId: string): void {
-    this.diagramService.regenerate(this.projectId, diagramId, {}).subscribe({
+    this.diagramService.regenerate(this.projectId, diagramId, { renderFormat: 'PNG' }).subscribe({
       next: (dto) => {
         this.isRegenerating.set(false);
         this.instructions.set('');
