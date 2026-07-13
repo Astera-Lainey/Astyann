@@ -117,15 +117,40 @@
 @media (max-width: 900px) { .sd__workspace { grid-template-columns: 1fr; } }
 
 // ── Viewer ────────────────────────────────────────────────────────────────
+// Sized to ~78% of viewport height (not a fixed px value) so the diagram is
+// the primary focus of the page and scales with the monitor, with a floor for
+// short/laptop viewports. `.sd__viewer-scroll` fills whatever height results
+// via flex, so the same rule drives both normal and fullscreen sizing below.
 .sd__viewer {
   display: flex; flex-direction: column;
   border-radius: 0.75rem; border: 1px solid shared.$slate-200; background: #ffffff;
   overflow: hidden; min-width: 0;
+  height: max(26rem, 78vh);
+  height: max(26rem, 78dvh);
+
+  &--fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    height: 100vh;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
+    animation: sd-fullscreen-in 0.16s ease both;
+  }
+}
+
+@keyframes sd-fullscreen-in {
+  from { opacity: 0; transform: scale(0.99); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 .sd__viewer-toolbar {
-  display: flex; align-items: center; gap: 0.25rem; justify-content: flex-end;
+  display: flex; align-items: center; gap: 0.25rem; justify-content: flex-end; flex-shrink: 0;
   padding: 0.625rem 0.75rem; border-bottom: 1px solid shared.$slate-200; background: #fafafa;
+}
+.sd__toolbar-divider {
+  width: 1px; height: 1.25rem; margin: 0 0.25rem; background-color: shared.$slate-200; flex-shrink: 0;
 }
 .sd__zoom-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -142,21 +167,32 @@
   &:hover { color: shared.$slate-900; }
 }
 
+// `overflow: hidden` (not `auto`) — panning is now driven entirely by the
+// image's own `translate()` transform (see `panX`/`panY` in the component),
+// not native scroll, so no scrollbars/native scroll should exist to fight
+// with it. `align-items`/`justify-content: center` still center the
+// loading/error placeholders below, which are normal-flow siblings of the
+// absolutely-positioned image and unaffected by its transform.
 .sd__viewer-scroll {
   position: relative;
-  height: 34rem; overflow: auto; cursor: grab;
+  flex: 1; min-height: 0; overflow: hidden; cursor: grab;
   display: flex; align-items: center; justify-content: center;
   background-color: #fbfbfa;
   background-image:
     linear-gradient(to right, shared.$slate-200 1px, transparent 1px),
     linear-gradient(to bottom, shared.$slate-200 1px, transparent 1px);
   background-size: 24px 24px;
-  background-attachment: local;
 
   &--grabbing { cursor: grabbing; }
 }
 
+// Positioned at the container's origin with a top-left transform-origin so
+// `translate(panX, panY) scale(zoom)` maps directly onto the coordinate
+// space the component's pan/zoom math operates in. `will-change` promotes
+// this to its own compositor layer so continuous wheel-zoom only costs a
+// GPU transform update, never layout/reflow.
 .sd__viewer-image {
+  position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform;
   display: block; user-select: none; -webkit-user-drag: none;
   filter: drop-shadow(0 6px 16px rgba(15, 23, 42, 0.08));
 }
@@ -164,6 +200,10 @@
 .sd__viewer-loading, .sd__viewer-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 0.625rem; padding: 2rem; text-align: center; min-height: 12rem;
+  // `.sd__viewer-empty` also appears directly inside `.sd__viewer` for the
+  // FAILED state (not nested in `.sd__viewer-scroll`) — flex: 1 lets it fill
+  // the now much taller viewer instead of leaving dead space below it.
+  flex: 1;
 }
 .sd__viewer-empty-title { margin: 0; font-size: 1rem; font-weight: 700; color: shared.$slate-900; }
 .sd__viewer-empty-text  { margin: 0; font-size: 0.8125rem; color: shared.$slate-500; max-width: 26rem; line-height: 1.5; }

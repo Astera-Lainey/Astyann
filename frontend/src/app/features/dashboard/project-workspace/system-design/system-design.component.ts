@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   Input,
   OnChanges,
   OnDestroy,
@@ -81,15 +82,29 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   readonly zoom = signal(1);
   readonly isPanning = signal(false);
 
+  /** Image top-left offset from the viewport's top-left, in CSS px — the
+   *  translate half of `translate(panX, panY) scale(zoom)`. Replaces the old
+   *  scrollLeft/scrollTop-based panning so pan and zoom share one coordinate
+   *  space, which is what makes cursor-centered zoom solvable in closed form. */
+  readonly panX = signal(0);
+  readonly panY = signal(0);
+
   readonly zoomPercent = computed(() => Math.round(this.zoom() * 100) + '%');
-  readonly imageWidth = computed(() => this.naturalWidth() * this.zoom() || undefined);
-  readonly imageHeight = computed(() => this.naturalHeight() * this.zoom() || undefined);
+  readonly viewerTransform = computed(() => `translate(${this.panX()}px, ${this.panY()}px) scale(${this.zoom()})`);
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
+  readonly isFullscreen = signal(false);
+  /** Mouse-over state of the viewer — scopes keyboard shortcuts (same "hover to
+   *  interact" model the existing wheel-zoom already uses) without stealing them
+   *  from the rest of the page. */
+  readonly isViewerHovered = signal(false);
+  private previousBodyOverflow = '';
 
   private readonly blobUrlCache = new Map<string, string>();
   private dragStartX = 0;
   private dragStartY = 0;
-  private dragStartScrollLeft = 0;
-  private dragStartScrollTop = 0;
+  private dragStartPanX = 0;
+  private dragStartPanY = 0;
 
   // ── Request changes / regenerate ─────────────────────────────────────────
   readonly instructions = signal('');
@@ -125,6 +140,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.blobUrlCache.forEach((url) => URL.revokeObjectURL(url));
     this.blobUrlCache.clear();
     this.stopPanning();
+    if (this.isFullscreen()) document.body.style.overflow = this.previousBodyOverflow;
   }
 
   // ── Load existing diagrams ───────────────────────────────────────────────
@@ -308,21 +324,45 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     const img = event.target as HTMLImageElement;
     this.naturalWidth.set(img.naturalWidth);
     this.naturalHeight.set(img.naturalHeight);
+    // Every fresh image load (initial view, tab switch, regenerate) should open
+    // fully visible rather than clipped at 100% — reuses the same fit-to-screen
+    // logic the toolbar button calls, so manual zoom afterwards is untouched.
+    this.fitToScreen();
   }
 
   // ── Zoom controls ─────────────────────────────────────────────────────────
+  //
+  // The image is drawn as `translate(panX, panY) scale(zoom)` with a
+  // top-left transform-origin, so a point at natural-image coordinates
+  // (ix, iy) always lands on screen at (panX + ix*zoom, panY + iy*zoom)
+  // relative to the viewer. Every zoom entry point below (wheel, +/- buttons,
+  // fit-to-screen) funnels through `applyZoomAtPoint`, which re-solves that
+  // one equation for the pan offset that keeps a chosen screen point fixed —
+  // that's the whole cursor-centered-zoom trick, no separate pan step needed.
 
   zoomIn(): void {
-    this.zoom.update((z) => Math.min(ZOOM_MAX, z * ZOOM_STEP));
+    this.zoomAtViewportCenter(Math.min(ZOOM_MAX, this.zoom() * ZOOM_STEP));
   }
 
   zoomOut(): void {
-    this.zoom.update((z) => Math.max(ZOOM_MIN, z / ZOOM_STEP));
+    this.zoomAtViewportCenter(Math.max(ZOOM_MIN, this.zoom() / ZOOM_STEP));
+  }
+
+  /** Toolbar buttons have no cursor-over-the-diagram context, so they zoom
+   *  around the current viewport center instead — the same "reasonable
+   *  default pivot" every diagram tool uses for keyboard/button zoom. */
+  private zoomAtViewportCenter(newZoom: number): void {
+    const container = this.scrollContainerRef?.nativeElement;
+    if (!container) {
+      this.zoom.set(newZoom);
+      return;
+    }
+    this.applyZoomAtPoint(container.clientWidth / 2, container.clientHeight / 2, newZoom);
   }
 
   resetZoom(): void {
     this.zoom.set(1);
-    this.centerScroll();
+    this.centerPan(1);
   }
 
   fitToScreen(): void {
@@ -334,29 +374,100 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
       return;
     }
     const scale = Math.min(container.clientWidth / nw, container.clientHeight / nh, 1);
-    this.zoom.set(scale > 0 ? scale : 1);
-    this.centerScroll();
+    const clamped = scale > 0 ? scale : 1;
+    this.zoom.set(clamped);
+    this.centerPan(clamped);
   }
 
   private resetZoomState(): void {
     this.zoom.set(1);
+    this.panX.set(0);
+    this.panY.set(0);
     this.naturalWidth.set(0);
     this.naturalHeight.set(0);
   }
 
-  private centerScroll(): void {
+  /** Centers the image at the given scale by placing its top-left corner so
+   *  equal blank space surrounds it — the transform-based replacement for the
+   *  old scrollLeft/scrollTop centering. Unlike the old version this needs no
+   *  queueMicrotask: it reads the container's own box (unaffected by the
+   *  image's transform) rather than a scrollWidth that depended on the image
+   *  having already been resized in the DOM. */
+  private centerPan(scale: number): void {
     const container = this.scrollContainerRef?.nativeElement;
     if (!container) return;
-    queueMicrotask(() => {
-      container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
-      container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
-    });
+    const displayedW = this.naturalWidth() * scale;
+    const displayedH = this.naturalHeight() * scale;
+    this.panX.set((container.clientWidth - displayedW) / 2);
+    this.panY.set((container.clientHeight - displayedH) / 2);
+  }
+
+  /**
+   * Cursor-centered zoom core. Given a pivot point in container-relative
+   * screen coordinates (pointX, pointY) and a target zoom level:
+   *
+   *   1. Invert the current transform to find which natural-image point is
+   *      currently drawn at the pivot:      imagePoint = (point - pan) / oldZoom
+   *   2. Re-apply the transform equation at the new zoom, solved for pan
+   *      instead of screen position, so that same image point still lands
+   *      on the pivot:                      pan = point - imagePoint * newZoom
+   *
+   * The viewport never needs a separate "compensating pan" step — steps 1
+   * and 2 together *are* the compensation.
+   */
+  private applyZoomAtPoint(pointX: number, pointY: number, newZoom: number): void {
+    const oldZoom = this.zoom();
+    if (newZoom === oldZoom) return;
+
+    const imagePointX = (pointX - this.panX()) / oldZoom;
+    const imagePointY = (pointY - this.panY()) / oldZoom;
+
+    const nextPanX = pointX - imagePointX * newZoom;
+    const nextPanY = pointY - imagePointY * newZoom;
+
+    const clamped = this.clampPan(nextPanX, nextPanY, newZoom);
+    this.zoom.set(newZoom);
+    this.panX.set(clamped.x);
+    this.panY.set(clamped.y);
+  }
+
+  /** Keeps a comfortable margin of the diagram always reachable on screen
+   *  instead of letting zoom/pan push it entirely out of view. */
+  private clampPan(panX: number, panY: number, scale: number): { x: number; y: number } {
+    const container = this.scrollContainerRef?.nativeElement;
+    const nw = this.naturalWidth();
+    const nh = this.naturalHeight();
+    if (!container || !nw || !nh) return { x: panX, y: panY };
+
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const displayedW = nw * scale;
+    const displayedH = nh * scale;
+
+    const marginX = Math.min(120, displayedW / 2, cw / 2);
+    const marginY = Math.min(120, displayedH / 2, ch / 2);
+
+    return {
+      x: Math.min(cw - marginX, Math.max(marginX - displayedW, panX)),
+      y: Math.min(ch - marginY, Math.max(marginY - displayedH, panY)),
+    };
   }
 
   onWheel(event: WheelEvent): void {
     event.preventDefault();
-    if (event.deltaY < 0) this.zoomIn();
-    else this.zoomOut();
+    const container = this.scrollContainerRef?.nativeElement;
+    if (!container) return;
+
+    const oldZoom = this.zoom();
+    const newZoom = event.deltaY < 0
+      ? Math.min(ZOOM_MAX, oldZoom * ZOOM_STEP)
+      : Math.max(ZOOM_MIN, oldZoom / ZOOM_STEP);
+
+    // Pivot is the cursor's position relative to the viewer, not the page —
+    // this is what makes the zoom track the point under the mouse rather
+    // than the viewport center.
+    const rect = container.getBoundingClientRect();
+    this.applyZoomAtPoint(event.clientX - rect.left, event.clientY - rect.top, newZoom);
   }
 
   // ── Drag to pan ───────────────────────────────────────────────────────────
@@ -368,18 +479,19 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     event.preventDefault();
     this.dragStartX = event.clientX;
     this.dragStartY = event.clientY;
-    this.dragStartScrollLeft = container.scrollLeft;
-    this.dragStartScrollTop = container.scrollTop;
+    this.dragStartPanX = this.panX();
+    this.dragStartPanY = this.panY();
     this.isPanning.set(true);
     window.addEventListener('mousemove', this.onDragMove);
     window.addEventListener('mouseup', this.onDragEnd);
   }
 
   private onDragMove = (event: MouseEvent): void => {
-    const container = this.scrollContainerRef?.nativeElement;
-    if (!container) return;
-    container.scrollLeft = this.dragStartScrollLeft - (event.clientX - this.dragStartX);
-    container.scrollTop = this.dragStartScrollTop - (event.clientY - this.dragStartY);
+    const nextPanX = this.dragStartPanX + (event.clientX - this.dragStartX);
+    const nextPanY = this.dragStartPanY + (event.clientY - this.dragStartY);
+    const clamped = this.clampPan(nextPanX, nextPanY, this.zoom());
+    this.panX.set(clamped.x);
+    this.panY.set(clamped.y);
   };
 
   private onDragEnd = (): void => {
@@ -390,6 +502,98 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.isPanning.set(false);
     window.removeEventListener('mousemove', this.onDragMove);
     window.removeEventListener('mouseup', this.onDragEnd);
+  }
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
+  // Not a separate viewer: the same toolbar, #scrollContainer and <img> are
+  // reused as-is, just repositioned via the `sd__viewer--fullscreen` CSS
+  // modifier (fixed, inset: 0) instead of duplicating any viewer markup/state.
+
+  toggleFullscreen(): void {
+    this.isFullscreen.update((v) => !v);
+    this.syncFullscreenSideEffects();
+  }
+
+  exitFullscreen(): void {
+    if (!this.isFullscreen()) return;
+    this.isFullscreen.set(false);
+    this.syncFullscreenSideEffects();
+  }
+
+  onViewerMouseEnter(): void {
+    this.isViewerHovered.set(true);
+  }
+
+  onViewerMouseLeave(): void {
+    this.isViewerHovered.set(false);
+  }
+
+  private syncFullscreenSideEffects(): void {
+    if (this.isFullscreen()) {
+      this.previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = this.previousBodyOverflow;
+    }
+    // Unlike the old scroll-based viewer, pan/zoom are now absolute pixel
+    // offsets against the container's own box — and that box jumps
+    // drastically between the ~78vh inline card and the 100vh overlay, so a
+    // stale pan would leave the diagram mis-centered (or fully clamped out of
+    // view) the moment the container's size actually changes. Re-fit once
+    // that resize has been laid out, same queueMicrotask pattern already
+    // used elsewhere here to wait out a pending DOM/style flush.
+    if (this.currentImageUrl()) {
+      queueMicrotask(() => this.fitToScreen());
+    }
+  }
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  // Scoped to when the pointer is over the viewer — the same "hover to
+  // interact" model the existing wheel-zoom handler already relies on — or
+  // unconditionally while fullscreen, since then the viewer *is* the page.
+
+  @HostListener('document:keydown', ['$event'])
+  onViewerKeydown(event: KeyboardEvent): void {
+    if (this.isTypingTarget(event.target)) return;
+
+    if (event.key === 'Escape') {
+      if (this.isFullscreen()) {
+        event.preventDefault();
+        this.exitFullscreen();
+      }
+      return;
+    }
+
+    if (!this.isFullscreen() && !this.isViewerHovered()) return;
+    if (!this.selectedDiagram() || this.isImageLoading() || !this.currentImageUrl()) return;
+
+    switch (event.key) {
+      case '+':
+      case '=':
+        event.preventDefault();
+        this.zoomIn();
+        break;
+      case '-':
+      case '_':
+        event.preventDefault();
+        this.zoomOut();
+        break;
+      case '0':
+        event.preventDefault();
+        this.fitToScreen();
+        break;
+      case 'f':
+      case 'F':
+        event.preventDefault();
+        this.toggleFullscreen();
+        break;
+    }
+  }
+
+  private isTypingTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el) return false;
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
   }
 
   // ── Request changes → regenerate ─────────────────────────────────────────

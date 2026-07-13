@@ -76,7 +76,10 @@
     <div class="sd__workspace">
 
       <!-- Viewer -->
-      <div class="sd__viewer">
+      <div class="sd__viewer"
+        [class.sd__viewer--fullscreen]="isFullscreen()"
+        (mouseenter)="onViewerMouseEnter()"
+        (mouseleave)="onViewerMouseLeave()">
         @if (selectedDiagram(); as diagram) {
           @if (diagram.status === 'FAILED') {
             <div class="sd__viewer-empty">
@@ -104,8 +107,21 @@
               <button type="button" class="sd__zoom-btn" aria-label="Zoom in" (click)="zoomIn()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
               </button>
-              <button type="button" class="sd__zoom-btn sd__zoom-btn--fit" aria-label="Fit to screen" (click)="fitToScreen()">
+              <button type="button" class="sd__zoom-btn sd__zoom-btn--fit" aria-label="Fit to screen" title="Fit to screen (0)" (click)="fitToScreen()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
+
+              <span class="sd__toolbar-divider"></span>
+
+              <button type="button" class="sd__zoom-btn sd__zoom-btn--fullscreen"
+                [attr.aria-label]="isFullscreen() ? 'Exit fullscreen' : 'View fullscreen'"
+                [title]="isFullscreen() ? 'Exit fullscreen (Esc)' : 'View fullscreen (F)'"
+                (click)="toggleFullscreen()">
+                @if (isFullscreen()) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>
+                } @else {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                }
               </button>
             </div>
 
@@ -125,8 +141,7 @@
                   [src]="url"
                   [alt]="diagramTypeLabels[diagram.type] + ' diagram'"
                   draggable="false"
-                  [style.width.px]="imageWidth()"
-                  [style.height.px]="imageHeight()"
+                  [style.transform]="viewerTransform()"
                   (load)="onImageLoad($event)" />
               }
             </div>

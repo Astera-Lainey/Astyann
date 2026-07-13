@@ -61,7 +61,7 @@
                 <a
                   [routerLink]="['/app/projects', activeProjectIdValue(), item.section]"
                   class="shell__workspace-link"
-                  [class.shell__workspace-link--active]="activeSection() === 'review'"
+                  [class.shell__workspace-link--active]="activeSection() === 'review' || activeSection() === 'requirements'"
                 >
                   <span class="shell__icon-box">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="item.icon" /></svg>

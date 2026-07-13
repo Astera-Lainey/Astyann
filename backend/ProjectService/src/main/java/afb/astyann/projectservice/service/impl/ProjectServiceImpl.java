@@ -1,7 +1,6 @@
 package afb.astyann.projectservice.service.impl;
 
 import afb.astyann.projectservice.client.*;
-import afb.astyann.projectservice.domain.GenerationType;
 import afb.astyann.projectservice.domain.GuidedQuestion;
 import afb.astyann.projectservice.domain.Project;
 import afb.astyann.projectservice.domain.ProjectStatus;
@@ -52,10 +51,7 @@ public class ProjectServiceImpl implements IProjectService {
     private final ClarificationQuestionRepository clarificationQuestionRepository;
     private final AIServiceClient                 aiServiceClient;
     private final RequirementsServiceClient  requirementsClient;
-    private final DocumentServiceClient      documentClient;
     private final UMLServiceClient           umlClient;
-    private final CodeGenServiceClient       codeGenClient;
-    private final DeploymentServiceClient    deploymentClient;
     private final VersionServiceClient       versionClient;
     private final RAGServiceClient           ragClient;
     private final ProjectBackgroundService   projectBackgroundService;
@@ -170,34 +166,6 @@ public class ProjectServiceImpl implements IProjectService {
     @Transactional(readOnly = true)
     public ProjectDTO getProjectById(UUID projectId) {
         return toDTO(findOrThrow(projectId));
-    }
-
-    // ── Trigger Generation ────────────────────────────────────────────────────
-
-    @Override
-    public void triggerGeneration(UUID projectId, GenerationType type) {
-        log.info("Triggering generation type={} for project id={}", type, projectId);
-        Project project = findOrThrow(projectId);
-        project.setStatus(ProjectStatus.GENERATING);
-        projectRepository.save(project);
-
-        switch (type) {
-            case REQUIREMENTS -> log.info("Requirements pipeline is auto-initiated on project creation.");
-            case DOCUMENTS    -> callClient("documents",    () ->
-                    documentClient.triggerDocumentGeneration(projectId));
-            case UML          -> callClient("uml",          () ->
-                    umlClient.triggerUMLGeneration(projectId));
-            case CODE         -> callClient("codegen",      () ->
-                    codeGenClient.triggerCodeGeneration(projectId));
-            case DEPLOYMENT   -> callClient("deployment",   () ->
-                    deploymentClient.triggerDeploymentGeneration(projectId));
-            case FULL -> {
-                callClient("documents",  () -> documentClient.triggerDocumentGeneration(projectId));
-                callClient("uml",        () -> umlClient.triggerUMLGeneration(projectId));
-                callClient("codegen",    () -> codeGenClient.triggerCodeGeneration(projectId));
-                callClient("deployment", () -> deploymentClient.triggerDeploymentGeneration(projectId));
-            }
-        }
     }
 
     // ── File Helpers ──────────────────────────────────────────────────────────

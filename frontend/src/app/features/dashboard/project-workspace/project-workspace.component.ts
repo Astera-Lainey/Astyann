@@ -110,7 +110,7 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   get breadcrumbSectionLabel(): string {
     const section = this.section();
     const status = this.pcsfStatus();
-    if (section === 'requirements' && status !== 'VALIDATED') return 'Questions';
+    if (section === 'requirements' && status !== 'VALIDATED' && status !== 'APPROVED') return 'Questions';
     if (section === 'review') return 'Requirements';
     return section ? SECTION_LABELS[section] : '';
   }
@@ -172,8 +172,15 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
           this.pcsfStatus.set(response.pcsfStatus);
           this.pendingQuestionsCount.set(response.pendingQuestionsCount);
 
-          if (response.pendingQuestionsCount > 0 && !this.showQuestionsModal()) {
-            this.openQuestionsModal();
+          // Once requirements are approved (or already validated), clarification
+          // questions are moot — never reopen the modal or redirect away, even if
+          // pendingQuestionsCount is stale, so approving keeps the user on this page.
+          if (response.pcsfStatus === 'APPROVED' || response.pcsfStatus === 'VALIDATED') {
+            return;
+          }
+
+          if (response.pcsfStatus === 'UNDER_REVIEW' && response.pendingQuestionsCount > 0) {
+            if (!this.showQuestionsModal()) this.openQuestionsModal();
           } else if (response.pcsfStatus === 'UNDER_REVIEW' && this.section() !== 'review') {
             this.router.navigate(['/app/projects', pid, 'review']);
           } else if (response.pcsfStatus === 'FAILED') {
