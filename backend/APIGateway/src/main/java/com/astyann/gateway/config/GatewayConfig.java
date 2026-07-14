@@ -80,15 +80,21 @@ public class GatewayConfig {
                     .uri(projectServiceUrl))
 
             // ── Requirement Service (port 8083) ──────────────────────────────
+            // AI inference (PCSF) calls run against large Ollama models with no fixed
+            // upper bound — a negative response-timeout disables the gateway timeout.
             .route("requirement-service", r -> r
                     .path("/api/v1/requirements/**")
                     .filters(f -> f.filter(jwtFilter))
+                    .metadata("response-timeout", -1L)
                     .uri(requirementServiceUrl))
 
             // ── UML Service (port 8084) ───────────────────────────────────────
+            // Diagram generation runs against large Ollama models with no fixed
+            // upper bound — a negative response-timeout disables the gateway timeout.
             .route("uml-service", r -> r
                     .path("/api/v1/uml/**")
                     .filters(f -> f.filter(jwtFilter))
+                    .metadata("response-timeout", -1L)
                     .uri(umlServiceUrl))
 
             // ── Document Service (port 8085) ─────────────────────────────────
@@ -116,9 +122,12 @@ public class GatewayConfig {
                     .uri(deploymentServiceUrl))
 
             // ── AI Orchestrator Service (port 8089) ──────────────────────────
+            // Inference calls run against large Ollama models with no fixed upper
+            // bound — a negative response-timeout disables the gateway timeout.
             .route("ai-orchestrator-service", r -> r
                     .path("/api/v1/ai/**")
                     .filters(f -> f.filter(jwtFilter))
+                    .metadata("response-timeout", -1L)
                     .uri(aiOrchestratorServiceUrl))
 
             // ── RAG Service (port 8090) ───────────────────────────────────────

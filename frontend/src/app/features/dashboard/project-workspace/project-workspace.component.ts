@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
-import { Router, ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription, timer, switchMap, takeWhile, catchError, of } from 'rxjs';
 import { ProjectService } from '../../../core/services/project.service';
 import { Project, ClarificationQuestion, SubmitAnswersResponseData } from '../../../core/models/project.models';
 import { ToastService } from '../../../core/services/toast.service';
 import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
+import { SystemDesignComponent } from './system-design/system-design.component';
+import { VersionHistoryComponent } from './version-history/version-history.component';
 
 export type WorkspaceSection =
   | 'requirements'
@@ -29,7 +31,7 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
 @Component({
   selector: 'app-project-workspace-page',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RequirementsViewComponent],
+  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent, VersionHistoryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-workspace.component.html',
   styleUrl: './project-workspace.component.scss',
@@ -39,11 +41,6 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
   readonly section = signal<WorkspaceSection | null>(null);
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
-
-  readonly sectionLabels = SECTION_LABELS;
-  readonly sectionOrder: WorkspaceSection[] = [
-    'requirements', 'design', 'documents', 'code', 'versions', 'deploy',
-  ];
 
   readonly pcsfStatus = signal<string>('DRAFT');
   readonly pendingQuestionsCount = signal(0);
@@ -105,10 +102,15 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     return section ? SECTION_LABELS[section] : '';
   }
 
+  get showPageHeading(): boolean {
+    const section = this.section();
+    return this.isKnownSection && section !== 'requirements' && section !== 'review';
+  }
+
   get breadcrumbSectionLabel(): string {
     const section = this.section();
     const status = this.pcsfStatus();
-    if (section === 'requirements' && status !== 'VALIDATED') return 'Questions';
+    if (section === 'requirements' && status !== 'VALIDATED' && status !== 'APPROVED') return 'Questions';
     if (section === 'review') return 'Requirements';
     return section ? SECTION_LABELS[section] : '';
   }
@@ -126,19 +128,21 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
     const pid = this.projectId;
     this.isRetrying.set(true);
     this.retryError.set(null);
-    this.projectService.retryInference(pid).subscribe({
-      next: () => {
-        this.isRetrying.set(false);
-        this.pcsfStatus.set('INFERRING');
-        this.startStatusPolling();
-      },
-      error: (error: HttpErrorResponse) => {
-        this.isRetrying.set(false);
-        this.retryError.set(
-          error.error?.error ?? 'Could not retry analysis. Please try again.',
-        );
-      },
-    });
+    this.projectService
+      .resetProjectStatus(pid)
+      .pipe(switchMap(() => this.projectService.retryInference(pid)))
+      .subscribe({
+        next: () => {
+          this.isRetrying.set(false);
+          this.startStatusPolling();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.isRetrying.set(false);
+          this.retryError.set(
+            error.error?.error ?? 'Could not retry analysis. Please try again.',
+          );
+        },
+      });
   }
 
   // ── Status polling ──────────────────────────────────────────────────────────
@@ -168,8 +172,15 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
           this.pcsfStatus.set(response.pcsfStatus);
           this.pendingQuestionsCount.set(response.pendingQuestionsCount);
 
-          if (response.pendingQuestionsCount > 0 && !this.showQuestionsModal()) {
-            this.openQuestionsModal();
+          // Once requirements are approved (or already validated), clarification
+          // questions are moot — never reopen the modal or redirect away, even if
+          // pendingQuestionsCount is stale, so approving keeps the user on this page.
+          if (response.pcsfStatus === 'APPROVED' || response.pcsfStatus === 'VALIDATED') {
+            return;
+          }
+
+          if (response.pcsfStatus === 'UNDER_REVIEW' && response.pendingQuestionsCount > 0) {
+            if (!this.showQuestionsModal()) this.openQuestionsModal();
           } else if (response.pcsfStatus === 'UNDER_REVIEW' && this.section() !== 'review') {
             this.router.navigate(['/app/projects', pid, 'review']);
           } else if (response.pcsfStatus === 'FAILED') {

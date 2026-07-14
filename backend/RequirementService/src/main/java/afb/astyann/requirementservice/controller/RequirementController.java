@@ -6,6 +6,7 @@ import afb.astyann.requirementservice.domain.pcsf.Pcsf;
 import afb.astyann.requirementservice.dto.*;
 import afb.astyann.requirementservice.dto.pcsf.*;
 import afb.astyann.requirementservice.exception.RequirementNotFoundException;
+import afb.astyann.requirementservice.repository.ClarificationQuestionRepository;
 import afb.astyann.requirementservice.repository.RequirementRepository;
 import afb.astyann.requirementservice.service.RequirementBackgroundService;
 import afb.astyann.requirementservice.service.RequirementGenerationService;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
 public class RequirementController {
 
     private final RequirementRepository       requirementRepository;
+    private final ClarificationQuestionRepository clarificationQuestionRepository;
     private final RequirementBackgroundService backgroundService;
     private final RequirementGenerationService generationService;
     private final QAService                   qaService;
@@ -234,6 +237,23 @@ public class RequirementController {
         return ResponseEntity.accepted()
                 .body(ApiResponse.<Void>builder()
                         .status(202).message("Retry started. Poll /pcsf/status for updates.").build());
+    }
+
+    // ── Cleanup ────────────────────────────────────────────────────────────────
+
+    /**
+     * DELETE /api/v1/requirements/{projectId}
+     * Called by ProjectService when a project is deleted, to clean up this
+     * service's own data. Idempotent — a no-op if nothing exists for the project.
+     */
+    @DeleteMapping("/{projectId}")
+    @Transactional
+    public ResponseEntity<Void> delete(@PathVariable String projectId) {
+        requirementRepository.findByProjectId(parseId(projectId)).ifPresent(req -> {
+            clarificationQuestionRepository.deleteByRequirement(req);
+            requirementRepository.delete(req);
+        });
+        return ResponseEntity.noContent().build();
     }
 
     // ── Template download ──────────────────────────────────────────────────────

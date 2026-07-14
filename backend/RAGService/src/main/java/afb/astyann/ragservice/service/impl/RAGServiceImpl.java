@@ -7,6 +7,7 @@ import afb.astyann.ragservice.service.RAGService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
@@ -21,12 +22,19 @@ public class RAGServiceImpl implements RAGService {
 
     private final VectorStore vectorStore;
 
+    // Callers (RequirementService, etc.) send whole PCSF sections as single
+    // documents with no size limit — split here so no single chunk can exceed
+    // the embedding model's max input token count.
+    private final TokenTextSplitter textSplitter = new TokenTextSplitter();
+
     @Override
     public void indexDocument(IndexRequestDTO dto) {
         Document doc = toDocument(dto);
-        vectorStore.add(List.of(doc));
-        log.debug("Indexed document section='{}' for projectId={}",
-                  dto.getMetadata() != null ? dto.getMetadata().get("section") : "?", dto.getProjectId());
+        List<Document> chunks = textSplitter.apply(List.of(doc));
+        vectorStore.add(chunks);
+        log.debug("Indexed document section='{}' for projectId={} ({} chunk(s))",
+                  dto.getMetadata() != null ? dto.getMetadata().get("section") : "?",
+                  dto.getProjectId(), chunks.size());
     }
 
     @Override
@@ -38,8 +46,10 @@ public class RAGServiceImpl implements RAGService {
         List<Document> docs = dto.getItems().stream()
                 .map(this::toDocument)
                 .collect(Collectors.toList());
-        vectorStore.add(docs);
-        log.info("Indexed {} documents for projectId={}", docs.size(), dto.getProjectId());
+        List<Document> chunks = textSplitter.apply(docs);
+        vectorStore.add(chunks);
+        log.info("Indexed {} documents ({} chunks) for projectId={}",
+                docs.size(), chunks.size(), dto.getProjectId());
     }
 
     @Override

@@ -1,6 +1,5 @@
 package afb.astyann.projectservice.service;
 
-import afb.astyann.projectservice.domain.GenerationType;
 import afb.astyann.projectservice.dto.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,8 +22,5 @@ public interface IProjectService {
 
     /** Retrieve a single project by its ID. */
     ProjectDTO getProjectById(UUID projectId);
-
-    /** Trigger a generation pipeline for the given project. */
-    void triggerGeneration(UUID projectId, GenerationType type);
 
 }

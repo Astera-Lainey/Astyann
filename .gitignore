@@ -23,3 +23,5 @@ application-local.yml
 Thumbs.db
 
 opencode.json
+
+uploads/

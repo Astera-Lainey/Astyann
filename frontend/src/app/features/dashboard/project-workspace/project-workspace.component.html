@@ -101,23 +101,11 @@
       <span class="workspace__breadcrumb-current">{{ breadcrumbSectionLabel }}</span>
     </div>
 
-    <nav class="workspace__tabs">
-      @for (s of sectionOrder; track s) {
-        @if (s === 'requirements') {
-          <a [routerLink]="['/app/projects', project.projectId, s]"
-            class="workspace__tab"
-            [class.workspace__tab--active]="section() === 'review'">
-            {{ sectionLabels[s] }}
-          </a>
-        } @else {
-          <a [routerLink]="['/app/projects', project.projectId, s]"
-            routerLinkActive="workspace__tab--active"
-            class="workspace__tab">
-            {{ sectionLabels[s] }}
-          </a>
-        }
-      }
-    </nav>
+    @if (showPageHeading) {
+      <div class="workspace__page-heading">
+        <h1 class="workspace__title">{{ currentSectionLabel }}</h1>
+      </div>
+    }
 
     <div class="workspace__content">
       @if (!isKnownSection) {
@@ -141,7 +129,7 @@
               <p class="workspace__error" role="alert">{{ retryError() }}</p>
             }
           </div>
-        } @else if (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED') {
+        } @else if (pendingQuestionsCount() === 0 && (pcsfStatus() === 'UNDER_REVIEW' || pcsfStatus() === 'VALIDATED' || pcsfStatus() === 'APPROVED')) {
           <app-requirements-view
             [projectId]="project.projectId"
             [pcsfStatus]="pcsfStatus()"
@@ -152,16 +140,23 @@
             <p class="workspace__placeholder-text">
               @if (pcsfStatus() === 'INFERRING') {
                 Running AI analysis on your project…
+              } @else if (pcsfStatus() === 'UNDER_REVIEW' && pendingQuestionsCount() > 0) {
+                Waiting for your answers to the clarification questions…
               } @else {
                 Analysing your document…
               }
             </p>
           </div>
         }
+      } @else if (section() === 'design') {
+        <app-system-design
+          [projectId]="project.projectId"
+          [pcsfApproved]="pcsfStatus() === 'APPROVED'" />
+      } @else if (section() === 'versions') {
+        <app-version-history [projectId]="project.projectId" />
       } @else {
         <div class="workspace__placeholder">
-          <h2 class="workspace__placeholder-title">{{ currentSectionLabel }}</h2>
-          <p class="workspace__placeholder-text">{{ currentSectionLabel }} view coming soon.</p>
+          <p class="workspace__placeholder-text">This view is coming soon.</p>
         </div>
       }
     </div>

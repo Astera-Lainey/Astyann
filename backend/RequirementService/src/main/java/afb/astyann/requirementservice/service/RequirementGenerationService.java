@@ -1,5 +1,6 @@
 package afb.astyann.requirementservice.service;
 
+import afb.astyann.requirementservice.client.ProjectServiceClient;
 import afb.astyann.requirementservice.domain.PcsfStatus;
 import afb.astyann.requirementservice.domain.Requirement;
 import afb.astyann.requirementservice.dto.ApproveResponse;
@@ -23,13 +24,16 @@ public class RequirementGenerationService {
     private final RequirementRepository  requirementRepository;
     private final AiInferencePcsfService inferenceService;
     private final RagIndexingService     ragIndexingService;
+    private final ProjectServiceClient   projectServiceClient;
 
     public RequirementGenerationService(RequirementRepository requirementRepository,
                                         AiInferencePcsfService inferenceService,
-                                        @Lazy RagIndexingService ragIndexingService) {
+                                        @Lazy RagIndexingService ragIndexingService,
+                                        ProjectServiceClient projectServiceClient) {
         this.requirementRepository = requirementRepository;
         this.inferenceService      = inferenceService;
         this.ragIndexingService    = ragIndexingService;
+        this.projectServiceClient  = projectServiceClient;
     }
 
     @Transactional
@@ -54,10 +58,12 @@ public class RequirementGenerationService {
                 new TransactionSynchronization() {
                     @Override public void afterCommit() {
                         ragIndexingService.initializeIndexAsync(reqId);
+                        notifyProjectGenerating(projectId);
                     }
                 });
         } else {
             ragIndexingService.initializeIndexAsync(reqId);
+            notifyProjectGenerating(projectId);
         }
 
         log.info("Requirements approved for projectId={}. RAG indexing queued.", projectId);
@@ -66,6 +72,19 @@ public class RequirementGenerationService {
                 .status("APPROVED")
                 .message("Requirements approved. PCSF is being indexed into the RAG knowledge base.")
                 .build();
+    }
+
+    /**
+     * Best-effort notification to ProjectService so the Project's own status
+     * reflects PCSF approval. Failures are logged and swallowed — a ProjectService
+     * outage must not block PCSF approval from succeeding.
+     */
+    private void notifyProjectGenerating(UUID projectId) {
+        try {
+            projectServiceClient.updateStatus(projectId, new ProjectServiceClient.UpdateProjectStatusRequest("GENERATING"));
+        } catch (Exception ex) {
+            log.warn("Could not update project status to GENERATING for projectId={}: {}", projectId, ex.getMessage());
+        }
     }
 
     @Transactional

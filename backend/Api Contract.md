@@ -1432,14 +1432,6 @@ POST
 
 Retries the AI\-inference stage after a FAILED status, without requiring a new project\.
 
-API\-REQ\-12
-
-GET
-
-/api/v1/requirements/template
-
-Downloads the Astyann project specification template \(\.docx\)\.
-
 ### <a id="_Toc232406769"></a>__Endpoint Detail — Functional Specifications \(Requirements\)__
 
 __POST__
@@ -2090,40 +2082,6 @@ __Idempotent__
 
 No
 
-__GET__
-
-__/api/v1/requirements/template__
-
-__API\-REQ\-12__
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response__
-
-Binary \.docx file \(Content\-Type: application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found \(template resource missing\)
-
-__FR Covered__
-
-FR\-09
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
 ## <a id="_Toc232406900"></a>__RAG Service__
 
 __Note:__ the RAG Service is an internal, non\-user\-facing microservice — it is not routed through the API Gateway's JWT filter and is called service\-to\-service only \(currently by the Requirement Service, via a Feign client\)\. It supports FR\-09/FR\-13 by supplying semantically relevant context to AI generation calls, and has no functional/use\-case/user\-story traceability of its own\.
@@ -2407,6 +2365,8 @@ __Idempotent__
 Yes
 
 ## <a id="_Toc232406770"></a>__UML Diagrams__
+
+__Note:__ this module is implemented as the DiagramGeneratorService and is reached through the API Gateway at base path /api/v1/uml \(note the base path is /uml/\{projectId\}/\.\.\., not /projects/\{projectId\}/diagrams/\.\.\. as originally specified\)\. Additionally, GET \.\.\./\{diagramId\}/render takes format as a query parameter, not a path segment, as documented below\. All of API\-DIAG\-01 through 06 \(generate, list, approve, change\-request, regenerate, render\) are now implemented\. Diagrams also carry a FAILED status \(not in the original schema\) for a type whose AI generation or Kroki rendering could not be completed \(after one automatic self\-correction retry\); such diagrams still receive a diagramId and can be retried via regenerate\. Because API\-DIAG\-03 \(approve\) can approve multiple diagrams in one call, its response returns snapshotIds \(an array of UUIDs, one per approved diagram's version snapshot\) instead of the single snapshotId originally specified — each approved diagram produces its own snapshot via VersionService\. API\-DIAG\-05 \(regenerate\) now also applies any change instructions recorded via API\-DIAG\-04, clearing them on a successful feedback\-driven regeneration \(it ignores the request body's changeRequestId — like RequirementService's equivalent flow, it simply reads whatever instructions are currently stored for the diagram\), and its response includes previousVersionId \(the snapId of the diagram's prior active version snapshot, or null if it was never approved\)\.
 
 __API Code__
 
@@ -3911,6 +3871,8 @@ __Idempotent__
 Yes
 
 ## <a id="_Toc232406776"></a>__Version and Snapshot Management__
+
+__Note:__ this module is implemented as VersionService and is reached through the API Gateway at base path /api/v1/versions \(note the base path is /versions/\{projectId\}/\.\.\., not /projects/\{projectId\}/versions/\.\.\. as originally specified — the literal contract path would collide with ProjectService's already\-active /api/v1/projects/\*\* gateway route\)\. Only snapshot creation and read/listing \(createSnapshot, getTimeline, listSnapshots, getSnapshot\) are implemented in this pass; API\-VER\-02/03/04 \(ZIP download of the current or a historical version, and restore\) are NOT yet implemented, since they require multiple artifact\-producing services \(document generation, code generation, deployment packaging\) that do not yet exist\. Additionally, the Snapshot entity's entrySource field \(originally a single free\-text string, e\.g\. "User\-requested regeneration"\) has been split into two fields: entrySource \(UUID, nullable\) is now a self\-referential reference to the upstream artifact\-snapshot this one was derived from \(e\.g\. a future DocumentSnapshot's entrySource would point to the DiagramSnapshot it was generated from\), forming a provenance chain across the pipeline; triggerReason \(String, nullable\) carries the original free\-text "why" \(e\.g\. "Diagram approved", or the approval comment supplied to the diagram approve endpoint\)\. Since this pass only produces DiagramSnapshots \(the first stage in the chain\), entrySource is currently always null in practice\.
 
 __API Code__
 

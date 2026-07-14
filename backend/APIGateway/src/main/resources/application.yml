@@ -29,7 +29,7 @@ spring:
       # Graceful HTTP client settings
       httpclient:
         connect-timeout: 5000   # 5s connect timeout
-        response-timeout: 60s   # 60s for long-running AI generation calls
+        response-timeout: 60s   # default; AI-heavy routes override via per-route "response-timeout" metadata (see GatewayConfig)
 
 server:
   port: 8080

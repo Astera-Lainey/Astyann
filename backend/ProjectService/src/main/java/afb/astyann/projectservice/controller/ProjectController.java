@@ -1,5 +1,6 @@
 package afb.astyann.projectservice.controller;
 
+import afb.astyann.projectservice.domain.ProjectStatus;
 import afb.astyann.projectservice.dto.*;
 import afb.astyann.projectservice.service.IProjectService;
 import jakarta.validation.Valid;
@@ -101,20 +102,31 @@ public class ProjectController {
     }
 
     /**
-     * POST /api/v1/projects/{projectId}/generate
-     * Trigger a generation pipeline for the project.
+     * POST /api/v1/projects/{projectId}/retry-analysis
+     * Resets a FAILED project's status back to ANALYZING. Only touches the
+     * Project status field — does not call any other service and does not
+     * trigger background processing.
      */
-    @PostMapping("/{projectId}/generate")
-    public ResponseEntity<ApiResponse<Void>> triggerGeneration(
-            @PathVariable UUID projectId,
-            @Valid @RequestBody GenerationRequestDTO dto) {
-        projectService.triggerGeneration(projectId, dto.getType());
-        return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.<Void>builder()
-                        .status(202)
-                        .message("Generation triggered successfully.")
-                        .data(null)
-                        .build());
+    @PostMapping("/{projectId}/retry-analysis")
+    public ResponseEntity<ApiResponse<ProjectDTO>> retryAnalysis(
+            @PathVariable UUID projectId) {
+        ProjectDTO current = projectService.getProjectById(projectId);
+        if (current.getStatus() != ProjectStatus.FAILED) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<ProjectDTO>builder()
+                            .status(400)
+                            .message("Only failed projects can have their analysis retried.")
+                            .data(null)
+                            .build());
+        }
+        UpdateProjectDTO dto = new UpdateProjectDTO();
+        dto.setStatus(ProjectStatus.ANALYZING);
+        ProjectDTO updated = projectService.updateProject(projectId, dto);
+        return ResponseEntity.ok(ApiResponse.<ProjectDTO>builder()
+                .status(200)
+                .message("Project status reset to ANALYZING.")
+                .data(updated)
+                .build());
     }
 
     private UUID parseUserId(String rawUserId) {
