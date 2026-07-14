@@ -26,7 +26,7 @@ public final class DiagramPromptTemplates {
             Map.entry(DiagramType.BUSINESS_CLASS, "Model the domain/business entities and their relationships (no technical/persistence details)."),
             Map.entry(DiagramType.DESIGN_CLASS, "Model the technical class design: entities, attributes with types, and relationships suitable for a JPA implementation."),
             Map.entry(DiagramType.ACTIVITY, "Model the primary business process flow as an activity diagram with decision points."),
-            Map.entry(DiagramType.BUSINESS_SEQUENCE, "Model a business-level sequence diagram for the primary use case, showing actor-to-system interactions."),
+            Map.entry(DiagramType.BUSINESS_SEQUENCE, "Model a business-level sequence diagram for the primary use case, showing actor-to-system interactions where there is only one actor and one lifeline as system"),
             Map.entry(DiagramType.DESIGN_SEQUENCE, "Model a technical sequence diagram showing controller/service/repository interactions for the primary use case."),
             Map.entry(DiagramType.COMPONENT, "Model the system's components and their dependencies using PlantUML's `component \"Name\"` declarations or [Name] bracket syntax. Group related components with `package \"Name\" { ... }` if needed — do not use a \"module\" keyword, it does not exist in PlantUML."),
             Map.entry(DiagramType.DEPLOYMENT, "Model the deployment topology: nodes, artifacts, and communication protocols."),
