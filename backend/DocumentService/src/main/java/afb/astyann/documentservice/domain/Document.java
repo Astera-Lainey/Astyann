@@ -1,4 +1,4 @@
-package afb.astyann.diagramgeneratorservice.domain;
+package afb.astyann.documentservice.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -7,39 +7,40 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "uml_diagrams")
+@Table(name = "documents")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UMLDiagram {
+public class Document {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "diagram_id", updatable = false, nullable = false)
-    private UUID diagramId;
+    @Column(name = "document_id", updatable = false, nullable = false)
+    private UUID documentId;
 
     @Column(name = "project_id", nullable = false)
     private UUID projectId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private DiagramType type;
+    private DocumentType type;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private DiagramStatus status = DiagramStatus.PENDING_APPROVAL;
+    private DocumentStatus status = DocumentStatus.GENERATING;
 
-    @Column(name = "source_code", columnDefinition = "LONGTEXT")
-    private String sourceCode;
+    @Column(name = "file_path")
+    private String path;
 
-    @Column(name = "render_format")
-    private String renderFormat;
+    @Column(name = "page_count")
+    private Integer pageCount;
 
-    @Column(name = "generated_image_path")
-    private String generatedImagePath;
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer version = 1;
 
     @Column(name = "change_instructions", columnDefinition = "TEXT")
     private String changeInstructions;
@@ -48,9 +49,9 @@ public class UMLDiagram {
     private String lastError;
 
     /**
-     * Set once VersionService confirms a snapshot for this diagram's current APPROVED state.
-     * Null while APPROVED means the snapshot call failed (or hasn't run yet) — the diagram
-     * approval itself is not rolled back for that, so this is what the retry job polls on.
+     * Set once VersionService confirms a snapshot for this document's current APPROVED state.
+     * Null while APPROVED means the snapshot call failed (or hasn't run yet) — the approval
+     * itself is not rolled back for that, so this is what the retry job polls on.
      */
     @Column(name = "snapshot_id")
     private UUID snapshotId;

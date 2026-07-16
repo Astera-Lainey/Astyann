@@ -1,5 +1,6 @@
 package afb.astyann.diagramgeneratorservice.repository;
 
+import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,4 +13,5 @@ public interface UMLDiagramRepository extends JpaRepository<UMLDiagram, UUID> {
     List<UMLDiagram> findByProjectId(UUID projectId);
     Optional<UMLDiagram> findByProjectIdAndType(UUID projectId, DiagramType type);
     void deleteByProjectId(UUID projectId);
+    List<UMLDiagram> findByStatusAndSnapshotIdIsNull(DiagramStatus status);
 }

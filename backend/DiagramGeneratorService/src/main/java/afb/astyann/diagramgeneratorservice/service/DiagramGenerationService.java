@@ -177,25 +177,17 @@ public class DiagramGenerationService {
 
         // Synchronous: this is a pure outbound POST carrying in-memory diagram fields, not a
         // read of this service's own DB, so there's no pre-commit staleness risk to defer for.
+        // Failures here don't roll back the approval above — retryPendingSnapshots() sweeps up
+        // any diagram left APPROVED without a snapshotId.
+        String reason = (approvalComment != null && !approvalComment.isBlank()) ? approvalComment : "Diagram approved";
         List<UUID> snapshotIds = new ArrayList<>();
         for (UMLDiagram d : approvable) {
-            try {
-                var snap = versionServiceClient.createSnapshot(projectId, new VersionServiceClient.CreateSnapshotRequest(
-                        "DIAGRAM",
-                        d.getType().name(),
-                        null,
-                        (approvalComment != null && !approvalComment.isBlank()) ? approvalComment : "Diagram approved",
-                        d.getGeneratedImagePath(),
-                        d.getDiagramId(),
-                        d.getType().name()));
-                if (snap != null && snap.getData() != null) {
-                    snapshotIds.add(snap.getData().snapId());
-                }
-            } catch (Exception ex) {
-                log.error("Snapshot creation failed for diagramId={} — approval still recorded: {}",
-                        d.getDiagramId(), ex.getMessage());
+            UUID snapId = attemptSnapshot(projectId, d, reason);
+            if (snapId != null) {
+                snapshotIds.add(snapId);
             }
         }
+        repository.saveAll(approvable);
 
         // Deliberately not calling ProjectService to update project status here — ProjectStatus
         // (ANALYZING/GENERATING/COMPLETED/FAILED) has no per-stage "diagrams approved" value and
@@ -236,6 +228,53 @@ public class DiagramGenerationService {
         diagram.setChangeInstructions(instructions);
         diagram.setStatus(DiagramStatus.PENDING_APPROVAL);
         return repository.save(diagram);
+    }
+
+    /**
+     * Best-effort: creates a VersionService snapshot for an already-APPROVED diagram and, on
+     * success, stamps its snapshotId so it's no longer picked up by retryPendingSnapshots().
+     * Returns null (and just logs) on failure — callers are expected to tolerate that and let
+     * the retry job catch up later rather than fail/rollback the approval itself.
+     */
+    private UUID attemptSnapshot(UUID projectId, UMLDiagram diagram, String triggerReason) {
+        try {
+            var snap = versionServiceClient.createSnapshot(projectId, new VersionServiceClient.CreateSnapshotRequest(
+                    "DIAGRAM",
+                    diagram.getType().name(),
+                    null,
+                    triggerReason,
+                    diagram.getGeneratedImagePath(),
+                    diagram.getDiagramId(),
+                    diagram.getType().name()));
+            if (snap != null && snap.getData() != null) {
+                UUID snapId = snap.getData().snapId();
+                diagram.setSnapshotId(snapId);
+                return snapId;
+            }
+        } catch (Exception ex) {
+            log.error("Snapshot creation failed for diagramId={}: {}", diagram.getDiagramId(), ex.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Sweeps every APPROVED diagram still missing a snapshotId (approve() recorded the
+     * approval but the outbound createSnapshot call failed) and retries it. Invoked on a
+     * fixed schedule by SnapshotRetryScheduler — there is no other trigger for this, so a
+     * diagram stays retry-eligible indefinitely until VersionService accepts it.
+     */
+    @Transactional
+    public void retryPendingSnapshots() {
+        List<UMLDiagram> pending = repository.findByStatusAndSnapshotIdIsNull(DiagramStatus.APPROVED);
+        if (pending.isEmpty()) return;
+
+        log.info("Retrying snapshot creation for {} approved diagram(s) missing a snapshot", pending.size());
+        for (UMLDiagram d : pending) {
+            UUID snapId = attemptSnapshot(d.getProjectId(), d, "Diagram approved (retried snapshot creation)");
+            if (snapId != null) {
+                repository.save(d);
+            }
+        }
     }
 
     private UUID findActiveSnapshotId(UUID projectId, UUID diagramId) {
