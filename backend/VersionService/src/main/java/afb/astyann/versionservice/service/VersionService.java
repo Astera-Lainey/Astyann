@@ -109,6 +109,34 @@ public class VersionService {
     }
 
     /**
+     * Manually rolls back/forward the active version for a snapshot's artifact —
+     * e.g. reverting to an earlier approved diagram/document version. Deactivates
+     * whichever snapshot is currently active for the same (timelineId, artifactType,
+     * artifactId) and activates the requested one. Idempotent if already active.
+     */
+    @Transactional
+    public SnapshotDTO activateSnapshot(UUID snapId) {
+        Snapshot target = snapshotRepository.findById(snapId)
+                .orElseThrow(() -> new SnapshotNotFoundException(snapId));
+
+        if (!target.isActive()) {
+            snapshotRepository.findByTimelineIdAndArtifactTypeAndArtifactIdAndActiveTrue(
+                            target.getTimelineId(), target.getArtifactType(), target.getArtifactId())
+                    .ifPresent(prev -> {
+                        prev.setActive(false);
+                        snapshotRepository.save(prev);
+                    });
+
+            target.setActive(true);
+            target = snapshotRepository.save(target);
+        }
+
+        log.info("Snapshot activated manually: snapId={} artifactType={} artifactId={} versionNumber={}",
+                snapId, target.getArtifactType(), target.getArtifactId(), target.getVersionNumber());
+        return toDto(target);
+    }
+
+    /**
      * Called by ProjectService when a project is deleted, to clean up this
      * service's own data. Idempotent — a no-op if no timeline exists.
      */
