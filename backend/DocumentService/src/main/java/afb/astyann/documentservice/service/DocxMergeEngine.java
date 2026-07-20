@@ -2,8 +2,10 @@ package afb.astyann.documentservice.service;
 
 import afb.astyann.documentservice.service.schema.DocumentSchema;
 import afb.astyann.documentservice.service.schema.NestedGroupBlock;
+import afb.astyann.documentservice.service.schema.ParagraphBlock;
 import afb.astyann.documentservice.service.schema.RepeatingGroup;
 import afb.astyann.documentservice.service.schema.ScalarField;
+import afb.astyann.documentservice.service.schema.VerticalBlock;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
@@ -45,6 +47,12 @@ public class DocxMergeEngine {
             }
             for (NestedGroupBlock block : schema.nestedBlocks()) {
                 mergeNestedBlock(document, block, data.path(block.outerJsonKey()));
+            }
+            for (VerticalBlock block : schema.verticalBlocks()) {
+                mergeVerticalBlock(document, block, data.path(block.jsonKey()));
+            }
+            for (ParagraphBlock block : schema.paragraphBlocks()) {
+                mergeParagraphBlock(document, block, data.path(block.jsonKey()));
             }
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             document.write(out);
@@ -283,6 +291,102 @@ public class DocxMergeEngine {
             if (t != null) sb.append(t);
         });
         return sb.toString();
+    }
+
+    // ── Vertical block (one item's fields laid out as table rows, whole table cloned per item) ─
+
+    private void mergeVerticalBlock(XWPFDocument document, VerticalBlock block, JsonNode itemsNode) {
+        XWPFTable originalTable = findTableForPrefix(document, block.docxPrefix());
+        if (originalTable == null) {
+            log.warn("No table found for vertical block prefix {}", block.docxPrefix());
+            return;
+        }
+
+        CTTbl pristine = (CTTbl) originalTable.getCTTbl().copy();
+        XmlCursor cursor = originalTable.getCTTbl().newCursor();
+        for (JsonNode item : iterable(itemsNode)) {
+            // Same off-tree-fill-then-attach fix as mergeFlatGroupInTable/mergeNestedBlock: mutate
+            // the cloned table's content BEFORE it's attached to the live document tree.
+            CTTbl copy = (CTTbl) pristine.copy();
+            XWPFTable offTree = new XWPFTable(copy, document);
+            fillVerticalTable(offTree, block, item);
+
+            XWPFTable newTable = document.insertNewTbl(cursor);
+            newTable.getCTTbl().set(copy);
+            cursor.toCursor(newTable.getCTTbl().newCursor());
+            cursor.toEndToken();
+            cursor.toNextToken();
+        }
+        document.removeBodyElement(document.getBodyElements().indexOf(originalTable));
+    }
+
+    private void fillVerticalTable(XWPFTable table, VerticalBlock block, JsonNode item) {
+        Function<String, String> resolver = token -> {
+            if (!token.startsWith(block.docxPrefix() + ".")) return null;
+            String field = token.substring(block.docxPrefix().length() + 1);
+            return block.fields().contains(field) ? item.path(field).asText("") : null;
+        };
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                for (XWPFParagraph p : cell.getParagraphs()) {
+                    mergeParagraphPlaceholders(p, resolver);
+                }
+            }
+        }
+    }
+
+    // ── Paragraph block (one item's fields spread across a span of paragraphs, span cloned per item) ─
+
+    private void mergeParagraphBlock(XWPFDocument document, ParagraphBlock block, JsonNode itemsNode) {
+        List<XWPFParagraph> originals = findParagraphSpan(document, block.docxPrefix());
+        if (originals.isEmpty()) {
+            log.warn("No paragraph span found for block prefix {}", block.docxPrefix());
+            return;
+        }
+
+        List<CTP> pristine = originals.stream().map(p -> (CTP) p.getCTP().copy()).toList();
+
+        XmlCursor cursor = originals.get(0).getCTP().newCursor();
+        for (JsonNode item : iterable(itemsNode)) {
+            Function<String, String> itemResolver = token -> {
+                if (!token.startsWith(block.docxPrefix() + ".")) return null;
+                String field = token.substring(block.docxPrefix().length() + 1);
+                return block.fields().contains(field) ? item.path(field).asText("") : null;
+            };
+            for (CTP pristineP : pristine) {
+                CTP copy = (CTP) pristineP.copy();
+                XWPFParagraph offTree = new XWPFParagraph(copy, document);
+                mergeParagraphPlaceholders(offTree, itemResolver);
+
+                XWPFParagraph newP = document.insertNewParagraph(cursor);
+                newP.getCTP().set(copy);
+                cursor.toCursor(newP.getCTP().newCursor());
+                cursor.toEndToken();
+                cursor.toNextToken();
+            }
+        }
+        for (XWPFParagraph original : originals) {
+            document.removeBodyElement(document.getBodyElements().indexOf(original));
+        }
+    }
+
+    /** The contiguous run of body-level paragraphs spanning the first through the last
+     * occurrence of "${prefix.field}" for this block's declared fields. */
+    private List<XWPFParagraph> findParagraphSpan(XWPFDocument document, String prefix) {
+        List<IBodyElement> body = document.getBodyElements();
+        int first = -1, last = -1;
+        for (int i = 0; i < body.size(); i++) {
+            if (body.get(i) instanceof XWPFParagraph p && paragraphText(p).contains("${" + prefix + ".")) {
+                if (first < 0) first = i;
+                last = i;
+            }
+        }
+        if (first < 0) return List.of();
+        List<XWPFParagraph> span = new ArrayList<>();
+        for (int i = first; i <= last; i++) {
+            span.add((XWPFParagraph) body.get(i));
+        }
+        return span;
     }
 
     private Iterable<JsonNode> iterable(JsonNode arrayNode) {

@@ -138,6 +138,130 @@ class DocxMergeEngineSpikeTest {
         assertTrue(text.contains("Login") && text.contains("Logout") && text.contains("Reset Password"));
     }
 
+    @Test
+    void functionalAnalysis_verticalUseCaseBlock_clonesWholeTablePerItem() throws Exception {
+        DocumentSchema schema = DocumentSchemas.get(DocumentType.FUNCTIONAL_ANALYSIS);
+        ObjectNode data = buildFullData(schema, 2);
+
+        byte[] result;
+        try (InputStream template = new ClassPathResource(schema.templateResource()).getInputStream()) {
+            result = engine.merge(template, schema, data);
+        }
+
+        String text = extractText(result);
+        assertFalse(text.contains("${"), "No unresolved placeholders should remain: " + leftover(text));
+        assertTrue(text.contains("uc-0-title") && text.contains("uc-1-title"),
+                "Both use case titles should appear (whole vertical table cloned per item)");
+        assertTrue(text.contains("uc-0-alternativeScenario") && text.contains("uc-1-alternativeScenario"),
+                "A field from a non-first row of the vertical block should also be filled for both items");
+    }
+
+    @Test
+    void apiContract_verticalDetailBlockAndParagraphHeading_cloneCorrectly() throws Exception {
+        DocumentSchema schema = DocumentSchemas.get(DocumentType.API_CONTRACT);
+        ObjectNode data = buildFullData(schema, 2);
+
+        byte[] result;
+        try (InputStream template = new ClassPathResource(schema.templateResource()).getInputStream()) {
+            result = engine.merge(template, schema, data);
+        }
+
+        String text = extractText(result);
+        assertFalse(text.contains("${"), "No unresolved placeholders should remain: " + leftover(text));
+        assertTrue(text.contains("endpointGroup-0-name") && text.contains("endpointGroup-1-name"),
+                "Both group heading paragraphs should be cloned");
+        assertTrue(text.contains("endpointDetail-0-idempotent") && text.contains("endpointDetail-1-idempotent"),
+                "A field from the last row of the vertical detail block should be filled for both items");
+    }
+
+    @Test
+    void userManual_paragraphSpanAndVerticalFeatureBlock_cloneCorrectly() throws Exception {
+        DocumentSchema schema = DocumentSchemas.get(DocumentType.USER_MANUAL);
+        ObjectNode data = buildFullData(schema, 2);
+
+        byte[] result;
+        try (InputStream template = new ClassPathResource(schema.templateResource()).getInputStream()) {
+            result = engine.merge(template, schema, data);
+        }
+
+        String text = extractText(result);
+        assertFalse(text.contains("${"), "No unresolved placeholders should remain: " + leftover(text));
+        assertTrue(text.contains("featureModule-0-moduleName") && text.contains("featureModule-1-moduleName"),
+                "Both module headings (first paragraph of the span) should be cloned");
+        assertTrue(text.contains("featureModule-0-accessPath") && text.contains("featureModule-1-accessPath"),
+                "Both module access paths (last paragraph of the span) should be cloned");
+        assertTrue(text.contains("moduleFeature-0-errorHandling") && text.contains("moduleFeature-1-errorHandling"),
+                "A field from the last row of the vertical feature block should be filled for both items");
+    }
+
+    /** Fills every scalar/group/nested/vertical/paragraph field declared in the schema with a
+     * distinct, greppable value, using {@code itemsPerList} items per repeating block — enough to
+     * prove repetition actually clones distinct content rather than just structurally validating. */
+    private ObjectNode buildFullData(DocumentSchema schema, int itemsPerList) {
+        ObjectNode root = mapper.createObjectNode();
+        schema.scalars().forEach(f -> setDottedPath(root, f.path(), "SCALAR:" + f.path()));
+
+        schema.groups().forEach(g -> {
+            ArrayNode arr = root.putArray(g.jsonKey());
+            for (int i = 0; i < itemsPerList; i++) {
+                ObjectNode item = mapper.createObjectNode();
+                int idx = i;
+                g.fields().forEach(f -> item.put(f, g.docxPrefix() + "-" + idx + "-" + f));
+                arr.add(item);
+            }
+        });
+        schema.verticalBlocks().forEach(g -> {
+            ArrayNode arr = root.putArray(g.jsonKey());
+            for (int i = 0; i < itemsPerList; i++) {
+                ObjectNode item = mapper.createObjectNode();
+                int idx = i;
+                g.fields().forEach(f -> item.put(f, g.docxPrefix() + "-" + idx + "-" + f));
+                arr.add(item);
+            }
+        });
+        schema.paragraphBlocks().forEach(g -> {
+            ArrayNode arr = root.putArray(g.jsonKey());
+            for (int i = 0; i < itemsPerList; i++) {
+                ObjectNode item = mapper.createObjectNode();
+                int idx = i;
+                g.fields().forEach(f -> item.put(f, g.docxPrefix() + "-" + idx + "-" + f));
+                arr.add(item);
+            }
+        });
+        schema.nestedBlocks().forEach(nb -> {
+            ArrayNode outerArr = root.putArray(nb.outerJsonKey());
+            ObjectNode outerItem = mapper.createObjectNode();
+            outerItem.put("tableName", nb.headerDocxPrefix() + "-0-tableName");
+            ArrayNode innerArr = outerItem.putArray(nb.innerJsonField());
+            for (int i = 0; i < itemsPerList; i++) {
+                ObjectNode inner = mapper.createObjectNode();
+                int idx = i;
+                nb.rowFields().forEach(f -> inner.put(f, nb.rowDocxPrefix() + "-" + idx + "-" + f));
+                innerArr.add(inner);
+            }
+            outerArr.add(outerItem);
+        });
+        return root;
+    }
+
+    private void setDottedPath(ObjectNode root, String path, String value) {
+        String[] parts = path.split("\\.");
+        ObjectNode cur = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            cur = cur.has(parts[i]) && cur.get(parts[i]).isObject()
+                    ? (ObjectNode) cur.get(parts[i])
+                    : cur.putObject(parts[i]);
+        }
+        cur.put(parts[parts.length - 1], value);
+    }
+
+    private String leftover(String text) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\$\\{[\\w.]+}").matcher(text);
+        List<String> found = new java.util.ArrayList<>();
+        while (m.find()) found.add(m.group());
+        return found.toString();
+    }
+
     private void addCol(ArrayNode arr, String fieldName, String dataType, String fieldSize,
                         String required, String description, String example) {
         ObjectNode c = mapper.createObjectNode();

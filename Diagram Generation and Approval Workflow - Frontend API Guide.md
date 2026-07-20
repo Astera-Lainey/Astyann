@@ -62,7 +62,7 @@ The project's requirements (PCSF, from RequirementService) must be `APPROVED` be
 
 ## 1. Generate diagrams
 
-Kicks off PlantUML generation + Kroki rendering for one or more diagram types. Synchronous — the response only comes back once every requested type has either succeeded or failed (internally parallelized).
+Kicks off PlantUML generation + Kroki rendering for one or more diagram types. **Asynchronous** — returns immediately with every requested type in `GENERATING` status; it does not wait for the AI+Kroki pipelines to finish. (An earlier synchronous version blocked until every type succeeded or failed, which routinely outlived the gateway's 60s response timeout across a full 10-type batch.)
 
 ```
 POST /api/v1/uml/{projectId}/generate
@@ -79,35 +79,26 @@ Content-Type: application/json
 - Omit `diagramTypes` (or send `{}`) to generate all 10 types: `USE_CASE, BUSINESS_CLASS, DESIGN_CLASS, ACTIVITY, BUSINESS_SEQUENCE, DESIGN_SEQUENCE, COMPONENT, DEPLOYMENT, PACKAGE, ENTITY_RELATIONSHIP`.
 - `renderFormat`: `"SVG"` (default) or `"PNG"`.
 
-**Response `201`**:
+**Response `202`**:
 ```json
 {
-  "status": 201,
-  "message": "Diagrams generated.",
+  "status": 202,
+  "message": "Diagram generation started.",
   "data": {
     "diagrams": [
       {
         "diagramId": "8f14e...",
         "type": "USE_CASE",
-        "status": "PENDING_APPROVAL",
+        "status": "GENERATING",
         "renderUrl": "/api/v1/uml/<projectId>/8f14e.../render",
         "lastError": null,
         "previousVersionId": null
-      }
-    ],
-    "failures": [
-      {
-        "diagramId": "a21bc...",
-        "type": "ENTITY_RELATIONSHIP",
-        "reason": "Kroki rendering failed (400 BAD_REQUEST): Error 400: Syntax Error? ..."
       }
     ]
   }
 }
 ```
-- `diagrams`: successfully generated ones (also includes previously-`FAILED` types that succeeded this time).
-- `failures`: types that still failed after the automatic self-correction retry — each has a real `diagramId` you can call `change-request`/`regenerate` on directly.
-- The call only returns `422` (all failed and the whole batch was rejected) if it can't reach RequirementService/all downstream services fail entirely — a partial batch of failures still returns `201`.
+Poll `GET /{projectId}` until nothing is left `GENERATING` to find out how each type turned out — `PENDING_APPROVAL` on success (Kroki rendering includes an automatic self-correction retry internally before giving up), or `FAILED` with `lastError` populated. A `FAILED` type still has a real `diagramId` you can call `change-request`/`regenerate` on directly.
 
 ---
 
@@ -242,15 +233,17 @@ Content-Type: application/json
 ```
 Body is optional; omit `renderFormat` to keep the diagram's existing format.
 
-**Response `200`**:
+**Asynchronous** — returns immediately with the diagram in `GENERATING` status; it does not wait for the AI+Kroki pipeline to finish (the initial synchronous version routinely outlived the gateway's 60s response timeout, aborting the client connection while generation was still running server-side).
+
+**Response `202`**:
 ```json
 {
-  "status": 200,
-  "message": "Diagram regenerated.",
+  "status": 202,
+  "message": "Diagram regeneration started.",
   "data": {
     "diagramId": "8f14e...",
     "type": "DESIGN_CLASS",
-    "status": "PENDING_APPROVAL",
+    "status": "GENERATING",
     "renderUrl": "/api/v1/uml/<projectId>/8f14e.../render",
     "lastError": null,
     "previousVersionId": "9c31..."
@@ -259,8 +252,8 @@ Body is optional; omit `renderFormat` to keep the diagram's existing format.
 ```
 - If the diagram had pending `change-request` instructions, they're applied (feedback-driven regeneration) and then cleared. Otherwise it's a plain from-scratch regeneration (useful for retrying a `FAILED` diagram with no feedback).
 - `previousVersionId`: the diagram's prior *approved* version snapshot (`snapId` from VersionService), or `null` if it was never approved before.
-- If regeneration fails again, the response's `status` will be `"FAILED"` with `lastError` populated (still a `200` — the request was processed, it's the generation that didn't succeed; check `status`/`lastError`, don't rely on HTTP status alone here).
-- `409` if the diagram is currently `APPROVED` — call `change-request` first, which resets it to `PENDING_APPROVAL` and unblocks this call.
+- Poll `GET /{projectId}` until the diagram is no longer `GENERATING` to see the outcome — `PENDING_APPROVAL` on success, or `FAILED` with `lastError` populated on failure.
+- `409` if the diagram is currently `APPROVED` — call `change-request` first, which resets it to `PENDING_APPROVAL` and unblocks this call. Also `409` if it's already `GENERATING`.
 - `422` if the project's requirements are no longer `APPROVED`.
 
 ---
@@ -311,12 +304,12 @@ Each diagram *type* has its own independent version sequence (`versionNumber` 1,
 
 | Code | Meaning here |
 |---|---|
-| 200 | Success (list/approve/change-request/regenerate/render) |
-| 201 | Diagrams generated |
+| 200 | Success (list/approve/change-request/render) |
+| 202 | Diagram generation/regeneration started |
 | 404 | Diagram/project/timeline/snapshot not found |
-| 409 | Invalid state transition (regenerate on `APPROVED` without a prior change-request; approve with nothing `PENDING_APPROVAL`) |
+| 409 | Invalid state transition (regenerate on `APPROVED` without a prior change-request; regenerate/approve while still `GENERATING`; approve with nothing `PENDING_APPROVAL`) |
 | 422 | Requirements not `APPROVED` (generate/regenerate gate) |
-| 503 | A downstream dependency (AI/Kroki/RequirementService) is unreachable and the whole batch failed |
+| 503 | A downstream dependency (AI/Kroki/RequirementService) is unreachable |
 | 500 | Unexpected server error |
 
 ## Typical frontend flow

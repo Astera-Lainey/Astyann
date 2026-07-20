@@ -60,7 +60,7 @@ public final class DocumentSchemas {
                         new RepeatingGroup("req", "req", List.of("id", "title", "description", "priority")),
                         new RepeatingGroup("milestone", "milestone", List.of("phase", "duration", "description"))
                 ),
-                List.of());
+                List.of(), List.of(), List.of());
     }
 
     private static DocumentSchema functionalAnalysis() {
@@ -74,12 +74,15 @@ public final class DocumentSchemas {
                 List.of(
                         new RepeatingGroup("internalActor", "internalActor", List.of("name", "role")),
                         new RepeatingGroup("externalActor", "externalActor", List.of("name", "role")),
-                        new RepeatingGroup("uc", "uc", List.of("title", "objective", "actors", "preconditions",
-                                "mainScenario", "alternativeScenario", "postconditions")),
                         new RepeatingGroup("entity", "entity", List.of("name", "attributes", "methods")),
                         new RepeatingGroup("fr", "fr", List.of("id", "description")),
                         new RepeatingGroup("nfr", "nfr", List.of("id", "description"))
                 ),
+                List.of(),
+                // "uc" lays a single use case's fields out as table ROWS (Title/Objective/Actors/...),
+                // not as columns of a repeatable row — the whole table is cloned once per use case.
+                List.of(new VerticalBlock("uc", "uc", List.of("title", "objective", "actors", "preconditions",
+                        "postconditions", "mainScenario", "alternativeScenario"))),
                 List.of());
     }
 
@@ -99,7 +102,7 @@ public final class DocumentSchemas {
                         new RepeatingGroup("tool", "tool", List.of("name", "version", "purpose")),
                         new RepeatingGroup("refDoc", "refDoc", List.of("title", "description"))
                 ),
-                List.of());
+                List.of(), List.of(), List.of());
     }
 
     private static DocumentSchema deploymentGuide() {
@@ -126,7 +129,7 @@ public final class DocumentSchemas {
                         new RepeatingGroup("smokeTest", "smokeTest", List.of("step", "action", "expectedResult", "status")),
                         new RepeatingGroup("trouble", "trouble", List.of("symptom", "probableCause", "correctiveAction"))
                 ),
-                List.of());
+                List.of(), List.of(), List.of());
     }
 
     private static DocumentSchema architectureDocument() {
@@ -155,7 +158,7 @@ public final class DocumentSchemas {
                         new RepeatingGroup("decision", "decision", List.of("decision", "justification")),
                         new RepeatingGroup("architecturalView", "architecturalView", List.of("description"))
                 ),
-                List.of());
+                List.of(), List.of(), List.of());
     }
 
     private static DocumentSchema apiContract() {
@@ -171,15 +174,18 @@ public final class DocumentSchemas {
                         "coverageStats.coveragePercent"
                 ),
                 List.of(
-                        new RepeatingGroup("endpointGroup", "endpointGroup", List.of("name")),
                         new RepeatingGroup("endpoint", "endpoint", List.of("apiCode", "method", "path", "description")),
-                        new RepeatingGroup("endpointDetail", "endpointDetail", List.of("apiCode", "method", "path",
-                                "pathParameters", "queryParameters", "bodyParameters", "requiredHeaders",
-                                "requestSchema", "responseSchema", "statusCodes", "frCovered", "security", "idempotent")),
                         new RepeatingGroup("httpCode", "httpCode", List.of("code", "name", "description")),
                         new RepeatingGroup("trace", "trace", List.of("apiCode", "method", "path", "frCovered", "ucCovered", "usCovered"))
                 ),
-                List.of());
+                List.of(),
+                // "endpointDetail" lays a single endpoint's fields out as table ROWS, not columns of a
+                // repeatable row — the whole table is cloned once per endpoint.
+                List.of(new VerticalBlock("endpointDetail", "endpointDetail", List.of("apiCode", "method", "path",
+                        "pathParameters", "queryParameters", "bodyParameters", "requiredHeaders",
+                        "requestSchema", "responseSchema", "statusCodes", "frCovered", "security", "idempotent"))),
+                // "endpointGroup" is a bare heading paragraph (not inside any table) repeated once per group.
+                List.of(new ParagraphBlock("endpointGroup", "endpointGroup", List.of("name"))));
     }
 
     private static DocumentSchema userManual() {
@@ -194,15 +200,21 @@ public final class DocumentSchemas {
                         "interfaceOverview.mainNavigation", "interfaceOverview.dashboard", "interfaceOverview.commonElements"
                 ),
                 List.of(
-                        new RepeatingGroup("featureModule", "featureModule", List.of("moduleName", "overview", "accessPath")),
-                        new RepeatingGroup("moduleFeature", "moduleFeature", List.of("featureName", "steps", "expectedOutcome", "errorHandling")),
                         new RepeatingGroup("feature", "feature", List.of("area", "description")),
                         new RepeatingGroup("permission", "permission", List.of("action", "administrator", "manager", "standardUser")),
                         new RepeatingGroup("faq", "faq", List.of("question", "answer")),
                         new RepeatingGroup("glossary", "glossary", List.of("term", "definition")),
                         new RepeatingGroup("error", "error", List.of("message", "cause", "correctiveAction"))
                 ),
-                List.of());
+                List.of(),
+                // "moduleFeature" lays a single feature's fields out as table ROWS, not columns of a
+                // repeatable row — the whole table is cloned once per feature.
+                List.of(new VerticalBlock("moduleFeature", "moduleFeature",
+                        List.of("featureName", "steps", "expectedOutcome", "errorHandling"))),
+                // "featureModule" spans 3 separate paragraphs (moduleName/overview/accessPath), not one
+                // header paragraph — the whole span is cloned once per module.
+                List.of(new ParagraphBlock("featureModule", "featureModule",
+                        List.of("moduleName", "overview", "accessPath"))));
     }
 
     private static DocumentSchema dataDictionary() {
@@ -217,6 +229,7 @@ public final class DocumentSchemas {
                         new RepeatingGroup("constraint", "constraints", List.of("tableName", "type", "detail"))
                 ),
                 List.of(new NestedGroupBlock("colTable", "col", "tables", "columns",
-                        List.of("fieldName", "dataType", "fieldSize", "required", "description", "example"))));
+                        List.of("fieldName", "dataType", "fieldSize", "required", "description", "example"))),
+                List.of(), List.of());
     }
 }

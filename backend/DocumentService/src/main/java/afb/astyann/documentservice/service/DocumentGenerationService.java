@@ -283,6 +283,14 @@ public class DocumentGenerationService {
 
     public record RegenerateResult(Document document, UUID previousVersionId) {}
 
+    /**
+     * Kicks off regeneration for a single, already-existing document and returns immediately —
+     * it does NOT wait for the AI+merge pipeline to finish. Mirrors startGeneration()'s async
+     * pattern: blocking here until the pipeline finished routinely outlived the gateway's
+     * response-timeout (documents' larger AI-JSON payloads make this even more likely than for
+     * diagrams). Poll GET /{projectId} until the document is no longer GENERATING to see the
+     * outcome.
+     */
     public RegenerateResult regenerateDocument(UUID projectId, UUID documentId) {
         Document existing = repository.findById(documentId)
                 .filter(d -> d.getProjectId().equals(projectId))
@@ -301,18 +309,29 @@ public class DocumentGenerationService {
 
         UUID previousVersionId = findActiveSnapshotId(projectId, documentId);
         int nextVersion = (existing.getVersion() == null ? 1 : existing.getVersion()) + 1;
-
         String instructions = existing.getChangeInstructions();
-        Document result = (instructions != null && !instructions.isBlank())
-                ? generateWithFeedback(projectId, existing.getType(), instructions)
-                : generateOne(projectId, existing.getType());
+        DocumentType type = existing.getType();
 
-        if (result.getStatus() != DocumentStatus.FAILED) {
-            result.setVersion(nextVersion);
-            result = repository.save(result);
-        }
+        existing.setStatus(DocumentStatus.GENERATING);
+        existing.setLastError(null);
+        Document placeholder = repository.save(existing);
 
-        return new RegenerateResult(result, previousVersionId);
+        documentExecutor.execute(() -> {
+            try {
+                Document result = (instructions != null && !instructions.isBlank())
+                        ? generateWithFeedback(projectId, type, instructions)
+                        : generateOne(projectId, type);
+                if (result.getStatus() != DocumentStatus.FAILED) {
+                    result.setVersion(nextVersion);
+                    repository.save(result);
+                }
+            } catch (Exception ex) {
+                log.error("Unexpected failure regenerating documentId={}: {}", documentId, ex.getMessage(), ex);
+                markFailed(placeholder, ex.getMessage());
+            }
+        });
+
+        return new RegenerateResult(placeholder, previousVersionId);
     }
 
     /**

@@ -6,5 +6,6 @@ import java.util.List;
 
 public record DocumentSchema(DocumentType type, String templateResource, String promptHint,
                               List<ScalarField> scalars, List<RepeatingGroup> groups,
-                              List<NestedGroupBlock> nestedBlocks) {
+                              List<NestedGroupBlock> nestedBlocks,
+                              List<VerticalBlock> verticalBlocks, List<ParagraphBlock> paragraphBlocks) {
 }

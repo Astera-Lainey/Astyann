@@ -110,12 +110,17 @@ public class DiagramGenerationService {
     public record RegenerateResult(UMLDiagram diagram, UUID previousVersionId) {}
 
     /**
-     * Re-runs generation for a single, already-existing diagram (by id) — used to retry a
-     * diagram that previously ended up FAILED, or to apply feedback recorded via change-request.
-     * If the diagram has stored change-request instructions, applies them (feedback-driven
-     * regeneration) instead of a plain from-scratch regeneration, and clears them on success.
-     * Rejects APPROVED diagrams outright — a change-request must be submitted first, which
-     * resets the diagram to PENDING_APPROVAL and is what actually allows this to proceed.
+     * Kicks off regeneration for a single, already-existing diagram (by id) and returns
+     * immediately — it does NOT wait for the AI+Kroki pipeline to finish. Mirrors
+     * startGeneration()'s async pattern: blocking here until the pipeline finished routinely
+     * outlived the gateway's response-timeout, the same failure mode startGeneration was fixed
+     * for. Poll GET /{projectId} until the diagram is no longer GENERATING to see the outcome.
+     * Used to retry a diagram that previously ended up FAILED, or to apply feedback recorded via
+     * change-request. If the diagram has stored change-request instructions, applies them
+     * (feedback-driven regeneration) instead of a plain from-scratch regeneration, and clears
+     * them on success. Rejects APPROVED diagrams outright — a change-request must be submitted
+     * first, which resets the diagram to PENDING_APPROVAL and is what actually allows this to
+     * proceed.
      */
     public RegenerateResult regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
         UMLDiagram existing = repository.findById(diagramId)
@@ -134,13 +139,27 @@ public class DiagramGenerationService {
 
         String format = normalizeFormat(formatOverride != null ? formatOverride : existing.getRenderFormat());
         UUID previousVersionId = findActiveSnapshotId(projectId, diagramId);
-
         String instructions = existing.getChangeInstructions();
-        UMLDiagram result = (instructions != null && !instructions.isBlank())
-                ? generateWithFeedback(projectId, existing, format, instructions)
-                : generateOne(projectId, existing.getType(), format);
 
-        return new RegenerateResult(result, previousVersionId);
+        existing.setStatus(DiagramStatus.GENERATING);
+        existing.setRenderFormat(format);
+        existing.setLastError(null);
+        UMLDiagram placeholder = repository.save(existing);
+
+        diagramExecutor.execute(() -> {
+            try {
+                if (instructions != null && !instructions.isBlank()) {
+                    generateWithFeedback(projectId, placeholder, format, instructions);
+                } else {
+                    generateOne(projectId, placeholder.getType(), format);
+                }
+            } catch (Exception ex) {
+                log.error("Unexpected failure regenerating diagramId={}: {}", diagramId, ex.getMessage(), ex);
+                markFailed(placeholder, ex.getMessage());
+            }
+        });
+
+        return new RegenerateResult(placeholder, previousVersionId);
     }
 
     public record ApproveOutcome(List<UUID> snapshotIds, int updatedCount, boolean allDiagramsApproved) {}

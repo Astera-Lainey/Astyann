@@ -72,6 +72,11 @@ public class UMLDiagramController {
                 .build());
     }
 
+    /**
+     * Starts regeneration and returns immediately with the diagram in GENERATING status — it
+     * does not wait for the AI+Kroki pipeline to finish. Poll GET /{projectId} until the diagram
+     * is no longer GENERATING to find out the outcome (PENDING_APPROVAL or FAILED).
+     */
     @PostMapping("/{projectId}/{diagramId}/regenerate")
     public ResponseEntity<ApiResponse<DiagramSummaryDTO>> regenerate(
             @PathVariable String projectId,
@@ -81,17 +86,14 @@ public class UMLDiagramController {
         UUID dId = parseId(diagramId);
         String formatOverride = body != null ? body.getRenderFormat() : null;
         DiagramGenerationService.RegenerateResult result = service.regenerateDiagram(pId, dId, formatOverride);
-        UMLDiagram diagram = result.diagram();
-        String message = diagram.getStatus() == DiagramStatus.FAILED
-                ? "Diagram regeneration failed."
-                : "Diagram regenerated.";
-        DiagramSummaryDTO dto = toSummary(pId, diagram);
+        DiagramSummaryDTO dto = toSummary(pId, result.diagram());
         dto.setPreviousVersionId(result.previousVersionId());
-        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
-                .status(200)
-                .message(message)
-                .data(dto)
-                .build());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.<DiagramSummaryDTO>builder()
+                        .status(202)
+                        .message("Diagram regeneration started.")
+                        .data(dto)
+                        .build());
     }
 
     @PostMapping("/{projectId}/approve")

@@ -209,15 +209,17 @@ Content-Type: application/json
 ```
 No format concept for documents (that's diagram/Kroki-specific) — body is effectively unused, just send `{}`.
 
-**Response `200`**:
+**Asynchronous** — returns immediately with the document in `GENERATING` status; it does not wait for the AI+merge pipeline to finish. (An earlier synchronous version blocked on the full pipeline, which routinely outlived the gateway's 60s response timeout — documents' larger AI-JSON payloads make this even more likely to happen than for diagrams.)
+
+**Response `202`**:
 ```json
 {
-  "status": 200,
-  "message": "Document regenerated.",
+  "status": 202,
+  "message": "Document regeneration started.",
   "data": {
     "documentId": "8f14e...",
     "type": "SRS",
-    "status": "PENDING_APPROVAL",
+    "status": "GENERATING",
     "pageCount": 12,
     "lastError": null,
     "previousVersionId": "9c31..."
@@ -226,19 +228,19 @@ No format concept for documents (that's diagram/Kroki-specific) — body is effe
 ```
 - If change-request instructions were stored, they're applied (a fresh regeneration guided by the feedback — documents have no reverse mapping back to the original AI JSON the way diagrams do, so this isn't a literal incremental edit) and cleared on success.
 - `previousVersionId`: the document's prior *approved* version snapshot, or `null` if never approved.
-- If regeneration fails again, `status` will be `"FAILED"` with `lastError` populated — still a `200` (the request was processed; check `status`/`lastError`, don't rely on HTTP status alone).
-- `409` if the document is `APPROVED` (submit change-request first) or still `GENERATING`.
+- Poll `GET /{projectId}` until the document is no longer `GENERATING` to see the outcome — `PENDING_APPROVAL` on success, or `FAILED` with `lastError` populated on failure.
+- `409` if the document is `APPROVED` (submit change-request first) or already `GENERATING`.
 
 ---
 
 ## Status code reference
 
 | Code | Meaning here |
-|---|---|
-| 200 | Success (list/download/approve/change-request/regenerate) |
-| 202 | Document generation started |
+| --- | --- |
+| 200 | Success (list/download/approve/change-request) |
+| 202 | Document generation/regeneration started |
 | 404 | Document/project not found, or not yet generated |
-| 409 | Invalid state transition (regenerate on `APPROVED` without a prior change-request; approve on non-`PENDING_APPROVAL`; approve on already-`APPROVED`; no approved diagrams yet) |
+| 409 | Invalid state transition (regenerate on `APPROVED` without a prior change-request; regenerate/approve while still `GENERATING`; approve on already-`APPROVED`; no approved diagrams yet) |
 | 422 | Requirements not `APPROVED` (generate/regenerate gate), or a blocking validation check failed on approve |
 | 503 | A downstream dependency (AI/RequirementService/DiagramGeneratorService) is unreachable |
 | 500 | Unexpected server error |

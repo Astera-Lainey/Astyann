@@ -65,6 +65,18 @@ public final class DocumentPromptTemplates {
             nb.rowFields().forEach(f -> innerItem.put(f, "<" + f + ">"));
             outerItem.putArray(nb.innerJsonField()).add(innerItem);
         });
+        // Vertical/paragraph blocks are just another array-of-objects from the AI's perspective —
+        // how the merge engine physically lays them out in the .docx doesn't change the JSON shape.
+        schema.verticalBlocks().forEach(g -> {
+            ObjectNode item = mapper.createObjectNode();
+            g.fields().forEach(f -> item.put(f, "<" + f + ">"));
+            root.putArray(g.jsonKey()).add(item);
+        });
+        schema.paragraphBlocks().forEach(g -> {
+            ObjectNode item = mapper.createObjectNode();
+            g.fields().forEach(f -> item.put(f, "<" + f + ">"));
+            root.putArray(g.jsonKey()).add(item);
+        });
         return root;
     }
 

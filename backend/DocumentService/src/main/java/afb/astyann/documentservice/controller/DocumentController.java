@@ -118,6 +118,11 @@ public class DocumentController {
                 .build());
     }
 
+    /**
+     * Starts regeneration and returns immediately with the document in GENERATING status — it
+     * does not wait for the AI+merge pipeline to finish. Poll GET /{projectId} until the document
+     * is no longer GENERATING to find out the outcome (PENDING_APPROVAL or FAILED).
+     */
     @PostMapping("/{projectId}/{documentId}/regenerate")
     public ResponseEntity<ApiResponse<DocumentSummaryDTO>> regenerate(
             @PathVariable String projectId,
@@ -125,17 +130,14 @@ public class DocumentController {
             @RequestBody(required = false) RegenerateDocumentRequest body) {
         DocumentGenerationService.RegenerateResult result =
                 service.regenerateDocument(parseId(projectId), parseId(documentId));
-        Document doc = result.document();
-        String message = doc.getStatus() == DocumentStatus.FAILED
-                ? "Document regeneration failed."
-                : "Document regenerated.";
-        DocumentSummaryDTO dto = toSummary(doc);
+        DocumentSummaryDTO dto = toSummary(result.document());
         dto.setPreviousVersionId(result.previousVersionId());
-        return ResponseEntity.ok(ApiResponse.<DocumentSummaryDTO>builder()
-                .status(200)
-                .message(message)
-                .data(dto)
-                .build());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.<DocumentSummaryDTO>builder()
+                        .status(202)
+                        .message("Document regeneration started.")
+                        .data(dto)
+                        .build());
     }
 
     private DocumentSummaryDTO toSummary(Document d) {
