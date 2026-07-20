@@ -1,5 +1,56 @@
 <div class="sd">
 
+  @if (showApproveConfirm()) {
+    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="sd-approve-confirm-title">
+      <div class="modal-dialog sd__confirm-dialog">
+        <div class="sd__modal-icon sd__modal-icon--warn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="modal__body">
+          <p id="sd-approve-confirm-title" class="modal__question">Approve all diagrams?</p>
+          <p class="sd__modal-text">
+            Once approved, these diagrams will be locked and no further changes can be made.
+            You'll move on to the next stage, where project documentation is generated.
+          </p>
+          @if (approveError()) {
+            <p class="modal__error" role="alert">{{ approveError() }}</p>
+          }
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="modal__btn modal__btn--secondary" [disabled]="isApprovingAll()" (click)="cancelApproveConfirm()">Cancel</button>
+          <button type="button" class="modal__btn sd__confirm-btn" [disabled]="isApprovingAll()" (click)="confirmApprove()">
+            @if (isApprovingAll()) {
+              <span class="modal__btn-spinner"></span> Approving…
+            } @else {
+              Yes, approve
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showApproveSuccess()) {
+    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="sd-approve-success-title">
+      <div class="modal-dialog sd__confirm-dialog">
+        <div class="sd__modal-icon sd__modal-icon--success">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="modal__body">
+          <p id="sd-approve-success-title" class="modal__question">Diagrams approved</p>
+          <p class="sd__modal-text">
+            All diagrams are locked in and can no longer be edited. Continue to generate the
+            project documentation.
+          </p>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="modal__btn modal__btn--secondary" (click)="closeApproveSuccess()">Close</button>
+          <button type="button" class="modal__btn modal__btn--primary" (click)="goToNextStep()">Next Step</button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (isLoadingList()) {
     <div class="sd__placeholder">
       <div class="sd__spinner"></div>
@@ -66,7 +117,7 @@
         }
         <button type="button" class="sd__approve-all-btn"
           [disabled]="!hasPendingApproval() || isApprovingAll()"
-          (click)="approveAll()">
+          (click)="openApproveConfirm()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           {{ isApprovingAll() ? 'Approving…' : 'Approve design' }}
         </button>
@@ -97,6 +148,11 @@
                   Retry
                 }
               </button>
+            </div>
+          } @else if (diagram.status === 'GENERATING') {
+            <div class="sd__viewer-loading">
+              <div class="sd__spinner"></div>
+              <p class="sd__viewer-empty-text">Generating diagram…</p>
             </div>
           } @else {
             <div class="sd__viewer-toolbar">

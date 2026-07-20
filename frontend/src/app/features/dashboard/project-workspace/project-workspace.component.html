@@ -103,7 +103,41 @@
 
     @if (showPageHeading) {
       <div class="workspace__page-heading">
-        <h1 class="workspace__title">{{ currentSectionLabel }}</h1>
+        <div class="workspace__page-heading-main">
+          <h1 class="workspace__title">{{ currentSectionLabel }}</h1>
+
+          @if (section() === 'documents') {
+            <div class="workspace__title-info-wrap">
+              <button type="button" class="workspace__title-info-btn" aria-label="What do the statuses mean?"
+                [class.workspace__title-info-btn--active]="showDocLegend()" (click)="toggleDocLegend()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+
+              @if (showDocLegend()) {
+                <div class="workspace__title-legend" role="tooltip">
+                  <p><span class="workspace__legend-dot workspace__legend-dot--pending"></span> Pending Approval — generated, awaiting review</p>
+                  <p><span class="workspace__legend-dot workspace__legend-dot--approved"></span> Approved</p>
+                  <p><span class="workspace__legend-dot workspace__legend-dot--failed"></span> Failed — use Retry</p>
+                  <p><span class="workspace__legend-dot workspace__legend-dot--generating"></span> Generating</p>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        @if (section() === 'documents' && docComponent(); as doc) {
+          <div class="workspace__page-heading-actions">
+            @if (doc.approveError()) {
+              <p class="workspace__inline-error" role="alert">{{ doc.approveError() }}</p>
+            }
+            @if (doc.hasPendingApproval()) {
+              <button type="button" class="workspace__approve-all-btn" [disabled]="doc.isApprovingAll()" (click)="doc.approveAll()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                {{ doc.isApprovingAll() ? 'Approving…' : 'Approve all' }}
+              </button>
+            }
+          </div>
+        }
       </div>
     }
 
@@ -154,6 +188,8 @@
           [pcsfApproved]="pcsfStatus() === 'APPROVED'" />
       } @else if (section() === 'versions') {
         <app-version-history [projectId]="project.projectId" />
+      } @else if (section() === 'documents') {
+        <app-documentation [projectId]="project.projectId" />
       } @else {
         <div class="workspace__placeholder">
           <p class="workspace__placeholder-text">This view is coming soon.</p>

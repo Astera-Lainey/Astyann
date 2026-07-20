@@ -12,6 +12,7 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
 import { DiagramService } from '../../../../core/services/diagram.service';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -116,6 +117,8 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   readonly isApproving = signal(false);
   readonly isApprovingAll = signal(false);
   readonly approveError = signal<string | null>(null);
+  readonly showApproveConfirm = signal(false);
+  readonly showApproveSuccess = signal(false);
 
   private lastLoadedProjectId: string | null = null;
   private pollSub: Subscription | null = null;
@@ -123,6 +126,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   constructor(
     private readonly diagramService: DiagramService,
     private readonly toastService: ToastService,
+    private readonly router: Router,
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -671,7 +675,19 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     });
   }
 
-  approveAll(): void {
+  openApproveConfirm(): void {
+    if (!this.hasPendingApproval()) return;
+    this.approveError.set(null);
+    this.showApproveConfirm.set(true);
+  }
+
+  cancelApproveConfirm(): void {
+    if (this.isApprovingAll()) return;
+    this.showApproveConfirm.set(false);
+    this.approveError.set(null);
+  }
+
+  confirmApprove(): void {
     if (this.isApprovingAll() || !this.hasPendingApproval()) return;
     const pendingIds = this.diagrams()
       .filter((d) => d.status === 'PENDING_APPROVAL')
@@ -680,19 +696,26 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.isApprovingAll.set(true);
     this.approveError.set(null);
     this.diagramService.approve(this.projectId, {}).subscribe({
-      next: (res) => {
+      next: () => {
         this.isApprovingAll.set(false);
         this.markApproved(pendingIds);
-        this.toastService.show(
-          res.allDiagramsApproved ? 'All diagrams approved.' : `${res.updatedCount} diagram(s) approved.`,
-          'success',
-        );
+        this.showApproveConfirm.set(false);
+        this.showApproveSuccess.set(true);
       },
       error: () => {
         this.isApprovingAll.set(false);
         this.approveError.set('Could not approve diagrams. Please try again.');
       },
     });
+  }
+
+  closeApproveSuccess(): void {
+    this.showApproveSuccess.set(false);
+  }
+
+  goToNextStep(): void {
+    this.showApproveSuccess.set(false);
+    this.router.navigate(['/app/projects', this.projectId, 'documents']);
   }
 
   private markApproved(ids: string[]): void {
