@@ -74,18 +74,33 @@
                       }
                     </div>
 
-                    @if (canDownload(snap)) {
-                      <button type="button" class="vh__card-download-btn"
-                        [disabled]="downloadingSnapId() === snap.snapId"
-                        (click)="downloadSnapshot(snap)">
-                        @if (downloadingSnapId() === snap.snapId) {
-                          <span class="vh__btn-spinner"></span>
-                        } @else {
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                          Download
-                        }
-                      </button>
-                    }
+                    <div class="vh__card-actions">
+                      @if (!snap.active) {
+                        <button type="button" class="vh__card-activate-btn"
+                          [disabled]="activatingSnapId() === snap.snapId"
+                          (click)="activateSnapshot(snap)">
+                          @if (activatingSnapId() === snap.snapId) {
+                            <span class="vh__btn-spinner"></span>
+                          } @else {
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+                            Activate
+                          }
+                        </button>
+                      }
+
+                      @if (canDownload(snap)) {
+                        <button type="button" class="vh__card-download-btn"
+                          [disabled]="downloadingSnapId() === snap.snapId"
+                          (click)="downloadSnapshot(snap)">
+                          @if (downloadingSnapId() === snap.snapId) {
+                            <span class="vh__btn-spinner"></span>
+                          } @else {
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download
+                          }
+                        </button>
+                      }
+                    </div>
                   </div>
 
                   @if (snap.triggerReason) {

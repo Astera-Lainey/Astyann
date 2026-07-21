@@ -29,6 +29,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Void>builder().status(404).message(ex.getMessage()).build());
     }
 
+    @ExceptionHandler(DocumentVersionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVersionNotFound(DocumentVersionNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.<Void>builder().status(404).message(ex.getMessage()).build());
+    }
+
     @ExceptionHandler(DocumentValidationFailedException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationFailed(DocumentValidationFailedException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)

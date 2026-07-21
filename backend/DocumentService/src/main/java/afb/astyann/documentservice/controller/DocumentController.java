@@ -83,6 +83,44 @@ public class DocumentController {
                 .body(bytes);
     }
 
+    /**
+     * True rollback — restores an archived (previously-approved) version as the document's
+     * current live file, so download immediately reflects it. Also flips the active flag on the
+     * corresponding VersionService snapshot. Distinct from VersionService's own POST
+     * /snapshots/{snapId}/activate, which only flips that flag and never touches this document's
+     * actual content.
+     */
+    @PostMapping("/{projectId}/{documentId}/versions/{snapshotId}/activate")
+    public ResponseEntity<ApiResponse<DocumentSummaryDTO>> activateVersion(
+            @PathVariable String projectId,
+            @PathVariable String documentId,
+            @PathVariable String snapshotId) {
+        Document restored = service.activateVersion(parseId(projectId), parseId(documentId), parseId(snapshotId));
+        return ResponseEntity.ok(ApiResponse.<DocumentSummaryDTO>builder()
+                .status(200)
+                .message("Document version restored.")
+                .data(toSummary(restored))
+                .build());
+    }
+
+    /**
+     * Downloads a specific archived version regardless of which one is currently active/live —
+     * unlike /download, this is unaffected by activateVersion(). Use this for a "download vN"
+     * action in a version-history panel so it always returns vN's actual content.
+     */
+    @GetMapping("/{projectId}/{documentId}/versions/{snapshotId}/download")
+    public ResponseEntity<byte[]> downloadVersion(
+            @PathVariable String projectId,
+            @PathVariable String documentId,
+            @PathVariable String snapshotId) {
+        byte[] bytes = service.downloadVersion(parseId(projectId), parseId(documentId), parseId(snapshotId));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header("Content-Disposition", "attachment; filename=\"document.docx\"")
+                .body(bytes);
+    }
+
     @PostMapping("/{projectId}/{documentId}/approve")
     public ResponseEntity<ApiResponse<ApproveDocumentResponse>> approve(
             @PathVariable String projectId,

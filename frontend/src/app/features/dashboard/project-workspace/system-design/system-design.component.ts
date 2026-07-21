@@ -16,6 +16,7 @@ import { Router } from '@angular/router';
 import { Subscription, timer, switchMap, takeWhile } from 'rxjs';
 import { DiagramService } from '../../../../core/services/diagram.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { VersionService } from '../../../../core/services/version.service';
 import {
   ALL_DIAGRAM_TYPES,
   DIAGRAM_TYPE_LABELS,
@@ -24,6 +25,7 @@ import {
   DiagramSummary,
   DiagramType,
 } from '../../../../core/models/diagram.models';
+import { Snapshot } from '../../../../core/models/version.models';
 
 interface DiagramVm {
   diagramId: string;
@@ -68,6 +70,9 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
   );
   readonly hasPendingApproval = computed(() => this.diagrams().some((d) => d.status === 'PENDING_APPROVAL'));
   readonly hasAnyDiagrams = computed(() => this.diagrams().length > 0);
+
+  // ── Active version (from VersionService), keyed by diagramId ────────────────
+  readonly activeVersions = signal<Map<string, Snapshot>>(new Map());
 
   // ── Generate ──────────────────────────────────────────────────────────────
   readonly isGenerating = signal(false);
@@ -125,6 +130,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
 
   constructor(
     private readonly diagramService: DiagramService,
+    private readonly versionService: VersionService,
     private readonly toastService: ToastService,
     private readonly router: Router,
   ) {}
@@ -158,6 +164,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
         this.diagrams.set(vms);
         this.isLoadingList.set(false);
         if (vms.length > 0) this.selectTab(vms[0].diagramId);
+        this.loadActiveVersions();
         // Generation may already be in progress from an earlier visit (e.g.
         // the user reloaded the page mid-generation) — resume polling.
         if (vms.some((d) => d.status === 'GENERATING')) {
@@ -174,6 +181,18 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
 
   retryLoadDiagrams(): void {
     this.loadDiagrams();
+  }
+
+  /** Refreshes which snapshot VersionService currently has flagged active per diagram. */
+  private loadActiveVersions(): void {
+    this.versionService.getActiveSnapshotsByArtifact(this.projectId).subscribe((map) => {
+      this.activeVersions.set(map);
+    });
+  }
+
+  /** Active version number for a diagram, or null if it has never been approved. */
+  activeVersionNumber(diagramId: string): number | null {
+    return this.activeVersions().get(diagramId)?.versionNumber ?? null;
   }
 
   private toVm = (item: DiagramListItem | DiagramSummary): DiagramVm => ({
@@ -631,20 +650,24 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.runRegenerate(diagramId);
   }
 
+  /**
+   * regenerate() is asynchronous — it responds immediately with the diagram in GENERATING
+   * status, it does not wait for the AI+Kroki pipeline to finish. Reflect that placeholder right
+   * away (so the viewer switches to its "Generating diagram…" state), then poll until this
+   * diagram actually settles — previously this only applied the immediate GENERATING response
+   * and stopped, leaving the UI stuck showing "generating" until the user navigated away and
+   * back (which re-triggered loadDiagrams()'s own resume-polling check).
+   */
   private runRegenerate(diagramId: string): void {
     this.diagramService.regenerate(this.projectId, diagramId, { renderFormat: 'PNG' }).subscribe({
       next: (dto) => {
-        this.isRegenerating.set(false);
-        this.instructions.set('');
         this.diagrams.update((list) =>
           list.map((d) => (d.diagramId === dto.diagramId ? this.toVm(dto) : d)),
         );
-
-        if (dto.status === 'FAILED') {
-          this.regenerateError.set(dto.lastError ?? 'Regeneration failed. Please try again.');
+        if (dto.status === 'GENERATING') {
+          this.pollRegenerationUntilSettled(diagramId);
         } else {
-          this.regenerateError.set(null);
-          this.loadImageFor(dto.diagramId, true);
+          this.finishRegenerate(diagramId, dto.status, dto.lastError);
         }
       },
       error: () => {
@@ -652,6 +675,39 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
         this.regenerateError.set('Regeneration failed. Please try again.');
       },
     });
+  }
+
+  private pollRegenerationUntilSettled(diagramId: string): void {
+    this.pollSub?.unsubscribe();
+    this.pollSub = timer(0, 2500)
+      .pipe(
+        switchMap(() => this.diagramService.list(this.projectId)),
+        takeWhile((items) => items.some((d) => d.diagramId === diagramId && d.status === 'GENERATING'), true),
+      )
+      .subscribe({
+        next: (items) => {
+          const vms = items.map(this.toVm).sort(byCanonicalOrder);
+          this.diagrams.set(vms);
+          const target = vms.find((d) => d.diagramId === diagramId);
+          if (!target || target.status === 'GENERATING') return;
+          this.finishRegenerate(diagramId, target.status, target.lastError);
+        },
+        error: () => {
+          this.isRegenerating.set(false);
+          this.regenerateError.set('Lost track of regeneration progress. Please refresh and try again.');
+        },
+      });
+  }
+
+  private finishRegenerate(diagramId: string, status: DiagramStatus, lastError: string | null): void {
+    this.isRegenerating.set(false);
+    this.instructions.set('');
+    if (status === 'FAILED') {
+      this.regenerateError.set(lastError ?? 'Regeneration failed. Please try again.');
+    } else {
+      this.regenerateError.set(null);
+      if (this.selectedId() === diagramId) this.loadImageFor(diagramId, true);
+    }
   }
 
   // ── Approve ───────────────────────────────────────────────────────────────
@@ -722,5 +778,7 @@ export class SystemDesignComponent implements OnChanges, OnDestroy {
     this.diagrams.update((list) =>
       list.map((d) => (ids.includes(d.diagramId) ? { ...d, status: 'APPROVED' as DiagramStatus } : d)),
     );
+    // Approving creates a fresh snapshot per diagram — refresh so the active-version badge updates.
+    this.loadActiveVersions();
   }
 }

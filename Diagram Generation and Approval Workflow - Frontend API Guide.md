@@ -298,6 +298,66 @@ GET /api/v1/versions/{projectId}
 ```
 Each diagram *type* has its own independent version sequence (`versionNumber` 1, 2, 3...) and its own `active` snapshot — filter client-side by `diagramId` to build a per-diagram history. `GET /api/v1/versions/{projectId}/snapshots` returns the same list flattened (no timeline wrapper); `GET /api/v1/versions/snapshots/{snapId}` fetches one snapshot directly.
 
+### Render a specific version (independent of what's currently active)
+
+```
+GET /api/v1/uml/{projectId}/{diagramId}/versions/{snapId}/render?format=SVG
+```
+Returns the raw image bytes for exactly that snapshot's archived content, same response shape as the regular render endpoint. Unlike `GET /{projectId}/{diagramId}/render`, this is completely unaffected by which snapshot is currently active/live — use it for a "download vN" button in a history panel so it always returns vN's actual content, not whatever the diagram currently shows. `404` if `diagramId` doesn't belong to the project, or if `snapId` has no archived content for that diagram (e.g. it predates this endpoint's rollout).
+
+### Activate a specific version (rollback)
+
+Two different endpoints exist here — use the right one depending on whether you want a real rollback or just a bookkeeping flag flip.
+
+**Real rollback** — restores an archived (previously-approved) version as the diagram's actual current content. After this call, `GET /{projectId}/{diagramId}/render` and the diagram's `status` immediately reflect the restored version — this is what a "Restore this version" button in a history panel should call.
+
+```
+POST /api/v1/uml/{projectId}/{diagramId}/versions/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Diagram version restored.",
+  "data": {
+    "diagramId": "8f14e...",
+    "type": "USE_CASE",
+    "status": "APPROVED",
+    "renderUrl": "/api/v1/uml/<projectId>/8f14e.../render",
+    "lastError": null
+  }
+}
+```
+- Restores that snapshot's stored source + rendered image as the diagram's live content and sets its status to `APPROVED` (it was approved once already).
+- Also flips the snapshot's `active` flag in VersionService (best-effort — if that call fails, the restore itself still succeeds; the timeline flag may lag until the next successful activate).
+- Because only the rendered image is archived per version (not a full render-format-independent history), a restored diagram can be viewed/downloaded/re-approved as-is, but can't be format-converted (SVG↔PNG) or edited via `change-request` until it's regenerated fresh.
+- `404` if `diagramId` doesn't belong to the project, or if `snapId` has no archived content for that diagram (e.g. it belongs to a different diagram, or predates this endpoint's rollout).
+
+**Metadata-only flag flip** — flips which snapshot is flagged `active` in the timeline without touching the diagram's actual live content/status. Mostly useful for VersionService's own bookkeeping (and for artifact types with no rollback endpoint, e.g. CODE/DEPLOYMENT); the diagram workflow above generally wants the real-rollback endpoint instead.
+
+```
+POST /api/v1/versions/snapshots/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Snapshot activated.",
+  "data": {
+    "snapId": "9c31...",
+    "versionNumber": 1,
+    "artifactType": "DIAGRAM",
+    "artifactId": "8f14e...",
+    "diagramId": "8f14e...",
+    "diagramType": "USE_CASE",
+    "active": true
+  }
+}
+```
+- Deactivates whichever snapshot was previously active for the same diagram (same `artifactId`) and activates this one instead.
+- Idempotent — activating an already-active snapshot is a no-op success, not an error.
+- `404` if `snapId` doesn't exist.
+
 ---
 
 ## Status code reference

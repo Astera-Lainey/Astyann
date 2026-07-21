@@ -113,6 +113,13 @@
   &--failed     { background-color: #fef2f2; color: #dc2626; } // red/error
 }
 
+.doc__version-badge {
+  display: inline-flex; align-items: center;
+  padding: 0.1875rem 0.5625rem; border-radius: 999px;
+  background-color: #f0fdf4; color: #16a34a;
+  font-size: 0.6875rem; font-weight: 700; white-space: nowrap;
+}
+
 // ── Row 3-dot menu ──────────────────────────────────────────────────────────
 .doc__row-menu-wrap { position: relative; }
 

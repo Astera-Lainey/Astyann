@@ -46,12 +46,14 @@ export class DocumentService {
 
   /**
    * POST /api/v1/documents/{projectId}/{documentId}/regenerate
-   * Synchronous and blocking. Returns 200 even when regeneration fails —
-   * callers must inspect the returned DocumentSummary.status, not just the
-   * HTTP status code. Applies any instructions recorded via a prior
-   * submitChangeRequest() call, or performs a plain regeneration if none
-   * are stored. Rejects APPROVED documents (submit a change-request first)
-   * and documents still GENERATING.
+   * Asynchronous — responds immediately (202) with the document back in
+   * GENERATING status; it does not wait for the AI+merge pipeline to finish.
+   * Callers must poll list() until this document leaves GENERATING to see
+   * the real outcome (PENDING_APPROVAL or FAILED with lastError set).
+   * Applies any instructions recorded via a prior submitChangeRequest()
+   * call, or performs a plain regeneration if none are stored. Rejects
+   * APPROVED documents (submit a change-request first) and documents still
+   * GENERATING.
    */
   regenerate(projectId: string, documentId: string): Observable<DocumentSummary> {
     return this.http
@@ -103,6 +105,34 @@ export class DocumentService {
    */
   download(projectId: string, documentId: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${projectId}/${documentId}/download`, {
+      responseType: 'blob',
+    });
+  }
+
+  /**
+   * POST /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/activate
+   * A real rollback — restores that archived version as the document's current live
+   * file, unlike VersionService's own generic activate endpoint which only flips the
+   * timeline's active flag. Download and this document's status immediately reflect
+   * the restored version.
+   */
+  activateVersion(projectId: string, documentId: string, snapshotId: string): Observable<DocumentSummary> {
+    return this.http
+      .post<ApiEnvelope<DocumentSummary>>(
+        `${this.baseUrl}/${projectId}/${documentId}/versions/${snapshotId}/activate`,
+        {},
+      )
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * GET /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/download
+   * Downloads that specific archived version regardless of which one is currently
+   * active/live — unlike download(), this is unaffected by activateVersion().
+   * Use for a "download vN" action so it always returns vN's actual content.
+   */
+  downloadVersion(projectId: string, documentId: string, snapshotId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${projectId}/${documentId}/versions/${snapshotId}/download`, {
       responseType: 'blob',
     });
   }

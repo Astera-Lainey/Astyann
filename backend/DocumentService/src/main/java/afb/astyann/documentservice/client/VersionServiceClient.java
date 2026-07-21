@@ -20,6 +20,9 @@ public interface VersionServiceClient {
     @GetMapping("/api/v1/versions/{projectId}/snapshots")
     ApiResponse<List<SnapshotDTO>> listSnapshots(@PathVariable("projectId") UUID projectId);
 
+    @PostMapping("/api/v1/versions/snapshots/{snapId}/activate")
+    ApiResponse<SnapshotDTO> activateSnapshot(@PathVariable("snapId") UUID snapId);
+
     record CreateSnapshotRequest(String artifactType, String versionName, UUID entrySource,
                                   String triggerReason, String artifactPath,
                                   UUID documentId, String documentType) {}

@@ -47,9 +47,10 @@ export class DiagramService {
 
   /**
    * POST /api/v1/uml/{projectId}/{diagramId}/regenerate
-   * Synchronous and blocking. Returns 200 even when regeneration fails —
-   * callers must inspect the returned DiagramSummary.status, not just the
-   * HTTP status code.
+   * Asynchronous — responds immediately (202) with the diagram back in
+   * GENERATING status; it does not wait for the AI+Kroki pipeline to finish.
+   * Callers must poll list() until this diagram leaves GENERATING to see the
+   * real outcome (PENDING_APPROVAL or FAILED with lastError set).
    */
   regenerate(
     projectId: string,
@@ -109,6 +110,40 @@ export class DiagramService {
    */
   renderBlob(projectId: string, diagramId: string, format: RenderFormat = 'PNG'): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${projectId}/${diagramId}/render`, {
+      params: { format },
+      responseType: 'blob',
+    });
+  }
+
+  /**
+   * POST /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/activate
+   * A real rollback — restores that archived version as the diagram's current live
+   * content (source + rendered image), unlike VersionService's own generic
+   * activate endpoint which only flips the timeline's active flag. The render
+   * endpoint and this diagram's status immediately reflect the restored version.
+   */
+  activateVersion(projectId: string, diagramId: string, snapshotId: string): Observable<DiagramSummary> {
+    return this.http
+      .post<ApiEnvelope<DiagramSummary>>(
+        `${this.baseUrl}/${projectId}/${diagramId}/versions/${snapshotId}/activate`,
+        {},
+      )
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * GET /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/render
+   * Renders that specific archived version regardless of which one is currently
+   * active/live — unlike renderBlob(), this is unaffected by activateVersion().
+   * Use for a "download vN" action so it always returns vN's actual content.
+   */
+  renderVersionBlob(
+    projectId: string,
+    diagramId: string,
+    snapshotId: string,
+    format: RenderFormat = 'PNG',
+  ): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${projectId}/${diagramId}/versions/${snapshotId}/render`, {
       params: { format },
       responseType: 'blob',
     });

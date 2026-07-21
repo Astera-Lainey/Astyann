@@ -62,6 +62,10 @@
           </div>
 
           <div class="doc__row-actions">
+            @if (activeVersionNumber(d.documentId); as v) {
+              <span class="doc__version-badge" title="Active version on record">Active v{{ v }}</span>
+            }
+
             <span class="doc__badge"
               [class.doc__badge--generating]="d.status === 'GENERATING'"
               [class.doc__badge--pending]="d.status === 'PENDING_APPROVAL'"

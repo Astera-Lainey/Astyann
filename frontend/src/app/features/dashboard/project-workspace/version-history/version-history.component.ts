@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { formatDate } from '@angular/common';
+import { Observable, map } from 'rxjs';
 import { VersionService } from '../../../../core/services/version.service';
 import { DiagramService } from '../../../../core/services/diagram.service';
 import { DocumentService } from '../../../../core/services/document.service';
@@ -59,6 +60,7 @@ export class VersionHistoryComponent implements OnChanges {
   readonly selectedSubKey = signal<string | null>(null);
 
   readonly downloadingSnapId = signal<string | null>(null);
+  readonly activatingSnapId = signal<string | null>(null);
 
   private lastLoadedProjectId: string | null = null;
 
@@ -200,7 +202,7 @@ export class VersionHistoryComponent implements OnChanges {
 
     if (snap.artifactType === 'DOCUMENT' && snap.documentId) {
       this.downloadingSnapId.set(snap.snapId);
-      this.documentService.download(this.projectId, snap.documentId).subscribe({
+      this.documentService.downloadVersion(this.projectId, snap.documentId, snap.snapId).subscribe({
         next: (blob) => {
           this.downloadingSnapId.set(null);
           this.saveBlob(blob, `${name}.docx`);
@@ -212,7 +214,7 @@ export class VersionHistoryComponent implements OnChanges {
       });
     } else if (snap.artifactType === 'DIAGRAM' && snap.diagramId) {
       this.downloadingSnapId.set(snap.snapId);
-      this.diagramService.renderBlob(this.projectId, snap.diagramId, 'PNG').subscribe({
+      this.diagramService.renderVersionBlob(this.projectId, snap.diagramId, snap.snapId, 'PNG').subscribe({
         next: (blob) => {
           this.downloadingSnapId.set(null);
           this.saveBlob(blob, `${name}.png`);
@@ -223,6 +225,56 @@ export class VersionHistoryComponent implements OnChanges {
         },
       });
     }
+  }
+
+  // ── Activate (rollback to an earlier version) ─────────────────────────────
+
+  /**
+   * For diagrams/documents this is a real rollback — it restores the archived version as the
+   * artifact's current live content (via DiagramService/DocumentService), not just a flag flip,
+   * so the System Design / Documentation pages and downloads immediately reflect it. CODE/
+   * DEPLOYMENT artifacts have no content-restoring endpoint yet, so those fall back to
+   * VersionService's generic activate (metadata only).
+   */
+  activateSnapshot(snap: Snapshot): void {
+    if (snap.active || this.activatingSnapId()) return;
+
+    const restoresContent = (snap.artifactType === 'DIAGRAM' && !!snap.diagramId)
+      || (snap.artifactType === 'DOCUMENT' && !!snap.documentId);
+
+    let request$: Observable<unknown>;
+    if (snap.artifactType === 'DIAGRAM' && snap.diagramId) {
+      request$ = this.diagramService.activateVersion(this.projectId, snap.diagramId, snap.snapId);
+    } else if (snap.artifactType === 'DOCUMENT' && snap.documentId) {
+      request$ = this.documentService.activateVersion(this.projectId, snap.documentId, snap.snapId);
+    } else {
+      request$ = this.versionService.activateSnapshot(snap.snapId);
+    }
+
+    this.activatingSnapId.set(snap.snapId);
+    request$.pipe(map(() => undefined)).subscribe({
+      next: () => {
+        this.activatingSnapId.set(null);
+        this.snapshots.update((all) =>
+          all.map((s) => {
+            if (s.snapId === snap.snapId) return { ...s, active: true };
+            if (s.artifactType === snap.artifactType && s.artifactId === snap.artifactId && s.active) {
+              return { ...s, active: false };
+            }
+            return s;
+          }),
+        );
+        const label = snap.versionName || `v${snap.versionNumber}`;
+        this.toastService.show(
+          restoresContent ? `${label} restored as the current version.` : `${label} is now the active version.`,
+          'success',
+        );
+      },
+      error: () => {
+        this.activatingSnapId.set(null);
+        this.toastService.show('Could not activate this version. Please try again.', 'error');
+      },
+    });
   }
 
   private saveBlob(blob: Blob, filename: string): void {
