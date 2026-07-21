@@ -233,13 +233,75 @@ No format concept for documents (that's diagram/Kroki-specific) — body is effe
 
 ---
 
+## 7. (Optional) Version history
+
+Useful for a "document history" panel. Talks to VersionService directly (also reachable through the gateway at `/api/v1/versions/**`).
+
+```
+GET /api/v1/versions/{projectId}
+```
+```json
+{
+  "status": 200,
+  "message": "Timeline retrieved.",
+  "data": {
+    "timelineId": "...",
+    "projectId": "...",
+    "creationDate": "2026-07-16T09:00:00",
+    "snapshots": [
+      {
+        "snapId": "9c31...",
+        "versionNumber": 1,
+        "snapDate": "2026-07-16T10:20:00",
+        "triggerReason": "Document approved",
+        "artifactType": "DOCUMENT",
+        "artifactId": "8f14e...",
+        "documentId": "8f14e...",
+        "documentType": "SRS",
+        "active": true
+      }
+    ]
+  }
+}
+```
+Each document *type* has its own independent version sequence (`versionNumber` 1, 2, 3...) and its own `active` snapshot — filter client-side by `documentId` to build a per-document history. `GET /api/v1/versions/{projectId}/snapshots` returns the same list flattened (no timeline wrapper); `GET /api/v1/versions/snapshots/{snapId}` fetches one snapshot directly.
+
+### Activate a specific version (rollback)
+
+Manually makes an older (or otherwise inactive) snapshot the active one for its document — e.g. a "Restore this version" button in a history panel. Does **not** touch the document's current live content/status, only which snapshot is flagged `active` in the timeline.
+
+```
+POST /api/v1/versions/snapshots/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Snapshot activated.",
+  "data": {
+    "snapId": "9c31...",
+    "versionNumber": 1,
+    "artifactType": "DOCUMENT",
+    "artifactId": "8f14e...",
+    "documentId": "8f14e...",
+    "documentType": "SRS",
+    "active": true
+  }
+}
+```
+- Deactivates whichever snapshot was previously active for the same document (same `artifactId`) and activates this one instead.
+- Idempotent — activating an already-active snapshot is a no-op success, not an error.
+- `404` if `snapId` doesn't exist.
+
+---
+
 ## Status code reference
 
 | Code | Meaning here |
 | --- | --- |
-| 200 | Success (list/download/approve/change-request) |
+| 200 | Success (list/download/approve/change-request/activate) |
 | 202 | Document generation/regeneration started |
-| 404 | Document/project not found, or not yet generated |
+| 404 | Document/project not found, or not yet generated; snapshot not found (activate) |
 | 409 | Invalid state transition (regenerate on `APPROVED` without a prior change-request; regenerate/approve while still `GENERATING`; approve on already-`APPROVED`; no approved diagrams yet) |
 | 422 | Requirements not `APPROVED` (generate/regenerate gate), or a blocking validation check failed on approve |
 | 503 | A downstream dependency (AI/RequirementService/DiagramGeneratorService) is unreachable |

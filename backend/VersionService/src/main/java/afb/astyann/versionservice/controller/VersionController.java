@@ -54,6 +54,13 @@ public class VersionController {
                 .status(200).message("Snapshot retrieved.").data(result).build());
     }
 
+    @PostMapping("/snapshots/{snapId}/activate")
+    public ResponseEntity<ApiResponse<SnapshotDTO>> activateSnapshot(@PathVariable String snapId) {
+        SnapshotDTO result = versionService.activateSnapshot(parseId(snapId));
+        return ResponseEntity.ok(ApiResponse.<SnapshotDTO>builder()
+                .status(200).message("Snapshot activated.").data(result).build());
+    }
+
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> delete(@PathVariable String projectId) {
         versionService.deleteProjectData(parseId(projectId));

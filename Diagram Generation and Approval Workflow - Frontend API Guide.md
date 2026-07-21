@@ -298,6 +298,33 @@ GET /api/v1/versions/{projectId}
 ```
 Each diagram *type* has its own independent version sequence (`versionNumber` 1, 2, 3...) and its own `active` snapshot — filter client-side by `diagramId` to build a per-diagram history. `GET /api/v1/versions/{projectId}/snapshots` returns the same list flattened (no timeline wrapper); `GET /api/v1/versions/snapshots/{snapId}` fetches one snapshot directly.
 
+### Activate a specific version (rollback)
+
+Manually makes an older (or otherwise inactive) snapshot the active one for its artifact — e.g. a "Restore this version" button in a history panel. Does **not** touch the diagram's current live content/status, only which snapshot is flagged `active` in the timeline.
+
+```
+POST /api/v1/versions/snapshots/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Snapshot activated.",
+  "data": {
+    "snapId": "9c31...",
+    "versionNumber": 1,
+    "artifactType": "DIAGRAM",
+    "artifactId": "8f14e...",
+    "diagramId": "8f14e...",
+    "diagramType": "USE_CASE",
+    "active": true
+  }
+}
+```
+- Deactivates whichever snapshot was previously active for the same diagram (same `artifactId`) and activates this one instead.
+- Idempotent — activating an already-active snapshot is a no-op success, not an error.
+- `404` if `snapId` doesn't exist.
+
 ---
 
 ## Status code reference

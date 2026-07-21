@@ -59,6 +59,7 @@ export class VersionHistoryComponent implements OnChanges {
   readonly selectedSubKey = signal<string | null>(null);
 
   readonly downloadingSnapId = signal<string | null>(null);
+  readonly activatingSnapId = signal<string | null>(null);
 
   private lastLoadedProjectId: string | null = null;
 
@@ -223,6 +224,37 @@ export class VersionHistoryComponent implements OnChanges {
         },
       });
     }
+  }
+
+  // ── Activate (rollback to an earlier version) ─────────────────────────────
+
+  activateSnapshot(snap: Snapshot): void {
+    if (snap.active || this.activatingSnapId()) return;
+
+    this.activatingSnapId.set(snap.snapId);
+    this.versionService.activateSnapshot(snap.snapId).subscribe({
+      next: (activated) => {
+        this.activatingSnapId.set(null);
+        this.snapshots.update((all) =>
+          all.map((s) => {
+            if (s.snapId === activated.snapId) return activated;
+            if (
+              s.artifactType === activated.artifactType &&
+              s.artifactId === activated.artifactId &&
+              s.active
+            ) {
+              return { ...s, active: false };
+            }
+            return s;
+          }),
+        );
+        this.toastService.show(`${activated.versionName || `v${activated.versionNumber}`} is now the active version.`, 'success');
+      },
+      error: () => {
+        this.activatingSnapId.set(null);
+        this.toastService.show('Could not activate this version. Please try again.', 'error');
+      },
+    });
   }
 
   private saveBlob(blob: Blob, filename: string): void {

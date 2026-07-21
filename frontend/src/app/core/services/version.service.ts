@@ -30,4 +30,15 @@ export class VersionService {
       .get<ApiEnvelope<Snapshot>>(`${this.baseUrl}/snapshots/${snapshotId}`)
       .pipe(map((res) => res.data));
   }
+
+  /**
+   * POST /api/v1/versions/snapshots/{snapshotId}/activate
+   * Makes the given snapshot the active one for its artifact (e.g. rollback to an
+   * earlier version). Deactivates whichever snapshot was previously active.
+   */
+  activateSnapshot(snapshotId: string): Observable<Snapshot> {
+    return this.http
+      .post<ApiEnvelope<Snapshot>>(`${this.baseUrl}/snapshots/${snapshotId}/activate`, {})
+      .pipe(map((res) => res.data));
+  }
 }
