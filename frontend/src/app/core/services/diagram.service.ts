@@ -113,4 +113,20 @@ export class DiagramService {
       responseType: 'blob',
     });
   }
+
+  /**
+   * POST /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/activate
+   * A real rollback — restores that archived version as the diagram's current live
+   * content (source + rendered image), unlike VersionService's own generic
+   * activate endpoint which only flips the timeline's active flag. The render
+   * endpoint and this diagram's status immediately reflect the restored version.
+   */
+  activateVersion(projectId: string, diagramId: string, snapshotId: string): Observable<DiagramSummary> {
+    return this.http
+      .post<ApiEnvelope<DiagramSummary>>(
+        `${this.baseUrl}/${projectId}/${diagramId}/versions/${snapshotId}/activate`,
+        {},
+      )
+      .pipe(map((res) => res.data));
+  }
 }

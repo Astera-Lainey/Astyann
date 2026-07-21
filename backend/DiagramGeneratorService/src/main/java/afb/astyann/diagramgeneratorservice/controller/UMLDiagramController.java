@@ -149,6 +149,27 @@ public class UMLDiagramController {
                 .build());
     }
 
+    /**
+     * True rollback — restores an archived (previously-approved) version as the diagram's
+     * current live content, so the render endpoint and the workspace viewer immediately reflect
+     * it. Also flips the active flag on the corresponding VersionService snapshot. Distinct from
+     * VersionService's own POST /snapshots/{snapId}/activate, which only flips that flag and
+     * never touches this diagram's actual content.
+     */
+    @PostMapping("/{projectId}/{diagramId}/versions/{snapshotId}/activate")
+    public ResponseEntity<ApiResponse<DiagramSummaryDTO>> activateVersion(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @PathVariable String snapshotId) {
+        UUID pId = parseId(projectId);
+        UMLDiagram restored = service.activateVersion(pId, parseId(diagramId), parseId(snapshotId));
+        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
+                .status(200)
+                .message("Diagram version restored.")
+                .data(toSummary(pId, restored))
+                .build());
+    }
+
     @GetMapping("/{projectId}/{diagramId}/render")
     public ResponseEntity<byte[]> render(
             @PathVariable String projectId,

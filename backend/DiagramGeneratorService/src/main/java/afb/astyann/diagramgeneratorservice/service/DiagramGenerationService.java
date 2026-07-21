@@ -7,13 +7,16 @@ import afb.astyann.diagramgeneratorservice.client.RequirementServiceClient;
 import afb.astyann.diagramgeneratorservice.client.VersionServiceClient;
 import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
+import afb.astyann.diagramgeneratorservice.domain.DiagramVersionArchive;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import afb.astyann.diagramgeneratorservice.dto.ApiResponse;
 import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsRequest;
 import afb.astyann.diagramgeneratorservice.exception.DiagramNotFoundException;
+import afb.astyann.diagramgeneratorservice.exception.DiagramVersionNotFoundException;
 import afb.astyann.diagramgeneratorservice.exception.DownstreamServiceException;
 import afb.astyann.diagramgeneratorservice.exception.InvalidRenderFormatException;
 import afb.astyann.diagramgeneratorservice.exception.PcsfNotApprovedException;
+import afb.astyann.diagramgeneratorservice.repository.DiagramVersionArchiveRepository;
 import afb.astyann.diagramgeneratorservice.repository.UMLDiagramRepository;
 import afb.astyann.diagramgeneratorservice.util.PlantUmlCleaner;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class DiagramGenerationService {
     private static final int MAX_RENDER_ATTEMPTS = 2;
 
     private final UMLDiagramRepository repository;
+    private final DiagramVersionArchiveRepository archiveRepository;
     private final RequirementServiceClient requirementServiceClient;
     private final RAGServiceClient ragServiceClient;
     private final AIServiceClient aiServiceClient;
@@ -57,6 +61,7 @@ public class DiagramGenerationService {
     @Transactional
     public void deleteAllForProject(UUID projectId) {
         repository.deleteByProjectId(projectId);
+        archiveRepository.deleteByProjectId(projectId);
         storageService.deleteProjectDirectory(projectId);
     }
 
@@ -268,12 +273,57 @@ public class DiagramGenerationService {
             if (snap != null && snap.getData() != null) {
                 UUID snapId = snap.getData().snapId();
                 diagram.setSnapshotId(snapId);
+                // Captures the content as it exists right now so activateVersion() has something
+                // to restore later — UMLDiagram itself only ever holds the current live content.
+                archiveRepository.save(DiagramVersionArchive.builder()
+                        .snapshotId(snapId)
+                        .projectId(projectId)
+                        .diagramId(diagram.getDiagramId())
+                        .sourceCode(diagram.getSourceCode())
+                        .imagePath(diagram.getGeneratedImagePath())
+                        .renderFormat(diagram.getRenderFormat())
+                        .build());
                 return snapId;
             }
         } catch (Exception ex) {
             log.error("Snapshot creation failed for diagramId={}: {}", diagram.getDiagramId(), ex.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Restores an archived (previously-approved) version as the diagram's current live content —
+     * a real rollback, not just a VersionService metadata flip. The restored diagram becomes
+     * APPROVED immediately (it was approved once already) so downstream stages relying on
+     * "all diagrams approved" aren't broken by a rollback. Also flips the active flag on the
+     * VersionService side (best-effort) so the version-history timeline stays consistent.
+     */
+    @Transactional
+    public UMLDiagram activateVersion(UUID projectId, UUID diagramId, UUID snapshotId) {
+        UMLDiagram diagram = repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        DiagramVersionArchive archive = archiveRepository.findBySnapshotIdAndDiagramId(snapshotId, diagramId)
+                .orElseThrow(() -> new DiagramVersionNotFoundException(diagramId, snapshotId));
+
+        diagram.setSourceCode(archive.getSourceCode());
+        diagram.setGeneratedImagePath(archive.getImagePath());
+        diagram.setRenderFormat(archive.getRenderFormat());
+        diagram.setStatus(DiagramStatus.APPROVED);
+        diagram.setLastError(null);
+        diagram.setChangeInstructions(null);
+        diagram.setSnapshotId(snapshotId);
+        UMLDiagram saved = repository.save(diagram);
+
+        try {
+            versionServiceClient.activateSnapshot(snapshotId);
+        } catch (Exception ex) {
+            log.warn("Restored diagramId={} to snapshotId={} but could not flip its active flag " +
+                    "in VersionService: {}", diagramId, snapshotId, ex.getMessage());
+        }
+
+        return saved;
     }
 
     /**

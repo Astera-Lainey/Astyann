@@ -300,7 +300,33 @@ Each diagram *type* has its own independent version sequence (`versionNumber` 1,
 
 ### Activate a specific version (rollback)
 
-Manually makes an older (or otherwise inactive) snapshot the active one for its artifact — e.g. a "Restore this version" button in a history panel. Does **not** touch the diagram's current live content/status, only which snapshot is flagged `active` in the timeline.
+Two different endpoints exist here — use the right one depending on whether you want a real rollback or just a bookkeeping flag flip.
+
+**Real rollback** — restores an archived (previously-approved) version as the diagram's actual current content. After this call, `GET /{projectId}/{diagramId}/render` and the diagram's `status` immediately reflect the restored version — this is what a "Restore this version" button in a history panel should call.
+
+```
+POST /api/v1/uml/{projectId}/{diagramId}/versions/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Diagram version restored.",
+  "data": {
+    "diagramId": "8f14e...",
+    "type": "USE_CASE",
+    "status": "APPROVED",
+    "renderUrl": "/api/v1/uml/<projectId>/8f14e.../render",
+    "lastError": null
+  }
+}
+```
+- Restores that snapshot's stored source + rendered image as the diagram's live content and sets its status to `APPROVED` (it was approved once already).
+- Also flips the snapshot's `active` flag in VersionService (best-effort — if that call fails, the restore itself still succeeds; the timeline flag may lag until the next successful activate).
+- Because only the rendered image is archived per version (not a full render-format-independent history), a restored diagram can be viewed/downloaded/re-approved as-is, but can't be format-converted (SVG↔PNG) or edited via `change-request` until it's regenerated fresh.
+- `404` if `diagramId` doesn't belong to the project, or if `snapId` has no archived content for that diagram (e.g. it belongs to a different diagram, or predates this endpoint's rollout).
+
+**Metadata-only flag flip** — flips which snapshot is flagged `active` in the timeline without touching the diagram's actual live content/status. Mostly useful for VersionService's own bookkeeping (and for artifact types with no rollback endpoint, e.g. CODE/DEPLOYMENT); the diagram workflow above generally wants the real-rollback endpoint instead.
 
 ```
 POST /api/v1/versions/snapshots/{snapId}/activate

@@ -107,6 +107,9 @@
                 [class.sd__tab-dot--failed]="d.status === 'FAILED'"></span>
             }
             {{ diagramTypeLabels[d.type] }}
+            @if (activeVersionNumber(d.diagramId); as v) {
+              <span class="sd__tab-version">v{{ v }}</span>
+            }
           </button>
         }
       </div>
@@ -218,7 +221,10 @@
           } @else {
             @if (diagram.status === 'APPROVED') {
               <p class="sd__panel-desc">
-                This diagram is approved. Submitting an instruction will reopen it for editing and reset it to pending approval.
+                This diagram is approved
+                @if (activeVersionNumber(diagram.diagramId); as v) {
+                  (active version <strong>v{{ v }}</strong>)
+                }. Submitting an instruction will reopen it for editing and reset it to pending approval.
               </p>
             } @else {
               <p class="sd__panel-desc">

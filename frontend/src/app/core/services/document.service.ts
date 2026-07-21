@@ -106,4 +106,20 @@ export class DocumentService {
       responseType: 'blob',
     });
   }
+
+  /**
+   * POST /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/activate
+   * A real rollback — restores that archived version as the document's current live
+   * file, unlike VersionService's own generic activate endpoint which only flips the
+   * timeline's active flag. Download and this document's status immediately reflect
+   * the restored version.
+   */
+  activateVersion(projectId: string, documentId: string, snapshotId: string): Observable<DocumentSummary> {
+    return this.http
+      .post<ApiEnvelope<DocumentSummary>>(
+        `${this.baseUrl}/${projectId}/${documentId}/versions/${snapshotId}/activate`,
+        {},
+      )
+      .pipe(map((res) => res.data));
+  }
 }

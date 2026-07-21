@@ -8,13 +8,16 @@ import afb.astyann.documentservice.client.VersionServiceClient;
 import afb.astyann.documentservice.domain.Document;
 import afb.astyann.documentservice.domain.DocumentStatus;
 import afb.astyann.documentservice.domain.DocumentType;
+import afb.astyann.documentservice.domain.DocumentVersionArchive;
 import afb.astyann.documentservice.dto.ApiResponse;
 import afb.astyann.documentservice.dto.ValidationReportDTO;
 import afb.astyann.documentservice.exception.DiagramsNotApprovedException;
 import afb.astyann.documentservice.exception.DocumentNotFoundException;
+import afb.astyann.documentservice.exception.DocumentVersionNotFoundException;
 import afb.astyann.documentservice.exception.DownstreamServiceException;
 import afb.astyann.documentservice.exception.PcsfNotApprovedException;
 import afb.astyann.documentservice.repository.DocumentRepository;
+import afb.astyann.documentservice.repository.DocumentVersionArchiveRepository;
 import afb.astyann.documentservice.service.schema.DocumentSchema;
 import afb.astyann.documentservice.service.schema.DocumentSchemas;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,6 +57,7 @@ public class DocumentGenerationService {
     }
 
     private final DocumentRepository repository;
+    private final DocumentVersionArchiveRepository archiveRepository;
     private final RequirementServiceClient requirementServiceClient;
     private final DiagramServiceClient diagramServiceClient;
     private final RAGServiceClient ragServiceClient;
@@ -347,12 +351,55 @@ public class DocumentGenerationService {
             if (snap != null && snap.getData() != null) {
                 UUID snapId = snap.getData().snapId();
                 doc.setSnapshotId(snapId);
+                // Captures the .docx path as it exists right now so activateVersion() has
+                // something to restore later — Document itself only ever holds the current
+                // live file.
+                archiveRepository.save(DocumentVersionArchive.builder()
+                        .snapshotId(snapId)
+                        .projectId(projectId)
+                        .documentId(doc.getDocumentId())
+                        .filePath(doc.getPath())
+                        .pageCount(doc.getPageCount())
+                        .build());
                 return snapId;
             }
         } catch (Exception ex) {
             log.error("Snapshot creation failed for documentId={}: {}", doc.getDocumentId(), ex.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Restores an archived (previously-approved) version as the document's current live file —
+     * a real rollback, not just a VersionService metadata flip. The restored document becomes
+     * APPROVED immediately (it was approved once already). Also flips the active flag on the
+     * VersionService side (best-effort) so the version-history timeline stays consistent.
+     */
+    @Transactional
+    public Document activateVersion(UUID projectId, UUID documentId, UUID snapshotId) {
+        Document doc = repository.findById(documentId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DocumentNotFoundException(projectId, documentId));
+
+        DocumentVersionArchive archive = archiveRepository.findBySnapshotIdAndDocumentId(snapshotId, documentId)
+                .orElseThrow(() -> new DocumentVersionNotFoundException(documentId, snapshotId));
+
+        doc.setPath(archive.getFilePath());
+        doc.setPageCount(archive.getPageCount());
+        doc.setStatus(DocumentStatus.APPROVED);
+        doc.setLastError(null);
+        doc.setChangeInstructions(null);
+        doc.setSnapshotId(snapshotId);
+        Document saved = repository.save(doc);
+
+        try {
+            versionServiceClient.activateSnapshot(snapshotId);
+        } catch (Exception ex) {
+            log.warn("Restored documentId={} to snapshotId={} but could not flip its active flag " +
+                    "in VersionService: {}", documentId, snapshotId, ex.getMessage());
+        }
+
+        return saved;
     }
 
     /**

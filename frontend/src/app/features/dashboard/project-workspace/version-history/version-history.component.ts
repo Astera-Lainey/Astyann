@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { formatDate } from '@angular/common';
+import { Observable, map } from 'rxjs';
 import { VersionService } from '../../../../core/services/version.service';
 import { DiagramService } from '../../../../core/services/diagram.service';
 import { DocumentService } from '../../../../core/services/document.service';
@@ -228,27 +229,46 @@ export class VersionHistoryComponent implements OnChanges {
 
   // ── Activate (rollback to an earlier version) ─────────────────────────────
 
+  /**
+   * For diagrams/documents this is a real rollback — it restores the archived version as the
+   * artifact's current live content (via DiagramService/DocumentService), not just a flag flip,
+   * so the System Design / Documentation pages and downloads immediately reflect it. CODE/
+   * DEPLOYMENT artifacts have no content-restoring endpoint yet, so those fall back to
+   * VersionService's generic activate (metadata only).
+   */
   activateSnapshot(snap: Snapshot): void {
     if (snap.active || this.activatingSnapId()) return;
 
+    const restoresContent = (snap.artifactType === 'DIAGRAM' && !!snap.diagramId)
+      || (snap.artifactType === 'DOCUMENT' && !!snap.documentId);
+
+    let request$: Observable<unknown>;
+    if (snap.artifactType === 'DIAGRAM' && snap.diagramId) {
+      request$ = this.diagramService.activateVersion(this.projectId, snap.diagramId, snap.snapId);
+    } else if (snap.artifactType === 'DOCUMENT' && snap.documentId) {
+      request$ = this.documentService.activateVersion(this.projectId, snap.documentId, snap.snapId);
+    } else {
+      request$ = this.versionService.activateSnapshot(snap.snapId);
+    }
+
     this.activatingSnapId.set(snap.snapId);
-    this.versionService.activateSnapshot(snap.snapId).subscribe({
-      next: (activated) => {
+    request$.pipe(map(() => undefined)).subscribe({
+      next: () => {
         this.activatingSnapId.set(null);
         this.snapshots.update((all) =>
           all.map((s) => {
-            if (s.snapId === activated.snapId) return activated;
-            if (
-              s.artifactType === activated.artifactType &&
-              s.artifactId === activated.artifactId &&
-              s.active
-            ) {
+            if (s.snapId === snap.snapId) return { ...s, active: true };
+            if (s.artifactType === snap.artifactType && s.artifactId === snap.artifactId && s.active) {
               return { ...s, active: false };
             }
             return s;
           }),
         );
-        this.toastService.show(`${activated.versionName || `v${activated.versionNumber}`} is now the active version.`, 'success');
+        const label = snap.versionName || `v${snap.versionNumber}`;
+        this.toastService.show(
+          restoresContent ? `${label} restored as the current version.` : `${label} is now the active version.`,
+          'success',
+        );
       },
       error: () => {
         this.activatingSnapId.set(null);

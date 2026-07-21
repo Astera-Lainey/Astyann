@@ -268,7 +268,32 @@ Each document *type* has its own independent version sequence (`versionNumber` 1
 
 ### Activate a specific version (rollback)
 
-Manually makes an older (or otherwise inactive) snapshot the active one for its document — e.g. a "Restore this version" button in a history panel. Does **not** touch the document's current live content/status, only which snapshot is flagged `active` in the timeline.
+Two different endpoints exist here — use the right one depending on whether you want a real rollback or just a bookkeeping flag flip.
+
+**Real rollback** — restores an archived (previously-approved) version as the document's actual current file. After this call, `GET /{projectId}/{documentId}/download` and the document's `status` immediately reflect the restored version — this is what a "Restore this version" button in a history panel should call.
+
+```
+POST /api/v1/documents/{projectId}/{documentId}/versions/{snapId}/activate
+```
+**Response `200`**:
+```json
+{
+  "status": 200,
+  "message": "Document version restored.",
+  "data": {
+    "documentId": "8f14e...",
+    "type": "SRS",
+    "status": "APPROVED",
+    "pageCount": 12,
+    "lastError": null
+  }
+}
+```
+- Restores that snapshot's stored `.docx` file as the document's live content and sets its status to `APPROVED` (it was approved once already).
+- Also flips the snapshot's `active` flag in VersionService (best-effort — if that call fails, the restore itself still succeeds; the timeline flag may lag until the next successful activate).
+- `404` if `documentId` doesn't belong to the project, or if `snapId` has no archived content for that document (e.g. it belongs to a different document, or predates this endpoint's rollout).
+
+**Metadata-only flag flip** — flips which snapshot is flagged `active` in the timeline without touching the document's actual live content/status. Mostly useful for VersionService's own bookkeeping (and for artifact types with no rollback endpoint, e.g. CODE/DEPLOYMENT); the document workflow above generally wants the real-rollback endpoint instead.
 
 ```
 POST /api/v1/versions/snapshots/{snapId}/activate

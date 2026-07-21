@@ -14,12 +14,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription, catchError, forkJoin, map, of, timer, switchMap, takeWhile } from 'rxjs';
 import { DocumentService } from '../../../../core/services/document.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { VersionService } from '../../../../core/services/version.service';
 import {
   DOCUMENT_TYPE_LABELS,
   DocumentListItem,
   DocumentStatus,
   DocumentSummary,
 } from '../../../../core/models/document.models';
+import { Snapshot } from '../../../../core/models/version.models';
 
 const STATUS_LABELS: Record<DocumentStatus, string> = {
   GENERATING: 'Generating',
@@ -52,6 +54,9 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
   readonly allFailed = computed(
     () => this.hasAnyDocuments() && this.documents().every((d) => d.status === 'FAILED'),
   );
+
+  // ── Active version (from VersionService), keyed by documentId ───────────────
+  readonly activeVersions = signal<Map<string, Snapshot>>(new Map());
 
   // ── Generate ──────────────────────────────────────────────────────────────
   readonly isGenerating = signal(false);
@@ -101,6 +106,7 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
 
   constructor(
     private readonly documentService: DocumentService,
+    private readonly versionService: VersionService,
     private readonly toastService: ToastService,
   ) {}
 
@@ -125,6 +131,7 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
       next: (items) => {
         this.documents.set(items);
         this.isLoadingList.set(false);
+        this.loadActiveVersions();
         // Generation may already be in progress from an earlier visit (e.g.
         // the user reloaded the page mid-generation) — resume polling.
         if (items.some((d) => d.status === 'GENERATING')) {
@@ -140,6 +147,18 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
 
   retryLoadDocuments(): void {
     this.load();
+  }
+
+  /** Refreshes which snapshot VersionService currently has flagged active per document. */
+  private loadActiveVersions(): void {
+    this.versionService.getActiveSnapshotsByArtifact(this.projectId).subscribe((map) => {
+      this.activeVersions.set(map);
+    });
+  }
+
+  /** Active version number for a document, or null if it has never been approved. */
+  activeVersionNumber(documentId: string): number | null {
+    return this.activeVersions().get(documentId)?.versionNumber ?? null;
   }
 
   private toListVm = (s: DocumentSummary): DocumentListItem => ({
@@ -251,6 +270,7 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
         this.documents.update((list) =>
           list.map((d) => (d.documentId === documentId ? { ...d, status: 'APPROVED' as DocumentStatus } : d)),
         );
+        this.loadActiveVersions();
         this.toastService.show('Document approved.', 'success');
       },
       error: () => {
@@ -294,6 +314,7 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
         this.documents.update((list) =>
           list.map((d) => (succeededIds.includes(d.documentId) ? { ...d, status: 'APPROVED' as DocumentStatus } : d)),
         );
+        this.loadActiveVersions();
       }
 
       if (failedCount === 0) {
