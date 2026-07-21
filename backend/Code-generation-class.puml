@@ -1,0 +1,147 @@
+' ============================================================
+' 6. CODE GENERATION SERVICE — Design Class Diagram
+' ============================================================
+@startuml CodeGenService_DesignClass
+left to right direction
+skinparam classAttributeIconSize 0
+
+package "controller" {
+  class CodeGenController {
+    -codeGenService : ICodeGenService
+    +generateCode(projectId : UUID) : ResponseEntity<List<GeneratedCodeDTO>>
+    +getGeneratedCode(projectId : UUID) : ResponseEntity<List<GeneratedCodeDTO>>
+    +getCodeById(codeId : UUID) : ResponseEntity<GeneratedCodeDTO>
+    +approveCode(codeId : UUID) : ResponseEntity<GeneratedCodeDTO>
+    +requestChanges(codeId : UUID, dto : ChangeRequestDTO) : ResponseEntity<GeneratedCodeDTO>
+    +regenerateCode(codeId : UUID) : ResponseEntity<GeneratedCodeDTO>
+    +downloadCode(codeId : UUID) : ResponseEntity<Resource>
+    +validateCode(codeId : UUID) : ResponseEntity<ValidationResultDTO>
+  }
+}
+
+package "service" {
+  interface ICodeGenService {
+    +generateCode(projectId : UUID) : List<GeneratedCodeDTO>
+    +getGeneratedCode(projectId : UUID) : List<GeneratedCodeDTO>
+    +getCodeById(codeId : UUID) : GeneratedCodeDTO
+    +approveCode(codeId : UUID) : GeneratedCodeDTO
+    +requestChanges(codeId : UUID, feedback : String) : GeneratedCodeDTO
+    +regenerateCode(codeId : UUID) : GeneratedCodeDTO
+    +downloadCode(codeId : UUID) : byte[]
+    +validateCode(codeId : UUID) : ValidationResultDTO
+  }
+
+  class CodeGenServiceImpl {
+    -codeRepository : GeneratedCodeRepository
+    -aiOrchestratorClient : AIServiceClient
+    -metaModelClient : MetaModelServiceClient
+    -validationClient : ValidationServiceClient
+    -versionClient : VersionServiceClient
+    -storageService : StorageService
+    +generateCode(projectId : UUID) : List<GeneratedCodeDTO>
+    +getGeneratedCode(projectId : UUID) : List<GeneratedCodeDTO>
+    +getCodeById(codeId : UUID) : GeneratedCodeDTO
+    +approveCode(codeId : UUID) : GeneratedCodeDTO
+    +requestChanges(codeId : UUID, feedback : String) : GeneratedCodeDTO
+    +regenerateCode(codeId : UUID) : GeneratedCodeDTO
+    +downloadCode(codeId : UUID) : byte[]
+    +validateCode(codeId : UUID) : ValidationResultDTO
+  }
+
+  class CodeGeneratorEngine {
+    -projectId : UUID
+    +generateByLayer(layer : CodeLayer, context : String) : GeneratedCode
+    +generateAll(context : String) : List<GeneratedCode>
+    +correctErrors(code : GeneratedCode, errors : List<String>) : GeneratedCode
+  }
+}
+
+package "domain" {
+  class GeneratedCode {
+    -codeId : UUID
+    -projectId : UUID
+    -layer : CodeLayer
+    -codeUrl : String
+    -codePath : String
+    -genDate : LocalDateTime
+    -downloadUrl : String
+    -feedback : String
+  }
+
+  enum CodeLayer {
+    FRONTEND
+    BACKEND
+  }
+
+}
+
+package "repository" {
+  interface GeneratedCodeRepository {
+    +findByProjectId(projectId : UUID) : List<GeneratedCode>
+    +findByCodeId(codeId : UUID) : Optional<GeneratedCode>
+    +findByProjectIdAndLayer(projectId : UUID, layer : CodeLayer) : Optional<GeneratedCode>
+    +save(code : GeneratedCode) : GeneratedCode
+    +saveAll(codes : List<GeneratedCode>) : void
+  }
+}
+
+package "dto" {
+  class GeneratedCodeDTO {
+    +codeId : UUID
+    +layer : CodeLayer
+    +codeUrl : String
+    +genDate : LocalDateTime
+    +downloadUrl : String
+  }
+
+  class ChangeRequestDTO {
+    +feedback : String
+  }
+
+  class ValidationResultDTO {
+    +codeId : UUID
+    +passed : boolean
+    +errors : List<String>
+    +warnings : List<String>
+  }
+}
+
+package "client" {
+  class AIServiceClient {
+    +generateCodeForLayer(layer : CodeLayer, context : String) : String
+    +correctCodeErrors(codeId : UUID, errors : List<String>) : String
+    +regenerateCode(codeId : UUID, feedback : String) : String
+  }
+
+  class MetaModelServiceClient {
+    +getCodeConstraints(layer : CodeLayer) : String
+  }
+
+  class ValidationServiceClient {
+    +validateCode(codeId : UUID, codePath : String) : ValidationResultDTO
+  }
+
+  class VersionServiceClient {
+    +createCodeSnapshot(codeId : UUID) : void
+  }
+
+  class StorageService {
+    +saveCode(projectId : UUID, layer : CodeLayer, content : String) : String
+    +loadCode(path : String) : byte[]
+  }
+}
+
+CodeGenController      ..>  ICodeGenService
+CodeGenServiceImpl      ..|> ICodeGenService
+CodeGenServiceImpl      ..>  GeneratedCodeRepository
+CodeGenServiceImpl      ..>  AIServiceClient
+CodeGenServiceImpl      ..>  MetaModelServiceClient
+CodeGenServiceImpl      ..>  ValidationServiceClient
+CodeGenServiceImpl      ..>  VersionServiceClient
+CodeGenServiceImpl      ..>  StorageService
+CodeGenServiceImpl      ..>  CodeGeneratorEngine
+CodeGeneratorEngine     ..>  GeneratedCode
+GeneratedCodeRepository ..>  GeneratedCode
+GeneratedCode           ..>  CodeLayer
+
+@enduml
