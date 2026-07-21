@@ -266,6 +266,13 @@ GET /api/v1/versions/{projectId}
 ```
 Each document *type* has its own independent version sequence (`versionNumber` 1, 2, 3...) and its own `active` snapshot — filter client-side by `documentId` to build a per-document history. `GET /api/v1/versions/{projectId}/snapshots` returns the same list flattened (no timeline wrapper); `GET /api/v1/versions/snapshots/{snapId}` fetches one snapshot directly.
 
+### Download a specific version (independent of what's currently active)
+
+```
+GET /api/v1/documents/{projectId}/{documentId}/versions/{snapId}/download
+```
+Returns the raw `.docx` bytes for exactly that snapshot's archived file, same response shape as the regular download endpoint. Unlike `GET /{projectId}/{documentId}/download`, this is completely unaffected by which snapshot is currently active/live — use it for a "download vN" button in a history panel so it always returns vN's actual content, not whatever the document currently is. `404` if `documentId` doesn't belong to the project, or if `snapId` has no archived content for that document (e.g. it predates this endpoint's rollout).
+
 ### Activate a specific version (rollback)
 
 Two different endpoints exist here — use the right one depending on whether you want a real rollback or just a bookkeeping flag flip.

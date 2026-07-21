@@ -122,4 +122,16 @@ export class DocumentService {
       )
       .pipe(map((res) => res.data));
   }
+
+  /**
+   * GET /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/download
+   * Downloads that specific archived version regardless of which one is currently
+   * active/live — unlike download(), this is unaffected by activateVersion().
+   * Use for a "download vN" action so it always returns vN's actual content.
+   */
+  downloadVersion(projectId: string, documentId: string, snapshotId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${projectId}/${documentId}/versions/${snapshotId}/download`, {
+      responseType: 'blob',
+    });
+  }
 }

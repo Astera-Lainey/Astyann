@@ -298,6 +298,13 @@ GET /api/v1/versions/{projectId}
 ```
 Each diagram *type* has its own independent version sequence (`versionNumber` 1, 2, 3...) and its own `active` snapshot — filter client-side by `diagramId` to build a per-diagram history. `GET /api/v1/versions/{projectId}/snapshots` returns the same list flattened (no timeline wrapper); `GET /api/v1/versions/snapshots/{snapId}` fetches one snapshot directly.
 
+### Render a specific version (independent of what's currently active)
+
+```
+GET /api/v1/uml/{projectId}/{diagramId}/versions/{snapId}/render?format=SVG
+```
+Returns the raw image bytes for exactly that snapshot's archived content, same response shape as the regular render endpoint. Unlike `GET /{projectId}/{diagramId}/render`, this is completely unaffected by which snapshot is currently active/live — use it for a "download vN" button in a history panel so it always returns vN's actual content, not whatever the diagram currently shows. `404` if `diagramId` doesn't belong to the project, or if `snapId` has no archived content for that diagram (e.g. it predates this endpoint's rollout).
+
 ### Activate a specific version (rollback)
 
 Two different endpoints exist here — use the right one depending on whether you want a real rollback or just a bookkeeping flag flip.

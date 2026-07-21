@@ -387,6 +387,28 @@ public class DiagramGenerationService {
         return krokiClient.render(diagram.getSourceCode(), normalized);
     }
 
+    /**
+     * Renders a specific archived (previously-approved) version, independent of whatever the
+     * diagram's current live content is — unlike renderDiagram(), this never touches or is
+     * affected by activateVersion(). Used by the version-history panel so "download vN" always
+     * returns vN's actual content, no matter which version is currently active.
+     */
+    public byte[] renderVersion(UUID projectId, UUID diagramId, UUID snapshotId, String format) {
+        String normalized = normalizeFormat(format);
+        repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        DiagramVersionArchive archive = archiveRepository.findBySnapshotIdAndDiagramId(snapshotId, diagramId)
+                .orElseThrow(() -> new DiagramVersionNotFoundException(diagramId, snapshotId));
+
+        if (normalized.equalsIgnoreCase(archive.getRenderFormat()) && archive.getImagePath() != null) {
+            return storageService.loadImage(archive.getImagePath());
+        }
+        // Requested format differs from what's cached on disk — re-render on the fly, don't persist.
+        return krokiClient.render(archive.getSourceCode(), normalized);
+    }
+
     private UMLDiagram generateOne(UUID projectId, DiagramType type, String format) {
         UMLDiagram diagram = repository.findByProjectIdAndType(projectId, type).orElseGet(UMLDiagram::new);
         diagram.setProjectId(projectId);

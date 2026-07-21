@@ -129,4 +129,22 @@ export class DiagramService {
       )
       .pipe(map((res) => res.data));
   }
+
+  /**
+   * GET /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/render
+   * Renders that specific archived version regardless of which one is currently
+   * active/live — unlike renderBlob(), this is unaffected by activateVersion().
+   * Use for a "download vN" action so it always returns vN's actual content.
+   */
+  renderVersionBlob(
+    projectId: string,
+    diagramId: string,
+    snapshotId: string,
+    format: RenderFormat = 'PNG',
+  ): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${projectId}/${diagramId}/versions/${snapshotId}/render`, {
+      params: { format },
+      responseType: 'blob',
+    });
+  }
 }

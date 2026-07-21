@@ -103,6 +103,24 @@ public class DocumentController {
                 .build());
     }
 
+    /**
+     * Downloads a specific archived version regardless of which one is currently active/live —
+     * unlike /download, this is unaffected by activateVersion(). Use this for a "download vN"
+     * action in a version-history panel so it always returns vN's actual content.
+     */
+    @GetMapping("/{projectId}/{documentId}/versions/{snapshotId}/download")
+    public ResponseEntity<byte[]> downloadVersion(
+            @PathVariable String projectId,
+            @PathVariable String documentId,
+            @PathVariable String snapshotId) {
+        byte[] bytes = service.downloadVersion(parseId(projectId), parseId(documentId), parseId(snapshotId));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header("Content-Disposition", "attachment; filename=\"document.docx\"")
+                .body(bytes);
+    }
+
     @PostMapping("/{projectId}/{documentId}/approve")
     public ResponseEntity<ApiResponse<ApproveDocumentResponse>> approve(
             @PathVariable String projectId,

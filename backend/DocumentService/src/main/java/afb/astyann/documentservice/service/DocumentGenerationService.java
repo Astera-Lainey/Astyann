@@ -130,6 +130,25 @@ public class DocumentGenerationService {
         return storageService.loadDocument(doc.getPath());
     }
 
+    /**
+     * Downloads a specific archived version, independent of whatever the document's current live
+     * file is — unlike downloadDocument(), this never touches or is affected by
+     * activateVersion(). Used by the version-history panel so "download vN" always returns vN's
+     * actual content, no matter which version is currently active.
+     */
+    public byte[] downloadVersion(UUID projectId, UUID documentId, UUID snapshotId) {
+        repository.findById(documentId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DocumentNotFoundException(projectId, documentId));
+
+        DocumentVersionArchive archive = archiveRepository.findBySnapshotIdAndDocumentId(snapshotId, documentId)
+                .orElseThrow(() -> new DocumentVersionNotFoundException(documentId, snapshotId));
+        if (archive.getFilePath() == null) {
+            throw new DocumentVersionNotFoundException(documentId, snapshotId);
+        }
+        return storageService.loadDocument(archive.getFilePath());
+    }
+
     private Document generateOne(UUID projectId, DocumentType type) {
         Document doc = repository.findByProjectIdAndType(projectId, type).orElseGet(Document::new);
         doc.setProjectId(projectId);

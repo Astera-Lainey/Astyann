@@ -202,7 +202,7 @@ export class VersionHistoryComponent implements OnChanges {
 
     if (snap.artifactType === 'DOCUMENT' && snap.documentId) {
       this.downloadingSnapId.set(snap.snapId);
-      this.documentService.download(this.projectId, snap.documentId).subscribe({
+      this.documentService.downloadVersion(this.projectId, snap.documentId, snap.snapId).subscribe({
         next: (blob) => {
           this.downloadingSnapId.set(null);
           this.saveBlob(blob, `${name}.docx`);
@@ -214,7 +214,7 @@ export class VersionHistoryComponent implements OnChanges {
       });
     } else if (snap.artifactType === 'DIAGRAM' && snap.diagramId) {
       this.downloadingSnapId.set(snap.snapId);
-      this.diagramService.renderBlob(this.projectId, snap.diagramId, 'PNG').subscribe({
+      this.diagramService.renderVersionBlob(this.projectId, snap.diagramId, snap.snapId, 'PNG').subscribe({
         next: (blob) => {
           this.downloadingSnapId.set(null);
           this.saveBlob(blob, `${name}.png`);

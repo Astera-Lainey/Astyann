@@ -182,6 +182,24 @@ public class UMLDiagramController {
         return ResponseEntity.ok().contentType(mediaType).body(bytes);
     }
 
+    /**
+     * Renders a specific archived version regardless of which one is currently active/live —
+     * unlike /render, this is unaffected by activateVersion(). Use this for a "download vN"
+     * action in a version-history panel so it always returns vN's actual content.
+     */
+    @GetMapping("/{projectId}/{diagramId}/versions/{snapshotId}/render")
+    public ResponseEntity<byte[]> renderVersion(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @PathVariable String snapshotId,
+            @RequestParam(defaultValue = "SVG") String format) {
+        byte[] bytes = service.renderVersion(parseId(projectId), parseId(diagramId), parseId(snapshotId), format);
+        MediaType mediaType = "PNG".equalsIgnoreCase(format)
+                ? MediaType.IMAGE_PNG
+                : MediaType.valueOf("image/svg+xml");
+        return ResponseEntity.ok().contentType(mediaType).body(bytes);
+    }
+
     @DeleteMapping("/{projectId}")
     public ResponseEntity<Void> delete(@PathVariable String projectId) {
         service.deleteAllForProject(parseId(projectId));
