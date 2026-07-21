@@ -7,13 +7,16 @@ import afb.astyann.diagramgeneratorservice.client.RequirementServiceClient;
 import afb.astyann.diagramgeneratorservice.client.VersionServiceClient;
 import afb.astyann.diagramgeneratorservice.domain.DiagramStatus;
 import afb.astyann.diagramgeneratorservice.domain.DiagramType;
+import afb.astyann.diagramgeneratorservice.domain.DiagramVersionArchive;
 import afb.astyann.diagramgeneratorservice.domain.UMLDiagram;
 import afb.astyann.diagramgeneratorservice.dto.ApiResponse;
 import afb.astyann.diagramgeneratorservice.dto.GenerateDiagramsRequest;
 import afb.astyann.diagramgeneratorservice.exception.DiagramNotFoundException;
+import afb.astyann.diagramgeneratorservice.exception.DiagramVersionNotFoundException;
 import afb.astyann.diagramgeneratorservice.exception.DownstreamServiceException;
 import afb.astyann.diagramgeneratorservice.exception.InvalidRenderFormatException;
 import afb.astyann.diagramgeneratorservice.exception.PcsfNotApprovedException;
+import afb.astyann.diagramgeneratorservice.repository.DiagramVersionArchiveRepository;
 import afb.astyann.diagramgeneratorservice.repository.UMLDiagramRepository;
 import afb.astyann.diagramgeneratorservice.util.PlantUmlCleaner;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class DiagramGenerationService {
     private static final int MAX_RENDER_ATTEMPTS = 2;
 
     private final UMLDiagramRepository repository;
+    private final DiagramVersionArchiveRepository archiveRepository;
     private final RequirementServiceClient requirementServiceClient;
     private final RAGServiceClient ragServiceClient;
     private final AIServiceClient aiServiceClient;
@@ -57,6 +61,7 @@ public class DiagramGenerationService {
     @Transactional
     public void deleteAllForProject(UUID projectId) {
         repository.deleteByProjectId(projectId);
+        archiveRepository.deleteByProjectId(projectId);
         storageService.deleteProjectDirectory(projectId);
     }
 
@@ -110,12 +115,17 @@ public class DiagramGenerationService {
     public record RegenerateResult(UMLDiagram diagram, UUID previousVersionId) {}
 
     /**
-     * Re-runs generation for a single, already-existing diagram (by id) — used to retry a
-     * diagram that previously ended up FAILED, or to apply feedback recorded via change-request.
-     * If the diagram has stored change-request instructions, applies them (feedback-driven
-     * regeneration) instead of a plain from-scratch regeneration, and clears them on success.
-     * Rejects APPROVED diagrams outright — a change-request must be submitted first, which
-     * resets the diagram to PENDING_APPROVAL and is what actually allows this to proceed.
+     * Kicks off regeneration for a single, already-existing diagram (by id) and returns
+     * immediately — it does NOT wait for the AI+Kroki pipeline to finish. Mirrors
+     * startGeneration()'s async pattern: blocking here until the pipeline finished routinely
+     * outlived the gateway's response-timeout, the same failure mode startGeneration was fixed
+     * for. Poll GET /{projectId} until the diagram is no longer GENERATING to see the outcome.
+     * Used to retry a diagram that previously ended up FAILED, or to apply feedback recorded via
+     * change-request. If the diagram has stored change-request instructions, applies them
+     * (feedback-driven regeneration) instead of a plain from-scratch regeneration, and clears
+     * them on success. Rejects APPROVED diagrams outright — a change-request must be submitted
+     * first, which resets the diagram to PENDING_APPROVAL and is what actually allows this to
+     * proceed.
      */
     public RegenerateResult regenerateDiagram(UUID projectId, UUID diagramId, String formatOverride) {
         UMLDiagram existing = repository.findById(diagramId)
@@ -134,13 +144,27 @@ public class DiagramGenerationService {
 
         String format = normalizeFormat(formatOverride != null ? formatOverride : existing.getRenderFormat());
         UUID previousVersionId = findActiveSnapshotId(projectId, diagramId);
-
         String instructions = existing.getChangeInstructions();
-        UMLDiagram result = (instructions != null && !instructions.isBlank())
-                ? generateWithFeedback(projectId, existing, format, instructions)
-                : generateOne(projectId, existing.getType(), format);
 
-        return new RegenerateResult(result, previousVersionId);
+        existing.setStatus(DiagramStatus.GENERATING);
+        existing.setRenderFormat(format);
+        existing.setLastError(null);
+        UMLDiagram placeholder = repository.save(existing);
+
+        diagramExecutor.execute(() -> {
+            try {
+                if (instructions != null && !instructions.isBlank()) {
+                    generateWithFeedback(projectId, placeholder, format, instructions);
+                } else {
+                    generateOne(projectId, placeholder.getType(), format);
+                }
+            } catch (Exception ex) {
+                log.error("Unexpected failure regenerating diagramId={}: {}", diagramId, ex.getMessage(), ex);
+                markFailed(placeholder, ex.getMessage());
+            }
+        });
+
+        return new RegenerateResult(placeholder, previousVersionId);
     }
 
     public record ApproveOutcome(List<UUID> snapshotIds, int updatedCount, boolean allDiagramsApproved) {}
@@ -177,25 +201,17 @@ public class DiagramGenerationService {
 
         // Synchronous: this is a pure outbound POST carrying in-memory diagram fields, not a
         // read of this service's own DB, so there's no pre-commit staleness risk to defer for.
+        // Failures here don't roll back the approval above — retryPendingSnapshots() sweeps up
+        // any diagram left APPROVED without a snapshotId.
+        String reason = (approvalComment != null && !approvalComment.isBlank()) ? approvalComment : "Diagram approved";
         List<UUID> snapshotIds = new ArrayList<>();
         for (UMLDiagram d : approvable) {
-            try {
-                var snap = versionServiceClient.createSnapshot(projectId, new VersionServiceClient.CreateSnapshotRequest(
-                        "DIAGRAM",
-                        d.getType().name(),
-                        null,
-                        (approvalComment != null && !approvalComment.isBlank()) ? approvalComment : "Diagram approved",
-                        d.getGeneratedImagePath(),
-                        d.getDiagramId(),
-                        d.getType().name()));
-                if (snap != null && snap.getData() != null) {
-                    snapshotIds.add(snap.getData().snapId());
-                }
-            } catch (Exception ex) {
-                log.error("Snapshot creation failed for diagramId={} — approval still recorded: {}",
-                        d.getDiagramId(), ex.getMessage());
+            UUID snapId = attemptSnapshot(projectId, d, reason);
+            if (snapId != null) {
+                snapshotIds.add(snapId);
             }
         }
+        repository.saveAll(approvable);
 
         // Deliberately not calling ProjectService to update project status here — ProjectStatus
         // (ANALYZING/GENERATING/COMPLETED/FAILED) has no per-stage "diagrams approved" value and
@@ -238,6 +254,98 @@ public class DiagramGenerationService {
         return repository.save(diagram);
     }
 
+    /**
+     * Best-effort: creates a VersionService snapshot for an already-APPROVED diagram and, on
+     * success, stamps its snapshotId so it's no longer picked up by retryPendingSnapshots().
+     * Returns null (and just logs) on failure — callers are expected to tolerate that and let
+     * the retry job catch up later rather than fail/rollback the approval itself.
+     */
+    private UUID attemptSnapshot(UUID projectId, UMLDiagram diagram, String triggerReason) {
+        try {
+            var snap = versionServiceClient.createSnapshot(projectId, new VersionServiceClient.CreateSnapshotRequest(
+                    "DIAGRAM",
+                    diagram.getType().name(),
+                    null,
+                    triggerReason,
+                    diagram.getGeneratedImagePath(),
+                    diagram.getDiagramId(),
+                    diagram.getType().name()));
+            if (snap != null && snap.getData() != null) {
+                UUID snapId = snap.getData().snapId();
+                diagram.setSnapshotId(snapId);
+                // Captures the content as it exists right now so activateVersion() has something
+                // to restore later — UMLDiagram itself only ever holds the current live content.
+                archiveRepository.save(DiagramVersionArchive.builder()
+                        .snapshotId(snapId)
+                        .projectId(projectId)
+                        .diagramId(diagram.getDiagramId())
+                        .sourceCode(diagram.getSourceCode())
+                        .imagePath(diagram.getGeneratedImagePath())
+                        .renderFormat(diagram.getRenderFormat())
+                        .build());
+                return snapId;
+            }
+        } catch (Exception ex) {
+            log.error("Snapshot creation failed for diagramId={}: {}", diagram.getDiagramId(), ex.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Restores an archived (previously-approved) version as the diagram's current live content —
+     * a real rollback, not just a VersionService metadata flip. The restored diagram becomes
+     * APPROVED immediately (it was approved once already) so downstream stages relying on
+     * "all diagrams approved" aren't broken by a rollback. Also flips the active flag on the
+     * VersionService side (best-effort) so the version-history timeline stays consistent.
+     */
+    @Transactional
+    public UMLDiagram activateVersion(UUID projectId, UUID diagramId, UUID snapshotId) {
+        UMLDiagram diagram = repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        DiagramVersionArchive archive = archiveRepository.findBySnapshotIdAndDiagramId(snapshotId, diagramId)
+                .orElseThrow(() -> new DiagramVersionNotFoundException(diagramId, snapshotId));
+
+        diagram.setSourceCode(archive.getSourceCode());
+        diagram.setGeneratedImagePath(archive.getImagePath());
+        diagram.setRenderFormat(archive.getRenderFormat());
+        diagram.setStatus(DiagramStatus.APPROVED);
+        diagram.setLastError(null);
+        diagram.setChangeInstructions(null);
+        diagram.setSnapshotId(snapshotId);
+        UMLDiagram saved = repository.save(diagram);
+
+        try {
+            versionServiceClient.activateSnapshot(snapshotId);
+        } catch (Exception ex) {
+            log.warn("Restored diagramId={} to snapshotId={} but could not flip its active flag " +
+                    "in VersionService: {}", diagramId, snapshotId, ex.getMessage());
+        }
+
+        return saved;
+    }
+
+    /**
+     * Sweeps every APPROVED diagram still missing a snapshotId (approve() recorded the
+     * approval but the outbound createSnapshot call failed) and retries it. Invoked on a
+     * fixed schedule by SnapshotRetryScheduler — there is no other trigger for this, so a
+     * diagram stays retry-eligible indefinitely until VersionService accepts it.
+     */
+    @Transactional
+    public void retryPendingSnapshots() {
+        List<UMLDiagram> pending = repository.findByStatusAndSnapshotIdIsNull(DiagramStatus.APPROVED);
+        if (pending.isEmpty()) return;
+
+        log.info("Retrying snapshot creation for {} approved diagram(s) missing a snapshot", pending.size());
+        for (UMLDiagram d : pending) {
+            UUID snapId = attemptSnapshot(d.getProjectId(), d, "Diagram approved (retried snapshot creation)");
+            if (snapId != null) {
+                repository.save(d);
+            }
+        }
+    }
+
     private UUID findActiveSnapshotId(UUID projectId, UUID diagramId) {
         try {
             var response = versionServiceClient.listSnapshots(projectId);
@@ -277,6 +385,28 @@ public class DiagramGenerationService {
         }
         // Requested format differs from what's cached on disk — re-render on the fly, don't persist.
         return krokiClient.render(diagram.getSourceCode(), normalized);
+    }
+
+    /**
+     * Renders a specific archived (previously-approved) version, independent of whatever the
+     * diagram's current live content is — unlike renderDiagram(), this never touches or is
+     * affected by activateVersion(). Used by the version-history panel so "download vN" always
+     * returns vN's actual content, no matter which version is currently active.
+     */
+    public byte[] renderVersion(UUID projectId, UUID diagramId, UUID snapshotId, String format) {
+        String normalized = normalizeFormat(format);
+        repository.findById(diagramId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DiagramNotFoundException(projectId, diagramId));
+
+        DiagramVersionArchive archive = archiveRepository.findBySnapshotIdAndDiagramId(snapshotId, diagramId)
+                .orElseThrow(() -> new DiagramVersionNotFoundException(diagramId, snapshotId));
+
+        if (normalized.equalsIgnoreCase(archive.getRenderFormat()) && archive.getImagePath() != null) {
+            return storageService.loadImage(archive.getImagePath());
+        }
+        // Requested format differs from what's cached on disk — re-render on the fly, don't persist.
+        return krokiClient.render(archive.getSourceCode(), normalized);
     }
 
     private UMLDiagram generateOne(UUID projectId, DiagramType type, String format) {

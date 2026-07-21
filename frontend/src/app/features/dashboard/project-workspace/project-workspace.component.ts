@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, signal, viewChild } from '@angular/core';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription, timer, switchMap, takeWhile, catchError, of } from 'rxjs';
@@ -8,6 +8,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { RequirementsViewComponent } from './requirements-view/requirements-view.component';
 import { SystemDesignComponent } from './system-design/system-design.component';
 import { VersionHistoryComponent } from './version-history/version-history.component';
+import { DocumentationComponent } from './documentation/documentation.component';
 
 export type WorkspaceSection =
   | 'requirements'
@@ -31,7 +32,7 @@ const SECTION_LABELS: Record<WorkspaceSection, string> = {
 @Component({
   selector: 'app-project-workspace-page',
   standalone: true,
-  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent, VersionHistoryComponent],
+  imports: [RouterLink, RequirementsViewComponent, SystemDesignComponent, VersionHistoryComponent, DocumentationComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-workspace.component.html',
   styleUrl: './project-workspace.component.scss',
@@ -44,6 +45,9 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
 
   readonly pcsfStatus = signal<string>('DRAFT');
   readonly pendingQuestionsCount = signal(0);
+
+  readonly showDocLegend = signal(false);
+  readonly docComponent = viewChild(DocumentationComponent);
 
   readonly isRetrying = signal(false);
   readonly retryError = signal<string | null>(null);
@@ -121,6 +125,10 @@ export class ProjectWorkspaceComponent implements OnInit, OnDestroy {
 
   onRestartPolling(): void {
     if (this.projectId) this.startStatusPolling();
+  }
+
+  toggleDocLegend(): void {
+    this.showDocLegend.update((v) => !v);
   }
 
   retryInference(): void {

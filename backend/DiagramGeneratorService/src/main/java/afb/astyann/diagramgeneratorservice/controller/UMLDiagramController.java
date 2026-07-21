@@ -72,6 +72,11 @@ public class UMLDiagramController {
                 .build());
     }
 
+    /**
+     * Starts regeneration and returns immediately with the diagram in GENERATING status — it
+     * does not wait for the AI+Kroki pipeline to finish. Poll GET /{projectId} until the diagram
+     * is no longer GENERATING to find out the outcome (PENDING_APPROVAL or FAILED).
+     */
     @PostMapping("/{projectId}/{diagramId}/regenerate")
     public ResponseEntity<ApiResponse<DiagramSummaryDTO>> regenerate(
             @PathVariable String projectId,
@@ -81,17 +86,14 @@ public class UMLDiagramController {
         UUID dId = parseId(diagramId);
         String formatOverride = body != null ? body.getRenderFormat() : null;
         DiagramGenerationService.RegenerateResult result = service.regenerateDiagram(pId, dId, formatOverride);
-        UMLDiagram diagram = result.diagram();
-        String message = diagram.getStatus() == DiagramStatus.FAILED
-                ? "Diagram regeneration failed."
-                : "Diagram regenerated.";
-        DiagramSummaryDTO dto = toSummary(pId, diagram);
+        DiagramSummaryDTO dto = toSummary(pId, result.diagram());
         dto.setPreviousVersionId(result.previousVersionId());
-        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
-                .status(200)
-                .message(message)
-                .data(dto)
-                .build());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.<DiagramSummaryDTO>builder()
+                        .status(202)
+                        .message("Diagram regeneration started.")
+                        .data(dto)
+                        .build());
     }
 
     @PostMapping("/{projectId}/approve")
@@ -147,12 +149,51 @@ public class UMLDiagramController {
                 .build());
     }
 
+    /**
+     * True rollback — restores an archived (previously-approved) version as the diagram's
+     * current live content, so the render endpoint and the workspace viewer immediately reflect
+     * it. Also flips the active flag on the corresponding VersionService snapshot. Distinct from
+     * VersionService's own POST /snapshots/{snapId}/activate, which only flips that flag and
+     * never touches this diagram's actual content.
+     */
+    @PostMapping("/{projectId}/{diagramId}/versions/{snapshotId}/activate")
+    public ResponseEntity<ApiResponse<DiagramSummaryDTO>> activateVersion(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @PathVariable String snapshotId) {
+        UUID pId = parseId(projectId);
+        UMLDiagram restored = service.activateVersion(pId, parseId(diagramId), parseId(snapshotId));
+        return ResponseEntity.ok(ApiResponse.<DiagramSummaryDTO>builder()
+                .status(200)
+                .message("Diagram version restored.")
+                .data(toSummary(pId, restored))
+                .build());
+    }
+
     @GetMapping("/{projectId}/{diagramId}/render")
     public ResponseEntity<byte[]> render(
             @PathVariable String projectId,
             @PathVariable String diagramId,
             @RequestParam(defaultValue = "SVG") String format) {
         byte[] bytes = service.renderDiagram(parseId(projectId), parseId(diagramId), format);
+        MediaType mediaType = "PNG".equalsIgnoreCase(format)
+                ? MediaType.IMAGE_PNG
+                : MediaType.valueOf("image/svg+xml");
+        return ResponseEntity.ok().contentType(mediaType).body(bytes);
+    }
+
+    /**
+     * Renders a specific archived version regardless of which one is currently active/live —
+     * unlike /render, this is unaffected by activateVersion(). Use this for a "download vN"
+     * action in a version-history panel so it always returns vN's actual content.
+     */
+    @GetMapping("/{projectId}/{diagramId}/versions/{snapshotId}/render")
+    public ResponseEntity<byte[]> renderVersion(
+            @PathVariable String projectId,
+            @PathVariable String diagramId,
+            @PathVariable String snapshotId,
+            @RequestParam(defaultValue = "SVG") String format) {
+        byte[] bytes = service.renderVersion(parseId(projectId), parseId(diagramId), parseId(snapshotId), format);
         MediaType mediaType = "PNG".equalsIgnoreCase(format)
                 ? MediaType.IMAGE_PNG
                 : MediaType.valueOf("image/svg+xml");

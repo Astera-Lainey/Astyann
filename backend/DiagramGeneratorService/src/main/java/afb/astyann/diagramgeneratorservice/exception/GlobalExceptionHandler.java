@@ -23,6 +23,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Void>builder().status(404).message(ex.getMessage()).build());
     }
 
+    @ExceptionHandler(DiagramVersionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVersionNotFound(DiagramVersionNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.<Void>builder().status(404).message(ex.getMessage()).build());
+    }
+
     @ExceptionHandler(InvalidRenderFormatException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidFormat(InvalidRenderFormatException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

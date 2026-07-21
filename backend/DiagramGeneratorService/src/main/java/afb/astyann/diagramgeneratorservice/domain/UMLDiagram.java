@@ -47,6 +47,14 @@ public class UMLDiagram {
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
+    /**
+     * Set once VersionService confirms a snapshot for this diagram's current APPROVED state.
+     * Null while APPROVED means the snapshot call failed (or hasn't run yet) — the diagram
+     * approval itself is not rolled back for that, so this is what the retry job polls on.
+     */
+    @Column(name = "snapshot_id")
+    private UUID snapshotId;
+
     @Column(name = "generated_date", updatable = false)
     private LocalDateTime generatedDate;
 

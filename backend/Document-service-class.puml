@@ -1,0 +1,163 @@
+' ============================================================
+' 4. DOCUMENT SERVICE — Design Class Diagram
+' ============================================================
+@startuml DocumentService_DesignClass
+left to right direction
+skinparam classAttributeIconSize 0
+
+package "controller" {
+  class DocumentController {
+    -documentService : IDocumentService
+    +generateDocuments(projectId : UUID) : ResponseEntity<List<DocumentDTO>>
+    +getDocuments(projectId : UUID) : ResponseEntity<List<DocumentDTO>>
+    +getDocumentById(documentId : UUID) : ResponseEntity<DocumentDTO>
+    +approveDocument(documentId : UUID) : ResponseEntity<DocumentDTO>
+    +requestChanges(documentId : UUID, dto : ChangeRequestDTO) : ResponseEntity<DocumentDTO>
+    +regenerateDocument(documentId : UUID) : ResponseEntity<DocumentDTO>
+    +downloadDocument(documentId : UUID) : ResponseEntity<Resource>
+  }
+}
+
+package "service" {
+  interface IDocumentService {
+    +generateDocuments(projectId : UUID) : List<DocumentDTO>
+    +getDocuments(projectId : UUID) : List<DocumentDTO>
+    +getDocumentById(documentId : UUID) : DocumentDTO
+    +approveDocument(documentId : UUID) : DocumentDTO
+    +requestChanges(documentId : UUID, feedback : String) : DocumentDTO
+    +regenerateDocument(documentId : UUID) : DocumentDTO
+    +downloadDocument(documentId : UUID) : byte[]
+  }
+
+  class DocumentServiceImpl {
+    -documentRepository : DocumentRepository
+    -templateRepository : TemplateRepository
+    -aiOrchestratorClient : AIServiceClient
+    -metaModelClient : MetaModelServiceClient
+    -plantUMLClient : PlantUMLRenderingClient
+    -versionClient : VersionServiceClient
+    -storageService : StorageService
+    +generateDocuments(projectId : UUID) : List<DocumentDTO>
+    +getDocuments(projectId : UUID) : List<DocumentDTO>
+    +getDocumentById(documentId : UUID) : DocumentDTO
+    +approveDocument(documentId : UUID) : DocumentDTO
+    +requestChanges(documentId : UUID, feedback : String) : DocumentDTO
+    +regenerateDocument(documentId : UUID) : DocumentDTO
+    +downloadDocument(documentId : UUID) : byte[]
+  }
+
+  class DocumentGeneratorEngine {
+    -templateEngine : String
+    -projectId : UUID
+    +generate(type : DocumentType, context : String, template : Template) : Document
+    +embedDiagram(document : Document, diagram : UMLDiagramRef) : Document
+  }
+}
+
+package "domain" {
+  class Document {
+    -documentId : UUID
+    -projectId : UUID
+    -type : DocumentType
+    -path : String
+    -url : String
+    -generatedDate : LocalDateTime
+    -feedback : String
+    -approvedDate : LocalDateTime
+  }
+
+  class Template {
+    -templateId : UUID
+    -name : String
+    -type : DocumentType
+    -content : String
+    -version : String
+  }
+
+  class UMLDiagramRef {
+    -diagramId : UUID
+    -type : String
+    -imageUrl : String
+  }
+
+  enum DocumentType {
+    SRS
+    FUNCTIONAL_ANALYSIS
+    DESIGN_DOCUMENT
+    DEPLOYMENT_GUIDE
+    ARCHITECTURE_DOCUMENT
+    API_CONTRACT
+    USER_MANUAL
+  }
+}
+
+package "repository" {
+  interface DocumentRepository {
+    +findByProjectId(projectId : UUID) : List<Document>
+    +findByDocumentId(documentId : UUID) : Optional<Document>
+    +save(document : Document) : Document
+    +saveAll(docs : List<Document>) : void
+  }
+
+  interface TemplateRepository {
+    +findByType(type : DocumentType) : Optional<Template>
+    +findAll() : List<Template>
+    +save(template : Template) : Template
+  }
+}
+
+package "dto" {
+  class DocumentDTO {
+    +documentId : UUID
+    +type : DocumentType
+    +url : String
+    +generatedDate : LocalDateTime
+  }
+
+  class ChangeRequestDTO {
+    +feedback : String
+  }
+}
+
+package "client" {
+  class AIServiceClient {
+    +generateDocumentContent(type : DocumentType, context : String) : String
+    +regenerateDocument(documentId : UUID, feedback : String) : String
+  }
+
+  class MetaModelServiceClient {
+    +getDocumentConstraints(type : DocumentType) : String
+  }
+
+  class PlantUMLRenderingClient {
+    +renderDiagram(sourceCode : String) : byte[]
+  }
+
+  class VersionServiceClient {
+    +createDocumentSnapshot(documentId : UUID) : void
+  }
+
+  class StorageService {
+    +saveDocument(projectId : UUID, content : byte[]) : String
+    +loadDocument(path : String) : byte[]
+  }
+}
+
+DocumentController      ..>  IDocumentService
+DocumentServiceImpl      ..|> IDocumentService
+DocumentServiceImpl      ..>  DocumentRepository
+DocumentServiceImpl      ..>  TemplateRepository
+DocumentServiceImpl      ..>  AIServiceClient
+DocumentServiceImpl      ..>  MetaModelServiceClient
+DocumentServiceImpl      ..>  PlantUMLRenderingClient
+DocumentServiceImpl      ..>  VersionServiceClient
+DocumentServiceImpl      ..>  StorageService
+DocumentServiceImpl      ..>  DocumentGeneratorEngine
+DocumentGeneratorEngine  ..>  Document
+DocumentGeneratorEngine  ..>  Template
+DocumentGeneratorEngine  ..>  UMLDiagramRef
+DocumentRepository       ..>  Document
+TemplateRepository       ..>  Template
+Document                 ..>  DocumentType
+
+@enduml

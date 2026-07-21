@@ -239,7 +239,7 @@ export class RequirementsViewComponent implements OnChanges {
     });
   }
 
-  goToSystemDesign(): void {
+  goToNextStep(): void {
     this.showApproveSuccess.set(false);
     this.router.navigate(['/app/projects', this.projectId, 'design']);
   }

@@ -10,71 +10,113 @@
       <button type="button" class="vh__retry-btn" (click)="retryLoadTimeline()">Try again</button>
     </div>
   } @else if (snapshots().length === 0) {
-    <div class="vh__placeholder">
-      <h3 class="vh__placeholder-title">No versions yet</h3>
-      <p class="vh__placeholder-text">Snapshots appear here once diagrams or requirements are approved.</p>
+    <div class="vh__empty">
+      <div class="vh__empty-icon">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h3 class="vh__empty-title">No versions yet</h3>
+      <p class="vh__empty-text">Snapshots are created automatically when diagrams or generated documents are approved.</p>
     </div>
   } @else {
-    <div class="vh__layout">
-      <ul class="vh__list">
-        @for (snap of snapshots(); track snap.snapId) {
-          <li>
-            <button
-              type="button"
-              class="vh__list-item"
-              [class.vh__list-item--active]="snap.snapId === selectedSnapId()"
-              (click)="selectSnapshot(snap.snapId)"
-            >
-              <span class="vh__list-item__version">v{{ snap.versionNumber }}</span>
-              <span class="vh__list-item__name">{{ snap.versionName || snap.artifactType }}</span>
-              <span class="vh__list-item__date">{{ snap.snapDate | date: 'medium' }}</span>
-            </button>
-          </li>
-        }
-      </ul>
 
-      <div class="vh__detail">
-        @if (isLoadingDetail()) {
-          <div class="vh__placeholder">
-            <div class="vh__spinner"></div>
-            <p class="vh__placeholder-text">Loading snapshot…</p>
-          </div>
-        } @else if (detailError()) {
-          <div class="vh__placeholder">
-            <p class="vh__placeholder-text vh__placeholder-text--error">{{ detailError() }}</p>
-            <button type="button" class="vh__retry-btn" (click)="retryLoadDetail()">Try again</button>
-          </div>
-        } @else if (selectedSnapshot(); as snap) {
-          <div class="vh__detail-header">
-            <h3 class="vh__detail-title">{{ snap.versionName || ('Version ' + snap.versionNumber) }}</h3>
-            @if (snap.active) {
-              <span class="vh__badge">Active</span>
-            }
-          </div>
-          <dl class="vh__detail-fields">
-            <dt>Type</dt>
-            <dd>{{ snap.artifactType }}</dd>
-            <dt>Snapshot date</dt>
-            <dd>{{ snap.snapDate | date: 'medium' }}</dd>
-            @if (snap.triggerReason) {
-              <dt>Trigger</dt>
-              <dd>{{ snap.triggerReason }}</dd>
-            }
-            @if (snap.diagramType) {
-              <dt>Diagram type</dt>
-              <dd>{{ snap.diagramType }}</dd>
-            }
-            @if (snap.documentType) {
-              <dt>Document type</dt>
-              <dd>{{ snap.documentType }}</dd>
-            }
-            @if (snap.codeLayer) {
-              <dt>Code layer</dt>
-              <dd>{{ snap.codeLayer }}</dd>
-            }
-          </dl>
-        }
-      </div>
+    <!-- Category tabs -->
+    <div class="vh__tabs" role="tablist">
+      @for (g of artifactTypeGroups(); track g.type) {
+        <button type="button" role="tab" class="vh__tab"
+          [class.vh__tab--active]="selectedArtifactType() === g.type"
+          [attr.aria-selected]="selectedArtifactType() === g.type"
+          (click)="selectArtifactType(g.type)">
+          {{ artifactTypeLabels[g.type] }} <span class="vh__tab-count">{{ g.count }}</span>
+        </button>
+      }
     </div>
+
+    @if (selectedArtifactType(); as type) {
+      <p class="vh__tab-desc">{{ artifactTypeDescriptions[type] }}</p>
+
+      <div class="vh__layout">
+        <!-- Sidebar: sub-type list -->
+        <div class="vh__sidebar">
+          <div class="vh__sidebar-label">{{ artifactTypeLabels[type] }}</div>
+          <ul class="vh__sidebar-list">
+            @for (sub of subGroupsFor(type); track sub.key) {
+              <li>
+                <button type="button" class="vh__sidebar-item"
+                  [class.vh__sidebar-item--active]="selectedSubKey() === sub.key"
+                  (click)="selectSubGroup(sub.key)">
+                  <span class="vh__sidebar-item__label">{{ sub.label }}</span>
+                  <span class="vh__sidebar-item__count">{{ sub.count }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        </div>
+
+        <!-- Detail: version cards -->
+        <div class="vh__detail">
+          <div class="vh__detail-heading">
+            <span class="vh__detail-title">{{ selectedGroupLabel() }}</span>
+            <span class="vh__detail-count">{{ selectedSnapshots().length }} version{{ selectedSnapshots().length === 1 ? '' : 's' }}</span>
+          </div>
+
+          <div class="vh__cards">
+            @for (snap of selectedSnapshots(); track snap.snapId) {
+              <div class="vh__card-row">
+                <span class="vh__card-dot" [class.vh__card-dot--current]="snap.active"></span>
+
+                <div class="vh__card">
+                  <div class="vh__card-top">
+                    <div class="vh__card-titles">
+                      <span class="vh__card-version">v{{ snap.versionNumber }}</span>
+                      <span class="vh__card-type-badge">{{ selectedGroupLabel() }}</span>
+                      @if (snap.active) {
+                        <span class="vh__card-current-badge">current</span>
+                      }
+                    </div>
+
+                    <div class="vh__card-actions">
+                      @if (!snap.active) {
+                        <button type="button" class="vh__card-activate-btn"
+                          [disabled]="activatingSnapId() === snap.snapId"
+                          (click)="activateSnapshot(snap)">
+                          @if (activatingSnapId() === snap.snapId) {
+                            <span class="vh__btn-spinner"></span>
+                          } @else {
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+                            Activate
+                          }
+                        </button>
+                      }
+
+                      @if (canDownload(snap)) {
+                        <button type="button" class="vh__card-download-btn"
+                          [disabled]="downloadingSnapId() === snap.snapId"
+                          (click)="downloadSnapshot(snap)">
+                          @if (downloadingSnapId() === snap.snapId) {
+                            <span class="vh__btn-spinner"></span>
+                          } @else {
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download
+                          }
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  @if (snap.triggerReason) {
+                    <p class="vh__card-desc">{{ snap.triggerReason }}</p>
+                  }
+
+                  <p class="vh__card-meta">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    {{ formatRelative(snap.snapDate) }}
+                  </p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
   }
 </div>

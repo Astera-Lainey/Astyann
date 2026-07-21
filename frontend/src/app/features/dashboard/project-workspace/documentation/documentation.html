@@ -1,0 +1,170 @@
+<div class="doc">
+
+  @if (isLoadingList()) {
+    <div class="doc__placeholder">
+      <div class="doc__spinner"></div>
+      <p class="doc__placeholder-text">Loading your documents…</p>
+    </div>
+  } @else if (listError()) {
+    <div class="doc__placeholder">
+      <p class="doc__placeholder-text doc__placeholder-text--error">{{ listError() }}</p>
+      <button type="button" class="doc__retry-btn" (click)="retryLoadDocuments()">Try again</button>
+    </div>
+  } @else if (!hasAnyDocuments()) {
+
+    <!-- Empty state -->
+    <div class="doc__empty">
+      <div class="doc__empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+      </div>
+      <h3 class="doc__empty-title">No documents yet</h3>
+      <p class="doc__empty-text">Generate the full documentation suite from your approved requirements and diagrams — SRS, analysis, design, deployment guide, and more.</p>
+      @if (generateError()) {
+        <p class="doc__inline-error" role="alert">{{ generateError() }}</p>
+      }
+      <button type="button" class="doc__generate-btn" [disabled]="isGenerating()" (click)="generateDocuments()">
+        @if (isGenerating()) {
+          <span class="doc__btn-spinner"></span> Generating documents…
+        } @else {
+          Generate Documents
+        }
+      </button>
+    </div>
+
+  } @else {
+
+    @if (partialFailureNotice()) {
+      <div class="doc__notice" role="status">{{ partialFailureNotice() }}</div>
+    }
+
+    <!-- Document list -->
+    <div class="doc__list">
+      @for (d of documents(); track d.documentId) {
+        <div class="doc__row">
+          <div class="doc__row-main">
+            <span class="doc__row-dot"
+              [class.doc__row-dot--pending]="d.status === 'PENDING_APPROVAL'"
+              [class.doc__row-dot--approved]="d.status === 'APPROVED'"
+              [class.doc__row-dot--failed]="d.status === 'FAILED'"
+              [class.doc__row-dot--generating]="d.status === 'GENERATING'"></span>
+            <div class="doc__row-text">
+              <span class="doc__row-title">{{ documentTypeLabels[d.type] }}</span>
+              <span class="doc__row-meta">
+                @if (d.generatedAt) {
+                  Generated {{ d.generatedAt | date: 'medium' }} ·
+                }
+                v{{ d.version }}
+              </span>
+              @if (d.status === 'FAILED' && d.lastError) {
+                <span class="doc__row-error">{{ d.lastError }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="doc__row-actions">
+            @if (activeVersionNumber(d.documentId); as v) {
+              <span class="doc__version-badge" title="Active version on record">Active v{{ v }}</span>
+            }
+
+            <span class="doc__badge"
+              [class.doc__badge--generating]="d.status === 'GENERATING'"
+              [class.doc__badge--pending]="d.status === 'PENDING_APPROVAL'"
+              [class.doc__badge--approved]="d.status === 'APPROVED'"
+              [class.doc__badge--failed]="d.status === 'FAILED'">
+              {{ statusLabels[d.status] }}
+            </span>
+
+            <div class="doc__row-menu-wrap">
+              <button type="button" class="doc__row-menu-btn" aria-label="Document actions" aria-haspopup="menu"
+                [attr.aria-expanded]="openMenuId() === d.documentId"
+                (click)="toggleMenu(d.documentId, $event)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                </svg>
+              </button>
+
+              @if (openMenuId() === d.documentId) {
+                <div class="doc__row-menu" role="menu">
+                  @if (d.status === 'PENDING_APPROVAL' || d.status === 'APPROVED') {
+                    <button type="button" class="doc__row-menu-item" role="menuitem"
+                      [disabled]="downloadingId() === d.documentId"
+                      (click)="downloadDocument(d); closeMenu()">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      {{ downloadingId() === d.documentId ? 'Downloading…' : 'Download' }}
+                    </button>
+                  }
+                  @if (d.status === 'PENDING_APPROVAL') {
+                    <button type="button" class="doc__row-menu-item" role="menuitem"
+                      [disabled]="approvingId() === d.documentId"
+                      (click)="approveOne(d.documentId); closeMenu()">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      {{ approvingId() === d.documentId ? 'Approving…' : 'Approve' }}
+                    </button>
+                  }
+                  @if (d.status === 'PENDING_APPROVAL' || d.status === 'APPROVED') {
+                    <button type="button" class="doc__row-menu-item" role="menuitem"
+                      (click)="toggleChangePanel(d.documentId); closeMenu()">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Request changes
+                    </button>
+                  }
+                  @if (d.status === 'FAILED') {
+                    <button type="button" class="doc__row-menu-item doc__row-menu-item--danger" role="menuitem"
+                      [disabled]="regeneratingId() === d.documentId"
+                      (click)="retryDocument(d.documentId); closeMenu()">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                      {{ regeneratingId() === d.documentId ? 'Retrying…' : 'Retry' }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (openChangeId() === d.documentId) {
+          <div class="doc__change-panel">
+            <span class="doc__panel-label">Instructions for {{ documentTypeLabels[d.type] }}</span>
+            <textarea class="doc__change-textarea" rows="4"
+              placeholder="e.g. Add a section describing the password reset workflow."
+              [value]="changeInstruction()"
+              [disabled]="submittingChangeId() === d.documentId"
+              (input)="onChangeInstructionInput($event)"></textarea>
+            @if (changeError()) {
+              <p class="doc__inline-error" role="alert">{{ changeError() }}</p>
+            }
+            <div class="doc__change-panel-actions">
+              <button type="button" class="doc__change-cancel-btn" [disabled]="submittingChangeId() === d.documentId"
+                (click)="cancelChangePanel()">Cancel</button>
+              <button type="button" class="doc__change-submit-btn"
+                [class.doc__change-submit-btn--active]="canSubmitChange()"
+                [disabled]="!canSubmitChange() || submittingChangeId() === d.documentId"
+                (click)="submitChange(d.documentId)">
+                @if (submittingChangeId() === d.documentId) {
+                  <span class="doc__btn-spinner"></span> Submitting…
+                } @else {
+                  Submit &amp; regenerate
+                }
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+
+    @if (allFailed()) {
+      <!-- Action row -->
+      <div class="doc__actions-row">
+        <button type="button" class="doc__generate-btn doc__generate-btn--inline" [disabled]="isGenerating()"
+          (click)="generateDocuments()">
+          @if (isGenerating()) {
+            <span class="doc__btn-spinner"></span> Generating…
+          } @else {
+            Generate Documents
+          }
+        </button>
+      </div>
+    }
+
+  }
+</div>
