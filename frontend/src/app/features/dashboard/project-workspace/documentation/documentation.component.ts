@@ -245,13 +245,50 @@ export class DocumentationComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /**
+   * regenerate() is asynchronous — it responds immediately with the document in GENERATING
+   * status, it does not wait for the AI+merge pipeline to finish. Reflect that placeholder right
+   * away (so the row's badge/dot switches to "Generating"), then poll until this document
+   * actually settles — previously this applied the immediate GENERATING response as if it were
+   * final (even showing a premature "Document regenerated." toast) and never polled again,
+   * leaving the row stuck on GENERATING until the user navigated away and back.
+   */
   private applyRegenerateResult(documentId: string, dto: DocumentSummary): void {
-    this.regeneratingId.set(null);
     this.documents.update((list) =>
       list.map((d) => (d.documentId === documentId ? { ...d, status: dto.status, lastError: dto.lastError } : d)),
     );
-    if (dto.status === 'FAILED') {
-      this.toastService.show(dto.lastError ?? 'Regeneration failed. Please try again.', 'error');
+    if (dto.status === 'GENERATING') {
+      this.pollRegenerationUntilSettled(documentId);
+    } else {
+      this.finishRegenerate(documentId, dto.status, dto.lastError);
+    }
+  }
+
+  private pollRegenerationUntilSettled(documentId: string): void {
+    this.pollSub?.unsubscribe();
+    this.pollSub = timer(0, 2500)
+      .pipe(
+        switchMap(() => this.documentService.list(this.projectId)),
+        takeWhile((items) => items.some((d) => d.documentId === documentId && d.status === 'GENERATING'), true),
+      )
+      .subscribe({
+        next: (items) => {
+          this.documents.set(items);
+          const target = items.find((d) => d.documentId === documentId);
+          if (!target || target.status === 'GENERATING') return;
+          this.finishRegenerate(documentId, target.status, target.lastError);
+        },
+        error: () => {
+          this.regeneratingId.set(null);
+          this.toastService.show('Lost track of regeneration progress. Please refresh and try again.', 'error');
+        },
+      });
+  }
+
+  private finishRegenerate(documentId: string, status: DocumentStatus, lastError: string | null): void {
+    this.regeneratingId.set(null);
+    if (status === 'FAILED') {
+      this.toastService.show(lastError ?? 'Regeneration failed. Please try again.', 'error');
     } else {
       this.toastService.show('Document regenerated.', 'success');
     }

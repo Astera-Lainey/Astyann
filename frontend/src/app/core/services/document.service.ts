@@ -46,12 +46,14 @@ export class DocumentService {
 
   /**
    * POST /api/v1/documents/{projectId}/{documentId}/regenerate
-   * Synchronous and blocking. Returns 200 even when regeneration fails —
-   * callers must inspect the returned DocumentSummary.status, not just the
-   * HTTP status code. Applies any instructions recorded via a prior
-   * submitChangeRequest() call, or performs a plain regeneration if none
-   * are stored. Rejects APPROVED documents (submit a change-request first)
-   * and documents still GENERATING.
+   * Asynchronous — responds immediately (202) with the document back in
+   * GENERATING status; it does not wait for the AI+merge pipeline to finish.
+   * Callers must poll list() until this document leaves GENERATING to see
+   * the real outcome (PENDING_APPROVAL or FAILED with lastError set).
+   * Applies any instructions recorded via a prior submitChangeRequest()
+   * call, or performs a plain regeneration if none are stored. Rejects
+   * APPROVED documents (submit a change-request first) and documents still
+   * GENERATING.
    */
   regenerate(projectId: string, documentId: string): Observable<DocumentSummary> {
     return this.http

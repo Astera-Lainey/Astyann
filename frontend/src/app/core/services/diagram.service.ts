@@ -47,9 +47,10 @@ export class DiagramService {
 
   /**
    * POST /api/v1/uml/{projectId}/{diagramId}/regenerate
-   * Synchronous and blocking. Returns 200 even when regeneration fails —
-   * callers must inspect the returned DiagramSummary.status, not just the
-   * HTTP status code.
+   * Asynchronous — responds immediately (202) with the diagram back in
+   * GENERATING status; it does not wait for the AI+Kroki pipeline to finish.
+   * Callers must poll list() until this diagram leaves GENERATING to see the
+   * real outcome (PENDING_APPROVAL or FAILED with lastError set).
    */
   regenerate(
     projectId: string,
