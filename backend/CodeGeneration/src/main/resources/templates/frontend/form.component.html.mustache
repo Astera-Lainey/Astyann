@@ -1,0 +1,22 @@
+{{=[[ ]]=}}<div class="page-container">
+  <header class="page-header">
+    <h1 class="page-title">[[module.entityClassName]] @if (isEditMode()) { – Edit } @else { – New }</h1>
+  </header>
+
+  <ast-card>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="ast-form">
+[[#module.formFields]]
+      <ast-input label="[[label]]" type="[[inputType]]" formControlName="[[fieldName]]" [required]="[[required]]"></ast-input>
+[[/module.formFields]]
+
+      @if (error()) {
+        <div class="ast-alert ast-alert--danger">{{error()}}</div>
+      }
+
+      <div class="ast-form__actions">
+        <ast-button type="button" variant="ghost" [routerLink]="['/[[module.componentPrefix]]']">Cancel</ast-button>
+        <ast-button type="submit" variant="primary" [loading]="submitting()">Save</ast-button>
+      </div>
+    </form>
+  </ast-card>
+</div>

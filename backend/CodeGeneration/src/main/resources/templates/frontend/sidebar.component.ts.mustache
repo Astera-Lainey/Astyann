@@ -1,0 +1,33 @@
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+
+interface NavItem {
+  label: string;
+  path: string;
+  icon: string;
+  roles: string[];
+}
+
+@Component({
+  selector: 'app-sidebar',
+  standalone: true,
+  imports: [CommonModule, RouterLink, RouterLinkActive],
+  templateUrl: './sidebar.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class SidebarComponent {
+
+  private readonly router = inject(Router);
+
+  readonly navItems: NavItem[] = [
+{{#navigation}}
+    { label: '{{label}}', path: '{{path}}', icon: '{{icon}}', roles: [{{#roles}}'{{.}}', {{/roles}}] },
+{{/navigation}}
+  ];
+
+  logout(): void {
+    localStorage.removeItem('token');
+    this.router.navigateByUrl('/login');
+  }
+}

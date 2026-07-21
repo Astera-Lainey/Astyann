@@ -1,0 +1,29 @@
+{{=[[ ]]=}}<div class="page-container">
+  <header class="page-header">
+    <h1 class="page-title">[[entity.className]]s</h1>
+[[#module.hasCreate]]
+    <ast-button [routerLink]="['/[[module.componentPrefix]]/new']" variant="primary">
+      Add [[entity.className]]
+    </ast-button>
+[[/module.hasCreate]]
+  </header>
+
+  @if (loading()) {
+    <ast-spinner></ast-spinner>
+  } @else if (error()) {
+    <div class="ast-alert ast-alert--danger">{{error()}}</div>
+  } @else if (items().length === 0) {
+    <ast-empty-state title="No [[entity.instanceName]]s yet" subtitle="Start by creating your first [[entity.instanceName]]."></ast-empty-state>
+  } @else {
+    <ast-card>
+      <ast-table [columns]="columns" [rows]="items()">
+[[#module.hasUpdate]]
+        <button *tableAction="let row" class="ast-btn ast-btn--ghost" [routerLink]="['/[[module.componentPrefix]]', row.id, 'edit']">Edit</button>
+[[/module.hasUpdate]]
+[[#module.hasDelete]]
+        <button *tableAction="let row" class="ast-btn ast-btn--danger ast-btn--sm" (click)="onDelete(row.id)">Delete</button>
+[[/module.hasDelete]]
+      </ast-table>
+    </ast-card>
+  }
+</div>

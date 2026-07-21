@@ -1,0 +1,14 @@
+export interface {{entity.className}} {
+  id: string;
+{{#entity.fields}}
+  {{name}}{{^required}}?{{/required}}: {{tsType}};
+{{/entity.fields}}
+  createdAt?: string;
+  lastModifiedAt?: string;
+}
+
+export interface Create{{entity.className}}Dto {
+{{#entity.fields}}
+  {{name}}{{^required}}?{{/required}}: {{tsType}};
+{{/entity.fields}}
+}

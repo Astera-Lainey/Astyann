@@ -1,0 +1,13 @@
+<button
+  class="ast-btn"
+  [class.ast-btn--primary]="variant === 'primary'"
+  [class.ast-btn--secondary]="variant === 'secondary'"
+  [class.ast-btn--danger]="variant === 'danger'"
+  [class.ast-btn--ghost]="variant === 'ghost'"
+  [class.ast-btn--sm]="size === 'sm'"
+  [class.ast-btn--lg]="size === 'lg'"
+  [attr.type]="type"
+  [disabled]="disabled || loading">
+  @if (loading) { <span class="ast-spinner ast-spinner--inline"></span> }
+  <ng-content></ng-content>
+</button>

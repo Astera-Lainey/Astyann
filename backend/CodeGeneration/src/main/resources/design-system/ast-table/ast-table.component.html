@@ -1,0 +1,16 @@
+<table class="ast-table">
+  <thead>
+    <tr>
+      @for (col of columns; track col.fieldName) { <th>{{ col.label }}</th> }
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of rows; track $index) {
+      <tr>
+        @for (col of columns; track col.fieldName) { <td>{{ row[col.fieldName] }}</td> }
+        <td><ng-content></ng-content></td>
+      </tr>
+    }
+  </tbody>
+</table>

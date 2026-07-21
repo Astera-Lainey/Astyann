@@ -1,0 +1,47 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
+import { {{module.entityClassName}}, Create{{module.entityClassName}}Dto } from '../models/{{module.entityFileName}}.model';
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
+}
+
+@Injectable({ providedIn: 'root' })
+export class {{module.serviceName}} {
+
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiBaseUrl}{{module.apiPath}}`;
+
+{{#module.hasRead}}
+  getAll(page = 0, size = 20): Observable<PageResponse<{{module.entityClassName}}>> {
+    return this.http.get<PageResponse<{{module.entityClassName}}>>(this.baseUrl, {
+      params: { page: String(page), size: String(size) }
+    });
+  }
+
+  getById(id: string): Observable<{{module.entityClassName}}> {
+    return this.http.get<{{module.entityClassName}}>(`${this.baseUrl}/${id}`);
+  }
+{{/module.hasRead}}
+{{#module.hasCreate}}
+  create(body: Create{{module.entityClassName}}Dto): Observable<{{module.entityClassName}}> {
+    return this.http.post<{{module.entityClassName}}>(this.baseUrl, body);
+  }
+{{/module.hasCreate}}
+{{#module.hasUpdate}}
+  update(id: string, body: Create{{module.entityClassName}}Dto): Observable<{{module.entityClassName}}> {
+    return this.http.put<{{module.entityClassName}}>(`${this.baseUrl}/${id}`, body);
+  }
+{{/module.hasUpdate}}
+{{#module.hasDelete}}
+  delete(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+{{/module.hasDelete}}
+}

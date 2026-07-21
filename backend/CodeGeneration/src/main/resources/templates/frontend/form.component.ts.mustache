@@ -1,0 +1,62 @@
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { {{module.serviceName}} } from '../../../core/services/{{module.serviceFileName}}.service';
+import { AstCardComponent } from '../../../shared/ui/ast-card/ast-card.component';
+import { AstInputComponent } from '../../../shared/ui/ast-input/ast-input.component';
+import { AstButtonComponent } from '../../../shared/ui/ast-button/ast-button.component';
+
+@Component({
+  selector: 'app-{{module.componentPrefix}}-form',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, AstCardComponent, AstInputComponent, AstButtonComponent],
+  templateUrl: './{{module.componentPrefix}}-form.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class {{module.entityClassName}}FormComponent implements OnInit {
+
+  private readonly fb = inject(FormBuilder);
+  private readonly service = inject({{module.serviceName}});
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  readonly submitting = signal(false);
+  readonly error = signal<string | null>(null);
+  readonly isEditMode = signal(false);
+
+  readonly form = this.fb.group({
+{{#module.formFields}}
+    {{fieldName}}: [{{^required}}null{{/required}}{{#required}}null, Validators.required{{/required}}],
+{{/module.formFields}}
+  });
+
+  ngOnInit(): void {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) {
+      this.isEditMode.set(true);
+      this.service.getById(id).subscribe(existing => this.form.patchValue(existing as any));
+    }
+  }
+
+  onSubmit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+    this.submitting.set(true);
+    this.error.set(null);
+    const value = this.form.value as any;
+    const id = this.route.snapshot.paramMap.get('id');
+    const call$ = this.isEditMode() && id
+      ? this.service.update(id, value)
+      : this.service.create(value);
+    call$.subscribe({
+      next: () => this.router.navigate(['/{{module.componentPrefix}}']),
+      error: err => {
+        this.error.set(err?.message ?? 'Save failed.');
+        this.submitting.set(false);
+      }
+    });
+  }
+}

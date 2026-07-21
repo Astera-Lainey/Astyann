@@ -1,0 +1,13 @@
+{{=[[ ]]=}}<div class="login-container">
+  <ast-card>
+    <h1 class="page-title">Sign in to [[project.appName]]</h1>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="ast-form">
+      <ast-input label="Email" type="email" formControlName="email" [required]="true"></ast-input>
+      <ast-input label="Password" type="password" formControlName="password" [required]="true"></ast-input>
+      @if (error()) {
+        <div class="ast-alert ast-alert--danger">{{error()}}</div>
+      }
+      <ast-button type="submit" variant="primary" [loading]="submitting()">Sign in</ast-button>
+    </form>
+  </ast-card>
+</div>

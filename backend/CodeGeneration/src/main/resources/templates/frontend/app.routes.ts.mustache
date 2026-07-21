@@ -1,0 +1,23 @@
+import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
+
+export const routes: Routes = [
+  { path: 'login', loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent) },
+{{#modules}}
+  {
+    path: '{{componentPrefix}}',
+    canActivate: [authGuard],
+    children: [
+      { path: '', loadComponent: () => import('./features/{{componentPrefix}}/list/{{componentPrefix}}-list.component').then(m => m.{{entityClassName}}ListComponent) },
+{{#hasCreate}}
+      { path: 'new', loadComponent: () => import('./features/{{componentPrefix}}/form/{{componentPrefix}}-form.component').then(m => m.{{entityClassName}}FormComponent) },
+{{/hasCreate}}
+{{#hasUpdate}}
+      { path: ':id/edit', loadComponent: () => import('./features/{{componentPrefix}}/form/{{componentPrefix}}-form.component').then(m => m.{{entityClassName}}FormComponent) },
+{{/hasUpdate}}
+    ]
+  },
+{{/modules}}
+  { path: '', pathMatch: 'full', redirectTo: '{{project.defaultRoute}}' },
+  { path: '**', redirectTo: '{{project.defaultRoute}}' }
+];

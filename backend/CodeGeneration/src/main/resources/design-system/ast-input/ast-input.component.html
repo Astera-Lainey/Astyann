@@ -1,0 +1,13 @@
+<label class="ast-input" [class.ast-input--error]="!!errorMessage">
+  @if (label) { <span class="ast-input__label">{{ label }}@if (required) { <span aria-hidden="true"> *</span> }</span> }
+  <input
+    class="ast-input__control"
+    [attr.type]="type"
+    [placeholder]="placeholder"
+    [disabled]="disabled"
+    [value]="value ?? ''"
+    (input)="handleInput($event)"
+    (blur)="handleBlur()"
+  />
+  @if (errorMessage) { <span class="ast-input__error">{{ errorMessage }}</span> }
+</label>

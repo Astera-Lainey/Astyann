@@ -1,0 +1,12 @@
+{{=[[ ]]=}}<aside class="ast-sidebar">
+  <div class="ast-sidebar__brand">[[project.appName]]</div>
+  <nav class="ast-sidebar__nav">
+    @for (item of navItems; track item.path) {
+      <a [routerLink]="item.path" routerLinkActive="ast-sidebar__item--active" class="ast-sidebar__item">
+        <iconify-icon [icon]="item.icon"></iconify-icon>
+        <span>{{item.label}}</span>
+      </a>
+    }
+  </nav>
+  <button class="ast-btn ast-btn--ghost ast-sidebar__logout" (click)="logout()">Logout</button>
+</aside>
