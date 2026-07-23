@@ -23,17 +23,25 @@ import afb.astyann.codegeneration.exception.CodeVersionNotFoundException;
 import afb.astyann.codegeneration.exception.DocumentsNotApprovedException;
 import afb.astyann.codegeneration.exception.DownstreamServiceException;
 import afb.astyann.codegeneration.exception.PcsfNotApprovedException;
+import afb.astyann.codegeneration.client.AiOrchestratorClient;
 import afb.astyann.codegeneration.repository.CodeVersionArchiveRepository;
 import afb.astyann.codegeneration.repository.GeneratedCodeRepository;
+import afb.astyann.codegeneration.service.logic.FilePatcher;
+import afb.astyann.codegeneration.service.logic.LogicInjectionService;
+import afb.astyann.codegeneration.service.logic.MavenRunner;
+import afb.astyann.codegeneration.service.logic.PromptBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,9 +51,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
@@ -62,13 +72,27 @@ public class CodeGenerationService {
     private final RequirementServiceClient requirementServiceClient;
     private final DocumentServiceClient documentServiceClient;
     private final VersionServiceClient versionServiceClient;
+    private final AiOrchestratorClient aiOrchestratorClient;
     private final ProjectionBuilder projectionBuilder;
     private final FreeMarkerEngine freeMarkerEngine;
     private final MustacheEngine mustacheEngine;
     private final StorageService storageService;
+    private final LogicInjectionService logicInjectionService;
+    private final FilePatcher filePatcher;
+    private final MavenRunner mavenRunner;
+    private final PromptBuilder promptBuilder;
 
     @Qualifier("codeExecutor")
     private final Executor codeExecutor;
+
+    @Value("${codegen.ai.model:claude-sonnet-4-5}")
+    private String aiModel;
+
+    @Value("${codegen.validate.compile.enabled:true}")
+    private boolean compileValidationEnabled;
+
+    @Value("${codegen.validate.compile.max-attempts:3}")
+    private int compileMaxAttempts;
 
     // ── Generate ────────────────────────────────────────────────────────────────
 
@@ -129,7 +153,19 @@ public class CodeGenerationService {
         try {
             Path layerRoot = workDir.resolve(layer.name().toLowerCase());
             switch (layer) {
-                case BACKEND -> renderBackend(projectionBuilder.buildBackendProjection(pcsf), layerRoot);
+                case BACKEND -> {
+                    BackendProjection projection = projectionBuilder.buildBackendProjection(pcsf);
+                    renderBackend(projection, layerRoot);
+                    // ── AI logic injection: fill in every stub method body per module. ──
+                    // Runs against the freshly-rendered files in the working dir before the
+                    // ZIP is packaged. Best-effort — failures leave stubs in place.
+                    try {
+                        logicInjectionService.inject(projectId, layerRoot, projection, pcsf);
+                    } catch (Exception aiEx) {
+                        log.warn("Logic injection pass failed for project {}: {}",
+                                projectId, aiEx.getMessage(), aiEx);
+                    }
+                }
                 case FRONTEND -> renderFrontend(projectionBuilder.buildFrontendProjection(pcsf), layerRoot);
                 case INFRASTRUCTURE -> renderInfrastructure(projectionBuilder.buildInfraProjection(pcsf), layerRoot);
             }
@@ -378,12 +414,23 @@ public class CodeGenerationService {
         return storageService.loadZip(code.getCodePath());
     }
 
-    // ── Validate (deterministic; AI pass is a follow-up) ─────────────────────────
+    // ── Validate (compile self-correction loop) ──────────────────────────────────
 
     /**
-     * Deterministic self-check over the currently-GENERATED artifacts: verifies the ZIPs exist
-     * and that no layer is still in FAILED. This satisfies API-CODE-03 as a working stub; the
-     * design doc's "compilation / dependency" self-correction loop is an AI-driven follow-up.
+     * Full self-correction validation:
+     * <ol>
+     *   <li>Presence check for every layer (ZIP exists, no FAILED layer).</li>
+     *   <li>Extract the BACKEND ZIP into a temp dir and run {@code mvn compile}.</li>
+     *   <li>If compilation fails, group errors by file and ask the AI Orchestrator to return
+     *       the corrected source; write the fix and recompile. Repeat up to
+     *       {@code codegen.validate.compile.max-attempts} times.</li>
+     *   <li>If compilation eventually succeeds, re-zip the fixed backend and update the
+     *       stored artifact so subsequent downloads serve the fixed code.</li>
+     * </ol>
+     *
+     * The compile step can be disabled entirely via {@code codegen.validate.compile.enabled=false}
+     * (or is auto-skipped if {@code mvn} isn't on PATH), in which case validate() falls back to
+     * the deterministic presence check.
      */
     public ValidationReportDTO validate(UUID projectId) {
         List<GeneratedCode> layers = repository.findByProjectId(projectId);
@@ -415,13 +462,150 @@ public class CodeGenerationService {
                     .message("archive present").build());
         }
 
+        int attemptsUsed = 0;
+        GeneratedCode backend = layers.stream()
+                .filter(c -> c.getLayer() == CodeLayer.BACKEND)
+                .findFirst().orElse(null);
+
+        if (backend != null && backend.getCodePath() != null
+                && backend.getStatus() != CodeStatus.FAILED
+                && backend.getStatus() != CodeStatus.GENERATING
+                && compileValidationEnabled) {
+            CompileLoopOutcome outcome = runCompileLoop(projectId, backend);
+            attemptsUsed = outcome.attempts();
+            checks.addAll(outcome.checks());
+            issues.addAll(outcome.issues());
+        } else if (backend != null && !compileValidationEnabled) {
+            checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
+                    .message("compile-validation disabled via codegen.validate.compile.enabled=false").build());
+        }
+
         return ValidationReportDTO.builder()
                 .projectId(projectId)
                 .validationStatus(issues.isEmpty() ? "PASSED" : "FAILED")
-                .attemptsUsed(1)
+                .attemptsUsed(Math.max(1, attemptsUsed))
                 .checks(checks)
                 .remainingIssues(issues)
                 .build();
+    }
+
+    private record CompileLoopOutcome(int attempts, List<ValidationCheckDTO> checks, List<String> issues) {}
+
+    private CompileLoopOutcome runCompileLoop(UUID projectId, GeneratedCode backend) {
+        List<ValidationCheckDTO> checks = new ArrayList<>();
+        List<String> issues = new ArrayList<>();
+
+        if (!mavenRunner.isAvailable()) {
+            checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
+                    .message("`mvn` not on PATH — skipping compile-validation").build());
+            return new CompileLoopOutcome(0, checks, issues);
+        }
+
+        Path workDir = null;
+        try {
+            workDir = Files.createTempDirectory("astyann-validate-" + projectId + "-");
+            unzipInto(storageService.loadZip(backend.getCodePath()), workDir);
+
+            int attempt;
+            for (attempt = 1; attempt <= Math.max(1, compileMaxAttempts); attempt++) {
+                var result = mavenRunner.compile(workDir);
+                if (result.success()) {
+                    checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("PASSED")
+                            .message("compiled successfully on attempt " + attempt).build());
+                    // Persist the (possibly-fixed) backend so downloads reflect the fix.
+                    if (attempt > 1) {
+                        byte[] fixedZip = zipDirectory(workDir);
+                        String newPath = storageService.saveZip(projectId, CodeLayer.BACKEND, fixedZip);
+                        backend.setCodePath(newPath);
+                        backend.setLastError(null);
+                        repository.save(backend);
+                    }
+                    return new CompileLoopOutcome(attempt, checks, issues);
+                }
+
+                var errors = mavenRunner.parseErrors(result.output());
+                if (errors.isEmpty()) {
+                    issues.add("Backend failed to compile but no error rows were parseable from Maven output.");
+                    checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
+                            .message("compile failed; no parseable errors").build());
+                    return new CompileLoopOutcome(attempt, checks, issues);
+                }
+
+                Set<Path> filesToFix = new HashSet<>();
+                for (var err : errors) filesToFix.add(err.file());
+                for (Path file : filesToFix) {
+                    if (!Files.exists(file)) continue;
+                    List<String> perFile = errors.stream().filter(e -> e.file().equals(file))
+                            .map(MavenRunner.CompileErrorRow::formatted).toList();
+                    tryFixFileWithAi(file, perFile);
+                }
+                checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
+                        .message("attempt " + attempt + ": " + errors.size() + " errors, applying AI fix").build());
+            }
+
+            issues.add("Backend still fails to compile after " + compileMaxAttempts + " AI fix attempts.");
+            checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
+                    .message("exhausted retries").build());
+            return new CompileLoopOutcome(attempt - 1, checks, issues);
+
+        } catch (Exception ex) {
+            log.error("Compile self-correction loop errored for project {}: {}", projectId, ex.getMessage(), ex);
+            issues.add("Compile self-correction loop errored: " + ex.getMessage());
+            checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
+                    .message(ex.getMessage()).build());
+            return new CompileLoopOutcome(0, checks, issues);
+        } finally {
+            deleteQuietly(workDir);
+        }
+    }
+
+    private void tryFixFileWithAi(Path file, List<String> errorLines) {
+        try {
+            String current = filePatcher.read(file);
+            var response = aiOrchestratorClient.infer(new AiOrchestratorClient.InferenceRequest(
+                    aiModel,
+                    promptBuilder.systemPromptForCompileFix(),
+                    promptBuilder.userPromptForCompileFix(current, errorLines)));
+            String fixed = response == null ? null : response.content();
+            if (fixed == null || fixed.isBlank()) {
+                log.warn("AI returned empty fix for {}", file.getFileName());
+                return;
+            }
+            String cleaned = stripCodeFences(fixed);
+            if (!filePatcher.replaceEntireFile(file, cleaned)) {
+                log.warn("AI-proposed fix for {} did not parse — leaving file untouched.", file.getFileName());
+            }
+        } catch (Exception ex) {
+            log.warn("Could not fix {} via AI: {}", file.getFileName(), ex.getMessage());
+        }
+    }
+
+    private String stripCodeFences(String s) {
+        String t = s.trim();
+        if (t.startsWith("```")) {
+            int nl = t.indexOf('\n');
+            if (nl > 0) t = t.substring(nl + 1);
+            if (t.endsWith("```")) t = t.substring(0, t.length() - 3);
+        }
+        return t.trim();
+    }
+
+    private void unzipInto(byte[] zipBytes, Path destination) throws IOException {
+        try (ZipArchiveInputStream zis = new ZipArchiveInputStream(new ByteArrayInputStream(zipBytes))) {
+            org.apache.commons.compress.archivers.ArchiveEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path out = destination.resolve(entry.getName()).normalize();
+                if (!out.startsWith(destination)) {
+                    throw new IOException("Zip slip detected: " + entry.getName());
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(out);
+                } else {
+                    Files.createDirectories(out.getParent());
+                    Files.copy(zis, out);
+                }
+            }
+        }
     }
 
     // ── Approve ──────────────────────────────────────────────────────────────────
