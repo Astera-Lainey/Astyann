@@ -1,5 +1,6 @@
 package afb.astyann.codegeneration.service;
 
+import afb.astyann.codegeneration.client.AiOrchestratorClient;
 import afb.astyann.codegeneration.client.DocumentServiceClient;
 import afb.astyann.codegeneration.client.RequirementServiceClient;
 import afb.astyann.codegeneration.client.VersionServiceClient;
@@ -7,6 +8,7 @@ import afb.astyann.codegeneration.domain.CodeLayer;
 import afb.astyann.codegeneration.domain.CodeStatus;
 import afb.astyann.codegeneration.domain.CodeVersionArchive;
 import afb.astyann.codegeneration.domain.GeneratedCode;
+import afb.astyann.codegeneration.domain.logic.AiCompileFixResponse;
 import afb.astyann.codegeneration.domain.pcsf.Pcsf;
 import afb.astyann.codegeneration.domain.projection.BackendEntity;
 import afb.astyann.codegeneration.domain.projection.BackendModule;
@@ -23,13 +25,13 @@ import afb.astyann.codegeneration.exception.CodeVersionNotFoundException;
 import afb.astyann.codegeneration.exception.DocumentsNotApprovedException;
 import afb.astyann.codegeneration.exception.DownstreamServiceException;
 import afb.astyann.codegeneration.exception.PcsfNotApprovedException;
-import afb.astyann.codegeneration.client.AiOrchestratorClient;
 import afb.astyann.codegeneration.repository.CodeVersionArchiveRepository;
 import afb.astyann.codegeneration.repository.GeneratedCodeRepository;
 import afb.astyann.codegeneration.service.logic.FilePatcher;
 import afb.astyann.codegeneration.service.logic.LogicInjectionService;
 import afb.astyann.codegeneration.service.logic.MavenRunner;
 import afb.astyann.codegeneration.service.logic.PromptBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
@@ -58,6 +60,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +70,13 @@ public class CodeGenerationService {
 
     private static final String DESIGN_SYSTEM_RESOURCE_PATTERN = "classpath*:/design-system/**";
     private static final String DESIGN_SYSTEM_ROOT_PREFIX = "design-system/";
+    private static final String BACKEND_WRAPPER_RESOURCE_PATTERN = "classpath*:/backend-wrapper/**";
+    private static final String BACKEND_WRAPPER_ROOT_PREFIX = "backend-wrapper/";
+    private static final Pattern JSON_ENVELOPE = Pattern.compile("\\{[\\s\\S]*}");
+    private static final Pattern PACKAGE_DECL =
+            Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final GeneratedCodeRepository repository;
     private final CodeVersionArchiveRepository archiveRepository;
@@ -93,6 +104,9 @@ public class CodeGenerationService {
 
     @Value("${codegen.validate.compile.max-attempts:3}")
     private int compileMaxAttempts;
+
+    @Value("${codegen.generate.auto-validate:false}")
+    private boolean autoValidateAfterGenerate;
 
     // ── Generate ────────────────────────────────────────────────────────────────
 
@@ -178,6 +192,21 @@ public class CodeGenerationService {
             code.setDownloadUrl("/api/v1/code/" + projectId + "/download?layer=" + layer.name());
             code.setLastError(null);
             repository.save(code);
+
+            // Optional: automatically run the compile self-correction loop right after the
+            // backend is packaged, so /generate returns a compile-clean ZIP (with re-zipped
+            // fixes applied). Off by default — see codegen.generate.auto-validate.
+            if (autoValidateAfterGenerate && layer == CodeLayer.BACKEND) {
+                try {
+                    var report = validate(projectId);
+                    log.info("Auto-validate for project {}: status={}, attempts={}, issues={}",
+                            projectId, report.getValidationStatus(), report.getAttemptsUsed(),
+                            report.getRemainingIssues().size());
+                } catch (Exception vex) {
+                    log.warn("Auto-validate after generate failed for project {}: {}",
+                            projectId, vex.getMessage());
+                }
+            }
         } catch (Exception ex) {
             log.error("{} code generation failed for project {}: {}", layer, projectId, ex.getMessage(), ex);
             markFailed(codeId, ex.getMessage());
@@ -245,6 +274,38 @@ public class CodeGenerationService {
                 freeMarkerEngine.render("backend/PomXml.ftl", base));
         write(backendRoot.resolve("Dockerfile"),
                 freeMarkerEngine.render("backend/BackendDockerfile.ftl", base));
+
+        // ── Ship the Maven wrapper so validate()/downstream users can run `./mvnw compile`
+        // without needing Maven on the system PATH. Copies mvnw, mvnw.cmd, and
+        // .mvn/wrapper/maven-wrapper.properties verbatim from our own classpath. ──
+        copyBackendWrapper(backendRoot);
+    }
+
+    private void copyBackendWrapper(Path backendRoot) throws IOException {
+        var resolver = new PathMatchingResourcePatternResolver(getClass().getClassLoader());
+        var resources = resolver.getResources(BACKEND_WRAPPER_RESOURCE_PATTERN);
+        for (var resource : resources) {
+            String uri = resource.getURI().toString();
+            int idx = uri.indexOf(BACKEND_WRAPPER_ROOT_PREFIX);
+            if (idx < 0) continue;
+            String relative = uri.substring(idx + BACKEND_WRAPPER_ROOT_PREFIX.length());
+            if (relative.isEmpty() || relative.endsWith("/")) continue;
+            Path destination = backendRoot.resolve(relative);
+            if (Files.exists(destination)) continue; // never clobber
+            Files.createDirectories(destination.getParent());
+            try (InputStream in = resource.getInputStream()) {
+                Files.copy(in, destination);
+            }
+            // Mark the POSIX wrapper executable so `./mvnw` works on Linux/macOS.
+            if (relative.equals("mvnw")) {
+                try {
+                    var perms = java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x");
+                    Files.setPosixFilePermissions(destination, perms);
+                } catch (UnsupportedOperationException ignored) {
+                    // Windows: no POSIX perms, ignore — mvnw.cmd is used there instead.
+                }
+            }
+        }
     }
 
     // ── Frontend rendering ───────────────────────────────────────────────────────
@@ -495,18 +556,31 @@ public class CodeGenerationService {
         List<ValidationCheckDTO> checks = new ArrayList<>();
         List<String> issues = new ArrayList<>();
 
-        if (!mavenRunner.isAvailable()) {
-            checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
-                    .message("`mvn` not on PATH — skipping compile-validation").build());
-            return new CompileLoopOutcome(0, checks, issues);
-        }
-
         Path workDir = null;
         try {
             workDir = Files.createTempDirectory("astyann-validate-" + projectId + "-");
             unzipInto(storageService.loadZip(backend.getCodePath()), workDir);
 
+            // Stage the Maven wrapper into the workDir if the ZIP predates wrapper bundling.
+            // Copy is a no-op when files already exist. This means /validate stops depending
+            // on a system Maven install entirely for any ZIP going forward.
+            try {
+                copyBackendWrapper(workDir);
+            } catch (IOException wrapperEx) {
+                log.debug("Could not stage backend wrapper into validate workDir: {}", wrapperEx.getMessage());
+            }
+
+            // Probe candidates AFTER unzipping so a project-local ./mvnw wrapper is visible.
+            if (!mavenRunner.isAvailable(workDir)) {
+                checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
+                        .message("No working `mvn` found (tried mvn.cmd/mvn.bat/mvn on Windows, mvn on Unix; "
+                                + "and any ./mvnw wrapper). Install Maven or set "
+                                + "codegen.validate.compile.mvn-command to an absolute path.").build());
+                return new CompileLoopOutcome(0, checks, issues);
+            }
+
             int attempt;
+            List<String> lastErrorSummaries = List.of();
             for (attempt = 1; attempt <= Math.max(1, compileMaxAttempts); attempt++) {
                 var result = mavenRunner.compile(workDir);
                 if (result.success()) {
@@ -525,11 +599,23 @@ public class CodeGenerationService {
 
                 var errors = mavenRunner.parseErrors(result.output());
                 if (errors.isEmpty()) {
-                    issues.add("Backend failed to compile but no error rows were parseable from Maven output.");
+                    // No compiler rows means Maven itself failed before javac ran, or the
+                    // format was unexpected. Surface Maven's own failure lines (and, as a
+                    // fallback, the tail of the output) so the report is actionable.
+                    String failureSummary = mavenRunner.extractFailureSummary(result.output());
+                    log.warn("Compile failed for project {} with no parseable error rows. Maven summary:\n{}",
+                            projectId, failureSummary);
+                    issues.add("Backend failed to compile. Maven reported:\n" + failureSummary);
                     checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
-                            .message("compile failed; no parseable errors").build());
+                            .message("compile failed (exit=" + result.exitCode() + "); see remainingIssues for Maven output").build());
                     return new CompileLoopOutcome(attempt, checks, issues);
                 }
+
+                lastErrorSummaries = errors.stream()
+                        .map(MavenRunner.CompileErrorRow::formatted)
+                        .distinct()
+                        .limit(20)
+                        .toList();
 
                 Set<Path> filesToFix = new HashSet<>();
                 for (var err : errors) filesToFix.add(err.file());
@@ -537,13 +623,14 @@ public class CodeGenerationService {
                     if (!Files.exists(file)) continue;
                     List<String> perFile = errors.stream().filter(e -> e.file().equals(file))
                             .map(MavenRunner.CompileErrorRow::formatted).toList();
-                    tryFixFileWithAi(file, perFile);
+                    tryFixFileWithAi(workDir, file, perFile);
                 }
                 checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
                         .message("attempt " + attempt + ": " + errors.size() + " errors, applying AI fix").build());
             }
 
             issues.add("Backend still fails to compile after " + compileMaxAttempts + " AI fix attempts.");
+            issues.addAll(lastErrorSummaries);
             checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
                     .message("exhausted retries").build());
             return new CompileLoopOutcome(attempt - 1, checks, issues);
@@ -559,24 +646,125 @@ public class CodeGenerationService {
         }
     }
 
-    private void tryFixFileWithAi(Path file, List<String> errorLines) {
+    private void tryFixFileWithAi(Path workDir, Path file, List<String> errorLines) {
         try {
             String current = filePatcher.read(file);
+            String packageHint = extractPackageName(current);
             var response = aiOrchestratorClient.infer(new AiOrchestratorClient.InferenceRequest(
                     aiModel,
                     promptBuilder.systemPromptForCompileFix(),
-                    promptBuilder.userPromptForCompileFix(current, errorLines)));
-            String fixed = response == null ? null : response.content();
-            if (fixed == null || fixed.isBlank()) {
+                    promptBuilder.userPromptForCompileFix(current, errorLines, packageHint)));
+            String raw = response == null ? null : response.content();
+            if (raw == null || raw.isBlank()) {
                 log.warn("AI returned empty fix for {}", file.getFileName());
                 return;
             }
-            String cleaned = stripCodeFences(fixed);
-            if (!filePatcher.replaceEntireFile(file, cleaned)) {
+
+            AiCompileFixResponse fix = parseCompileFixResponse(raw);
+            String fixedSource = fix != null ? fix.getFixedSource() : null;
+            if (fixedSource == null || fixedSource.isBlank()) {
+                // Back-compat: model returned raw Java instead of JSON
+                fixedSource = stripCodeFences(raw);
+            } else {
+                fixedSource = stripCodeFences(fixedSource);
+            }
+
+            if (!filePatcher.replaceEntireFile(file, fixedSource)) {
                 log.warn("AI-proposed fix for {} did not parse — leaving file untouched.", file.getFileName());
+            }
+
+            if (fix != null && fix.getAdditionalFiles() != null && !fix.getAdditionalFiles().isEmpty()) {
+                Path javaRoot = findSrcMainJava(workDir);
+                if (javaRoot == null) {
+                    log.warn("Could not locate src/main/java under {} — skipping additionalFiles.", workDir);
+                    return;
+                }
+                for (var entry : fix.getAdditionalFiles().entrySet()) {
+                    String relative = entry.getKey();
+                    String source = entry.getValue();
+                    if (relative == null || relative.isBlank() || source == null || source.isBlank()) continue;
+                    // Allow keys either as "com/pkg/dto/Foo.java" or "dto/Foo.java" (package-relative).
+                    String normalized = relative.replace('\\', '/').replaceFirst("^/+", "");
+                    if (!normalized.contains("/") && packageHint != null) {
+                        normalized = packageHint.replace('.', '/') + "/dto/" + normalized;
+                        if (!normalized.endsWith(".java")) normalized += ".java";
+                    } else if (packageHint != null && !normalized.contains(packageHint.replace('.', '/'))) {
+                        // package-relative path like "dto/Foo.java"
+                        if (!normalized.startsWith("com/") && !normalized.startsWith("org/")
+                                && !normalized.startsWith("afb/") && !normalized.contains("/")) {
+                            // bare filename handled above
+                        } else if (!normalized.matches("^[a-z]+(/[a-z0-9_]+)+/.*")) {
+                            // leave as-is if it already looks like a full package path
+                        }
+                        // If path starts with dto/, enums/, exception/, service/, etc., prefix package
+                        if (normalized.matches("^(dto|enums|enum|exception|service|controller|entity|repository)/.*")) {
+                            normalized = packageHint.replace('.', '/') + "/" + normalized;
+                        }
+                    }
+                    Path target = javaRoot.resolve(normalized).normalize();
+                    if (!target.startsWith(javaRoot)) {
+                        log.warn("Refusing suspicious additional-file path from AI: {}", relative);
+                        continue;
+                    }
+                    if (Files.exists(target)) {
+                        log.debug("additionalFiles: {} already exists — leaving it.", normalized);
+                        continue;
+                    }
+                    if (filePatcher.replaceEntireFile(target, stripCodeFences(source))) {
+                        log.info("Wrote missing type from compile-fix: {}", normalized);
+                    } else {
+                        log.warn("AI additional file {} did not parse — skipped.", normalized);
+                    }
+                }
             }
         } catch (Exception ex) {
             log.warn("Could not fix {} via AI: {}", file.getFileName(), ex.getMessage());
+        }
+    }
+
+    private AiCompileFixResponse parseCompileFixResponse(String content) {
+        String trimmed = stripCodeFences(content.trim());
+        try {
+            if (trimmed.startsWith("{")) {
+                return objectMapper.readValue(trimmed, AiCompileFixResponse.class);
+            }
+            Matcher m = JSON_ENVELOPE.matcher(trimmed);
+            if (m.find()) {
+                return objectMapper.readValue(m.group(), AiCompileFixResponse.class);
+            }
+        } catch (Exception ex) {
+            log.debug("Compile-fix reply was not JSON (will treat as raw Java): {}", ex.getMessage());
+        }
+        return null;
+    }
+
+    private static String extractPackageName(String source) {
+        if (source == null) return null;
+        Matcher m = PACKAGE_DECL.matcher(source);
+        if (!m.find()) return null;
+        String pkg = m.group(1);
+        // Strip leaf packages so additionalFiles land under the project root package
+        // (…/dto/Foo.java) rather than under service.impl/dto/.
+        for (String suffix : List.of(
+                ".service.impl", ".service", ".controller", ".repository",
+                ".entity", ".dto", ".security", ".enums", ".enum", ".exception", ".config")) {
+            if (pkg.endsWith(suffix)) {
+                return pkg.substring(0, pkg.length() - suffix.length());
+            }
+        }
+        return pkg;
+    }
+
+    /** Locates {@code src/main/java} under the unzipped backend work directory. */
+    private static Path findSrcMainJava(Path workDir) {
+        Path direct = workDir.resolve("src/main/java");
+        if (Files.isDirectory(direct)) return direct;
+        try (var walk = Files.walk(workDir, 4)) {
+            return walk.filter(p -> p.endsWith(Path.of("src", "main", "java")) && Files.isDirectory(p))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
         }
     }
 

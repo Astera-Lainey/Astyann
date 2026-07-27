@@ -3,6 +3,7 @@ package afb.astyann.codegeneration.service.logic;
 import afb.astyann.codegeneration.domain.logic.StubMethod;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -20,12 +21,18 @@ import java.util.List;
  * JavaParser-based helper for reading, inspecting and rewriting generated Java files. Kept
  * intentionally small — the AI pass and the compile-fix loop both go through this so we have a
  * single place to add safety checks.
+ *
+ * <p>Language level is {@link ParserConfiguration.LanguageLevel#JAVA_17} to match the generated
+ * projects ({@code release 17}). The default JavaParser level rejects records / text blocks /
+ * pattern matching, which caused valid AI fixes to be refused with "Record Declarations are not
+ * supported".
  */
 @Service
 @Slf4j
 public class FilePatcher {
 
-    private final JavaParser parser = new JavaParser();
+    private final JavaParser parser = new JavaParser(
+            new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
 
     public String read(Path file) throws IOException {
         return Files.readString(file, StandardCharsets.UTF_8);

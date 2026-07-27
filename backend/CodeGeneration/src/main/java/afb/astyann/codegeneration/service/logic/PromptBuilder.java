@@ -24,38 +24,56 @@ public class PromptBuilder {
             You are a senior Java Spring Boot 3.3 backend engineer.
 
             You are given the current stub implementation of ONE module of a generated
-            microservice, together with everything you need to fully implement it: the entity
-            source(s), the module's use cases, business rules, and related documentation
-            context retrieved from the project's SFD and diagrams.
+            microservice, together with everything you need to fully implement it: the source
+            of every entity and repository already present in the project, the module's use
+            cases, business rules, and related documentation context retrieved from the
+            project's SFD and diagrams.
 
             Your task: return the FULLY IMPLEMENTED module.
 
             Output format — return ONLY a single JSON object with these fields:
             {
-              "serviceImpl": "<full source of the updated ServiceImpl.java>",
-              "repository":  "<full source of the updated Repository.java, or null>",
-              "controller":  "<full source of the updated Controller.java, or null>",
-              "notes":       "<one-sentence summary of what was implemented>"
+              "serviceImpl":     "<full source of the updated ServiceImpl.java>",
+              "repository":      "<full source of the updated Repository.java, or null>",
+              "controller":      "<full source of the updated Controller.java, or null>",
+              "additionalFiles": { "<path relative to src/main/java/{packagePath}/>": "<full Java source>" },
+              "notes":           "<one-sentence summary of what was implemented>"
             }
 
             HARD RULES:
-            1. Return ONLY the JSON. No prose before, no prose after, no markdown fences around it.
+            1. Return ONLY the JSON. No prose before, no prose after, no markdown fences.
             2. JSON string values are raw Java source — no ``` fences, no line-continuation escapes.
             3. Every method that currently throws UnsupportedOperationException MUST be
                implemented — do not leave any TODO or stub behind.
             4. Enforce every listed business rule. For precondition violations throw
                IllegalStateException with a clear, user-facing message.
             5. Follow each use case's main scenario steps exactly, in order.
-            6. Use ONLY the fields declared on the entity — do NOT invent new fields or columns.
-            7. You MAY add new @Query methods to Repository if the standard JpaRepository
+            6. Use ONLY the fields declared on each entity — do NOT invent new fields on any
+               entity, and do NOT invent columns.
+            7. STRICT TYPE RULE: Every type you reference must be either:
+                 (a) a JDK type,
+                 (b) a Spring / JPA / Lombok type from a standard dependency,
+                 (c) one of the entity / DTO / repository classes shown in the context, OR
+                 (d) declared by YOU in "additionalFiles".
+               If you need an enum, a custom exception, or a helper class that does not exist
+               yet, you MUST add it to "additionalFiles" with the full source. Do NOT reference
+               a type you have not either seen or declared.
+            8. Additional files must live under a reasonable sub-package. Suggested locations:
+                 - enums:      "enums/<Name>.java"
+                 - exceptions: "exception/<Name>.java"
+                 - helpers:    "service/impl/<Name>.java"
+               The path is relative to src/main/java/{packagePath}/ — do not include the
+               leading package directories.
+            9. You MAY add new @Query methods to Repository if the standard JpaRepository
                methods are not sufficient. In that case, return the FULL updated repository
                source in the "repository" field.
-            8. Keep the existing package declaration and existing imports; add any imports you
+           10. Keep the existing package declaration and existing imports; add any imports you
                need. Every symbol you use must be either already imported, added to the imports,
                or fully qualified.
-            9. Do NOT change method signatures — return types, parameter types, parameter names
+           11. Do NOT change method signatures — return types, parameter types, parameter names
                and thrown exceptions must match the stub exactly.
-            10. If the controller does NOT need to change (usual case), set "controller" to null.
+           12. If a file does not need to change, set its field to null. If you have no
+               additional files, set "additionalFiles" to an empty object {} or null.
             """;
 
     public String systemPrompt() {
@@ -69,8 +87,11 @@ public class PromptBuilder {
                              String serviceImplSource,
                              String repositorySource,
                              String controllerSource,
-                             String entitySource,
+                             String primaryEntitySource,
                              List<String> repositoryMethodSignatures,
+                             java.util.Map<String, String> allEntitySources,
+                             java.util.Map<String, String> allRepositorySources,
+                             java.util.List<String> allDtoClassNames,
                              String ragContext) {
 
         StringBuilder sb = new StringBuilder();
@@ -80,14 +101,40 @@ public class PromptBuilder {
           .append("primary entity: ").append(module.getEntityClassName()).append('\n')
           .append("request mapping: ").append(module.getRequestMapping()).append("\n\n");
 
-        sb.append("## ENTITY SOURCE\n```java\n").append(entitySource).append("\n```\n\n");
+        // ── Full catalog of already-declared types the AI is allowed to reference ──
+        sb.append("## AVAILABLE TYPES (already declared — you may reference these freely)\n");
+        sb.append("Entities: ").append(String.join(", ", allEntitySources.keySet())).append('\n');
+        sb.append("Repositories: ").append(String.join(", ", allRepositorySources.keySet())).append('\n');
+        sb.append("DTOs: ").append(String.join(", ", allDtoClassNames)).append("\n\n");
+
+        sb.append("## PRIMARY ENTITY SOURCE\n```java\n").append(primaryEntitySource).append("\n```\n\n");
+
+        if (allEntitySources.size() > 1) {
+            sb.append("## OTHER ENTITIES IN THE PROJECT\n");
+            for (var entry : allEntitySources.entrySet()) {
+                if (entry.getKey().equals(module.getEntityClassName())) continue;
+                sb.append("### ").append(entry.getKey()).append("\n```java\n")
+                  .append(truncate(entry.getValue(), 2500)).append("\n```\n");
+            }
+            sb.append('\n');
+        }
 
         sb.append("## CURRENT STUB — ServiceImpl\n```java\n").append(serviceImplSource).append("\n```\n\n");
 
-        sb.append("## CURRENT — Repository\n```java\n").append(repositorySource).append("\n```\n");
+        sb.append("## CURRENT — Repository (module primary)\n```java\n").append(repositorySource).append("\n```\n");
         if (!repositoryMethodSignatures.isEmpty()) {
             sb.append("Available repository methods (inherited from JpaRepository + custom):\n");
             for (String sig : repositoryMethodSignatures) sb.append("  - ").append(sig).append('\n');
+            sb.append('\n');
+        }
+
+        if (allRepositorySources.size() > 1) {
+            sb.append("## OTHER REPOSITORIES YOU MAY INJECT\n");
+            for (var entry : allRepositorySources.entrySet()) {
+                if (entry.getKey().equals(module.getEntityClassName() + "Repository")) continue;
+                sb.append("### ").append(entry.getKey()).append("\n```java\n")
+                  .append(truncate(entry.getValue(), 1200)).append("\n```\n");
+            }
             sb.append('\n');
         }
 
@@ -135,21 +182,43 @@ public class PromptBuilder {
 
     public String systemPromptForCompileFix() {
         return """
-               You are a senior Java compiler-error fixer. The Java file below FAILS to compile
-               against Spring Boot 3.3 / Java 21.
+               You are a senior Java compiler-error fixer for Spring Boot 3.3 / Java 17.
 
-               Return ONLY the fully-fixed source of the file. No prose, no markdown fences, no
-               explanation. Preserve the package, all existing imports (adding any that are
-               needed), all public method signatures, and the class name.
+               Return ONLY a JSON object (no prose, no markdown fences) with this shape:
+               {
+                 "fixedSource": "<full corrected Java source of the broken file>",
+                 "additionalFiles": {
+                   "<path relative to src/main/java/>": "<full Java source of a NEW type>"
+                 }
+               }
+
+               HARD RULES:
+               1. If the error is "cannot find symbol" for a DTO / enum / exception you introduced
+                  or that is referenced but missing, you MUST create it in "additionalFiles".
+                  Example key: "com/example/app/dto/GoodsReceivedDto.java"
+               2. Prefer plain classes (with getters/setters or Lombok @Data) over records unless
+                  the surrounding code already uses records.
+               3. Preserve the broken file's package, class name, and public method signatures
+                  unless a signature change is required to fix the compile error AND you also
+                  update every caller via additionalFiles.
+               4. Do NOT reference a type that is neither a JDK/Spring type nor present in
+                  fixedSource / additionalFiles.
+               5. If no new files are needed, set "additionalFiles" to {} or omit it.
                """;
     }
 
-    public String userPromptForCompileFix(String currentSource, List<String> errorLines) {
+    public String userPromptForCompileFix(String currentSource, List<String> errorLines,
+                                          String packagePathHint) {
         StringBuilder sb = new StringBuilder();
         sb.append("## COMPILE ERRORS\n");
         for (String e : errorLines) sb.append("- ").append(e).append('\n');
+        if (packagePathHint != null && !packagePathHint.isBlank()) {
+            sb.append("\n## PACKAGE PATH (use this prefix for additionalFiles keys)\n")
+              .append(packagePathHint.replace('.', '/'))
+              .append("/dto/YourType.java\n");
+        }
         sb.append("\n## CURRENT FILE\n").append(currentSource);
-        sb.append("\n\nReturn the corrected file source now.");
+        sb.append("\n\nReturn the JSON fix now.");
         return sb.toString();
     }
 

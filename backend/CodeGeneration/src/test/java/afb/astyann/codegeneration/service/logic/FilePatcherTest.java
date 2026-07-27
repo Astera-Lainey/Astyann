@@ -63,4 +63,17 @@ class FilePatcherTest {
         assertThat(written).isFalse();
         assertThat(Files.readString(file)).isEqualTo(original);
     }
+
+    @Test
+    void accepts_java17_record_declarations(@TempDir Path tmp) throws IOException {
+        Path file = tmp.resolve("GoodsReceivedDto.java");
+        String source = """
+                package com.example.dto;
+
+                public record GoodsReceivedDto(String productId, int quantity) {}
+                """;
+        boolean written = patcher.replaceEntireFile(file, source);
+        assertThat(written).isTrue();
+        assertThat(Files.readString(file)).contains("record GoodsReceivedDto");
+    }
 }

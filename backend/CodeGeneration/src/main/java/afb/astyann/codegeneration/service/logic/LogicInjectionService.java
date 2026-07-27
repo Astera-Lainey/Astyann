@@ -17,12 +17,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * The AI logic-injection pass. Runs after backend template rendering and before ZIP packaging:
@@ -106,7 +110,7 @@ public class LogicInjectionService {
         Path controllerFile  = javaRoot.resolve("controller").resolve(module.getControllerName() + ".java");
         Path entityFile      = javaRoot.resolve("entity").resolve(module.getEntityClassName() + ".java");
 
-        if (!java.nio.file.Files.exists(serviceImplFile) || !java.nio.file.Files.exists(entityFile)) {
+        if (!Files.exists(serviceImplFile) || !Files.exists(entityFile)) {
             log.debug("Skipping module {}: expected source files not present.", module.getServiceName());
             return false;
         }
@@ -116,6 +120,11 @@ public class LogicInjectionService {
         String controllerSource  = filePatcher.read(controllerFile);
         String entitySource      = filePatcher.read(entityFile);
         List<String> repoSignatures = filePatcher.methodSignatures(repositoryFile);
+
+        // Give the AI the FULL catalog of already-declared types so it doesn't hallucinate.
+        Map<String, String> allEntitySources = loadJavaSources(javaRoot.resolve("entity"));
+        Map<String, String> allRepositorySources = loadJavaSources(javaRoot.resolve("repository"));
+        List<String> allDtoClassNames = new ArrayList<>(loadJavaSources(javaRoot.resolve("dto")).keySet());
 
         PcsfModule pcsfModule = findMatchingPcsfModule(pcsf, module);
         PcsfEntity primaryEntity = findMatchingPcsfEntity(pcsf, module);
@@ -127,7 +136,7 @@ public class LogicInjectionService {
 
         String userPrompt = promptBuilder.userPrompt(module, pcsfModule, primaryEntity, rules,
                 serviceImplSource, repositorySource, controllerSource, entitySource,
-                repoSignatures, ragContext);
+                repoSignatures, allEntitySources, allRepositorySources, allDtoClassNames, ragContext);
 
         String content;
         try {
@@ -171,10 +180,69 @@ public class LogicInjectionService {
                 log.debug("Patched {}", controllerFile.getFileName());
             }
         }
+
+        // ── Write additional files the AI declared (enums, exceptions, helpers) ──
+        int newFiles = 0;
+        if (aiResponse.getAdditionalFiles() != null) {
+            for (var entry : aiResponse.getAdditionalFiles().entrySet()) {
+                String relative = entry.getKey();
+                String source = entry.getValue();
+                if (relative == null || relative.isBlank() || source == null || source.isBlank()) continue;
+                Path target = javaRoot.resolve(relative).normalize();
+                if (!target.startsWith(javaRoot)) {
+                    log.warn("Refusing suspicious additional-file path from AI: {}", relative);
+                    continue;
+                }
+                if (Files.exists(target)) {
+                    log.debug("Skipping additional file {} — already exists.", relative);
+                    continue;
+                }
+                try {
+                    if (filePatcher.replaceEntireFile(target, source)) {
+                        newFiles++;
+                        anyWritten = true;
+                        log.info("[{}] wrote additional file {}", module.getServiceName(), relative);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Could not write additional file {}: {}", relative, ex.getMessage());
+                }
+            }
+        }
+
+        // ── Post-injection sanity check: warn if any stubs are still present ──
+        List<afb.astyann.codegeneration.domain.logic.StubMethod> remaining =
+                filePatcher.findStubMethods(serviceImplFile);
+        if (!remaining.isEmpty()) {
+            log.warn("[{}] {} stub method(s) still remain after AI pass: {}",
+                    module.getServiceName(), remaining.size(),
+                    remaining.stream().map(afb.astyann.codegeneration.domain.logic.StubMethod::methodName).toList());
+        }
+
         if (aiResponse.getNotes() != null && !aiResponse.getNotes().isBlank()) {
-            log.info("[{}] {}", module.getServiceName(), aiResponse.getNotes());
+            log.info("[{}] {} (additional files: {})",
+                    module.getServiceName(), aiResponse.getNotes(), newFiles);
         }
         return anyWritten;
+    }
+
+    /** Reads every {@code *.java} file directly under {@code dir} into a
+     *  {@code ClassName -> source} map. Missing directories return empty. */
+    private Map<String, String> loadJavaSources(Path dir) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (!Files.exists(dir)) return out;
+        try (Stream<Path> files = Files.list(dir)) {
+            files.filter(f -> f.getFileName().toString().endsWith(".java"))
+                    .forEach(f -> {
+                        try {
+                            String name = f.getFileName().toString().replace(".java", "");
+                            out.put(name, filePatcher.read(f));
+                        } catch (IOException ignored) {
+                        }
+                    });
+        } catch (IOException ex) {
+            log.debug("Could not list {}: {}", dir, ex.getMessage());
+        }
+        return out;
     }
 
     // ── AI response parsing ────────────────────────────────────────────────
