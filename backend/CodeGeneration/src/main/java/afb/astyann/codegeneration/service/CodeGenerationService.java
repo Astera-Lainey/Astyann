@@ -102,7 +102,7 @@ public class CodeGenerationService {
     @Value("${codegen.validate.compile.enabled:true}")
     private boolean compileValidationEnabled;
 
-    @Value("${codegen.validate.compile.max-attempts:3}")
+    @Value("${codegen.validate.compile.max-attempts:5}")
     private int compileMaxAttempts;
 
     @Value("${codegen.generate.auto-validate:false}")
