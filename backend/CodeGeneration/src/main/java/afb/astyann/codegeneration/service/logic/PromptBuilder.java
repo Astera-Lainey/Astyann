@@ -1,7 +1,6 @@
 package afb.astyann.codegeneration.service.logic;
 
 import afb.astyann.codegeneration.domain.pcsf.FieldValue;
-import afb.astyann.codegeneration.domain.pcsf.Pcsf;
 import afb.astyann.codegeneration.domain.pcsf.PcsfBusinessRule;
 import afb.astyann.codegeneration.domain.pcsf.PcsfEntity;
 import afb.astyann.codegeneration.domain.pcsf.PcsfModule;
@@ -219,6 +218,37 @@ public class PromptBuilder {
         }
         sb.append("\n## CURRENT FILE\n").append(currentSource);
         sb.append("\n\nReturn the JSON fix now.");
+        return sb.toString();
+    }
+
+    // ── Frontend (TypeScript / Angular) compile-fix prompts ──────────────────
+
+    public String systemPromptForTsFix() {
+        return """
+               You are a senior Angular 21 / TypeScript engineer fixing type-check errors in a
+               single generated source file (standalone components, signals, no NgModules).
+
+               Return ONLY the full corrected source of the file — raw TypeScript, no prose, no
+               markdown fences, no JSON wrapper.
+
+               HARD RULES:
+               1. Fix every listed error. Do not introduce new ones.
+               2. Change ONLY what is needed to make the file type-check; preserve the component's
+                  selector, class name, exported members and public API.
+               3. Do not invent imports from packages that are not already used in the project.
+               4. Keep the existing import style and formatting.
+               5. Output the ENTIRE file, not a diff or a fragment.
+               """;
+    }
+
+    public String userPromptForTsFix(String currentSource, List<String> errorLines,
+                                     String relativePath) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## FILE\n").append(relativePath == null ? "(unknown)" : relativePath).append("\n\n");
+        sb.append("## TYPE-CHECK ERRORS\n");
+        for (String e : errorLines) sb.append("- ").append(e).append('\n');
+        sb.append("\n## CURRENT FILE\n").append(currentSource);
+        sb.append("\n\nReturn the full corrected TypeScript file now.");
         return sb.toString();
     }
 

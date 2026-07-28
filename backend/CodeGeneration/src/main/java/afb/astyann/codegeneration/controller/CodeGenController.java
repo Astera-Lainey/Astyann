@@ -167,6 +167,9 @@ public class CodeGenController {
                 .downloadUrl(code.getDownloadUrl())
                 .lastError(code.getLastError())
                 .genDate(code.getGenDate())
+                .modulesTotal(code.getModulesTotal())
+                .modulesPatched(code.getModulesPatched())
+                .stubMethodsRemaining(code.getStubMethodsRemaining())
                 .build();
     }
 

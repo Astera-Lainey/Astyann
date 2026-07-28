@@ -595,7 +595,11 @@ public class ProjectionBuilder {
         if (words.length == 0) return null;
         String firstVerb = words[0].toLowerCase(Locale.ROOT);
         if (CRUD_VERBS.contains(firstVerb)) return null;
-        return toLowerCamelCase(useCaseName.trim());
+        String action = toLowerCamelCase(useCaseName.trim());
+        // Guard: only emit a custom endpoint when the derived name is a valid Java identifier
+        // start (a letter). Anything else is dropped rather than rendered into broken source.
+        if (action.isEmpty() || !Character.isLetter(action.charAt(0))) return null;
+        return action;
     }
 
     // ── Type mapping ──────────────────────────────────────────────────────────
@@ -690,11 +694,17 @@ public class ProjectionBuilder {
         return String.join("_", splitWords(input)).toLowerCase(Locale.ROOT);
     }
 
-    /** Splits on whitespace/underscore/hyphen and camelCase boundaries into lowercase-friendly words. */
+    /**
+     * Splits on camelCase boundaries and on any run of non-alphanumeric characters into
+     * lowercase-friendly words. Crucially this drops punctuation — parentheses, slashes, commas,
+     * etc. — so a use case named "Record a Stock Entry (Goods Received)" derives the identifier
+     * {@code recordAStockEntryGoodsReceived} rather than {@code recordAStockEntry(goodsReceived)},
+     * which is invalid Java and broke template rendering downstream.
+     */
     private List<String> splitWords(String input) {
         String spaced = input.trim()
                 .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
-                .replaceAll("[\\s_\\-]+", " ")
+                .replaceAll("[^A-Za-z0-9]+", " ")
                 .trim();
         List<String> words = new ArrayList<>();
         for (String w : spaced.split(" ")) if (!w.isEmpty()) words.add(w);

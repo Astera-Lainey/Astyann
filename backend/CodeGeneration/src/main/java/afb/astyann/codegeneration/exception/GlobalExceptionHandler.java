@@ -42,6 +42,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Void>builder().status(503).message(ex.getMessage()).build());
     }
 
+    @ExceptionHandler(CodeNotImplementedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotImplemented(CodeNotImplementedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.<Void>builder().status(409).message(ex.getMessage()).build());
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)

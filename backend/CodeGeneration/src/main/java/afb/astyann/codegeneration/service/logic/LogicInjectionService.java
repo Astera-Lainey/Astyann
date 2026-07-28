@@ -3,6 +3,7 @@ package afb.astyann.codegeneration.service.logic;
 import afb.astyann.codegeneration.client.AiOrchestratorClient;
 import afb.astyann.codegeneration.client.RagClient;
 import afb.astyann.codegeneration.domain.logic.AiModuleResponse;
+import afb.astyann.codegeneration.domain.logic.StubMethod;
 import afb.astyann.codegeneration.domain.pcsf.FieldValue;
 import afb.astyann.codegeneration.domain.pcsf.Pcsf;
 import afb.astyann.codegeneration.domain.pcsf.PcsfBusinessRule;
@@ -11,8 +12,8 @@ import afb.astyann.codegeneration.domain.pcsf.PcsfModule;
 import afb.astyann.codegeneration.domain.projection.BackendModule;
 import afb.astyann.codegeneration.domain.projection.BackendProjection;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -33,7 +36,8 @@ import java.util.stream.Stream;
  * for each module, ships the current stubs + PCSF business context + RAG snippets to the AI
  * Orchestrator, asks for the fully-implemented module, and patches the generated files in place.
  *
- * <p>Failure of a single module is not fatal — the stub source is left in place and generation
+ * <p>Modules are independent, so they are implemented in parallel on {@code logicExecutor}.
+ * Failure of a single module is not fatal — the stub source is left in place and generation
  * continues. This mirrors the "best-effort snapshot" pattern used elsewhere in the codebase.
  */
 @Service
@@ -46,18 +50,24 @@ public class LogicInjectionService {
     private final RagClient ragClient;
     private final FilePatcher filePatcher;
     private final PromptBuilder promptBuilder;
-    // Self-contained ObjectMapper — this service doesn't need the shared Spring one and it
-    // avoids a required-dependency on spring-boot-starter-web in downstream services.
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final AdditionalFilePathResolver additionalFilePathResolver;
+    private final ObjectMapper objectMapper;
+    private final Executor logicExecutor;
 
     public LogicInjectionService(AiOrchestratorClient aiClient,
                                  RagClient ragClient,
                                  FilePatcher filePatcher,
-                                 PromptBuilder promptBuilder) {
+                                 PromptBuilder promptBuilder,
+                                 AdditionalFilePathResolver additionalFilePathResolver,
+                                 ObjectMapper objectMapper,
+                                 @Qualifier("logicExecutor") Executor logicExecutor) {
         this.aiClient = aiClient;
         this.ragClient = ragClient;
         this.filePatcher = filePatcher;
         this.promptBuilder = promptBuilder;
+        this.additionalFilePathResolver = additionalFilePathResolver;
+        this.objectMapper = objectMapper;
+        this.logicExecutor = logicExecutor;
     }
 
     @Value("${codegen.ai.logic-injection.enabled:true}")
@@ -69,39 +79,121 @@ public class LogicInjectionService {
     @Value("${codegen.ai.rag.top-k:5}")
     private int ragTopK;
 
+    @Value("${codegen.ai.logic-injection.max-attempts:2}")
+    private int maxAiAttempts;
+
     /**
-     * Walks every module in the projection and delegates its implementation to the AI. Errors
-     * are logged and swallowed so a flaky AI or RAG endpoint cannot break code generation.
+     * Outcome of a whole-layer injection pass, persisted onto {@code GeneratedCode} so callers
+     * and {@code validate()} can tell a logic-complete backend from a still-stubbed one.
      *
-     * @return count of modules successfully patched.
+     * @param modulesTotal         modules the projection asked us to implement
+     * @param modulesPatched       modules where at least one file was written
+     * @param stubMethodsRemaining blocking completeness issues under {@code src/main/java}:
+     *                             remaining stub methods PLUS files that fail to parse
+     *                             ({@code 0} == verifiably complete)
+     * @param stubDetails          human-readable labels for each blocking issue (stub
+     *                             "Class.method" entries and "unparseable: File.java" entries)
      */
-    public int inject(UUID projectId,
-                      Path backendRoot,
-                      BackendProjection projection,
-                      Pcsf pcsf) {
+    public record InjectionResult(int modulesTotal, int modulesPatched,
+                                  int stubMethodsRemaining, List<String> stubDetails) {}
+
+    /**
+     * Walks every module in the projection (in parallel) and delegates its implementation to the
+     * AI. Errors are logged and swallowed so a flaky AI or RAG endpoint cannot break code
+     * generation. The remaining-stub count is computed authoritatively by re-scanning the tree
+     * after the pass, so it stays correct even when individual modules failed.
+     */
+    public InjectionResult inject(UUID projectId,
+                                  Path backendRoot,
+                                  BackendProjection projection,
+                                  Pcsf pcsf) {
+        String packagePath = projection.getProjectInfo().getPackagePath();
+        Path srcMainJava = backendRoot.resolve("src/main/java");
+        Path javaRoot = srcMainJava.resolve(packagePath);
+        String packageHint = packagePath == null ? null : packagePath.replace('/', '.');
+        int total = projection.getModules().size();
+
         if (!enabled) {
             log.info("Logic injection disabled — leaving stubs in place for project {}.", projectId);
-            return 0;
+            return toResult(total, 0, filePatcher.scanTree(javaRoot));
         }
-        int patched = 0;
-        String packagePath = projection.getProjectInfo().getPackagePath();
-        Path javaRoot = backendRoot.resolve("src/main/java").resolve(packagePath);
 
-        for (BackendModule module : projection.getModules()) {
-            try {
-                if (injectOneModule(projectId, javaRoot, module, projection, pcsf)) patched++;
-            } catch (Exception ex) {
-                log.warn("Logic injection failed for module {} (entity {}): {}",
-                        module.getServiceName(), module.getEntityClassName(), ex.getMessage(), ex);
-            }
+        List<CompletableFuture<Boolean>> futures = projection.getModules().stream()
+                .map(module -> CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return injectOneModule(projectId, javaRoot, srcMainJava, packageHint,
+                                module, projection, pcsf);
+                    } catch (Exception ex) {
+                        log.warn("Logic injection failed for module {} (entity {}): {}",
+                                module.getServiceName(), module.getEntityClassName(), ex.getMessage(), ex);
+                        return false;
+                    }
+                }, logicExecutor))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+
+        int patched = (int) futures.stream().filter(f -> Boolean.TRUE.equals(f.join())).count();
+        FilePatcher.TreeScan scan = filePatcher.scanTree(javaRoot);
+
+        log.info("Logic injection patched {}/{} modules for project {} ({} stub(s), {} unparseable file(s) remain).",
+                patched, total, projectId, scan.stubs().size(), scan.unparseable().size());
+        if (!scan.unparseable().isEmpty()) {
+            log.warn("[project {}] {} generated file(s) did not parse and will block completion: {}",
+                    projectId, scan.unparseable().size(),
+                    scan.unparseable().stream().map(p -> p.getFileName().toString()).toList());
         }
-        log.info("Logic injection patched {}/{} modules for project {}.",
-                patched, projection.getModules().size(), projectId);
-        return patched;
+        return toResult(total, patched, scan);
+    }
+
+    /**
+     * Calls the AI Orchestrator for a module implementation, retrying up to
+     * {@code codegen.ai.logic-injection.max-attempts} times when the reply is empty or cannot be
+     * parsed. Returns {@code null} if every attempt fails (module keeps its stubs).
+     */
+    private AiModuleResponse requestModuleImplementation(BackendModule module, String userPrompt) {
+        int attempts = Math.max(1, maxAiAttempts);
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            String content;
+            try {
+                var response = aiClient.infer(new AiOrchestratorClient.InferenceRequest(
+                        model, promptBuilder.systemPrompt(), userPrompt));
+                content = response == null ? null : response.content();
+            } catch (Exception ex) {
+                log.warn("AI Orchestrator call failed for module {} on attempt {}/{}: {}",
+                        module.getServiceName(), attempt, attempts, ex.getMessage());
+                continue;
+            }
+            if (content == null || content.isBlank()) {
+                log.warn("AI Orchestrator returned empty content for module {} (attempt {}/{})",
+                        module.getServiceName(), attempt, attempts);
+                continue;
+            }
+            AiModuleResponse parsed = parseAiResponse(content);
+            if (parsed != null) return parsed;
+            log.warn("Could not parse AI response for module {} (attempt {}/{}, first 200 chars): {}",
+                    module.getServiceName(), attempt, attempts,
+                    content.substring(0, Math.min(200, content.length())));
+        }
+        return null;
+    }
+
+    /** Folds stubs + unparseable files into a single blocking count for the InjectionResult. */
+    private InjectionResult toResult(int total, int patched, FilePatcher.TreeScan scan) {
+        List<String> details = new ArrayList<>(stubLabels(scan.stubs()));
+        for (Path p : scan.unparseable()) details.add("unparseable: " + p.getFileName());
+        return new InjectionResult(total, patched, scan.blockingCount(), details);
+    }
+
+    private static List<String> stubLabels(List<StubMethod> stubs) {
+        List<String> out = new ArrayList<>(stubs.size());
+        for (StubMethod s : stubs) out.add(s.className() + "." + s.methodName());
+        return out;
     }
 
     private boolean injectOneModule(UUID projectId,
                                     Path javaRoot,
+                                    Path srcMainJava,
+                                    String packageHint,
                                     BackendModule module,
                                     BackendProjection projection,
                                     Pcsf pcsf) throws IOException {
@@ -138,26 +230,12 @@ public class LogicInjectionService {
                 serviceImplSource, repositorySource, controllerSource, entitySource,
                 repoSignatures, allEntitySources, allRepositorySources, allDtoClassNames, ragContext);
 
-        String content;
-        try {
-            var response = aiClient.infer(new AiOrchestratorClient.InferenceRequest(
-                    model, promptBuilder.systemPrompt(), userPrompt));
-            content = response == null ? null : response.content();
-        } catch (FeignException ex) {
-            log.warn("AI Orchestrator refused module {} (HTTP {}): {}",
-                    module.getServiceName(), ex.status(), ex.getMessage());
-            return false;
-        }
-        if (content == null || content.isBlank()) {
-            log.warn("AI Orchestrator returned empty content for module {}", module.getServiceName());
-            return false;
-        }
-
-        AiModuleResponse aiResponse = parseAiResponse(content);
+        // Ask the AI to implement the module, retrying on an empty or unparseable reply — a single
+        // blank response (seen from some models) otherwise leaves the whole module stubbed for good.
+        AiModuleResponse aiResponse = requestModuleImplementation(module, userPrompt);
         if (aiResponse == null) {
-            log.warn("Could not parse AI response for module {} (first 200 chars): {}",
-                    module.getServiceName(),
-                    content.substring(0, Math.min(200, content.length())));
+            log.warn("Giving up on module {} after {} attempt(s) — leaving stubs in place.",
+                    module.getServiceName(), Math.max(1, maxAiAttempts));
             return false;
         }
 
@@ -188,11 +266,8 @@ public class LogicInjectionService {
                 String relative = entry.getKey();
                 String source = entry.getValue();
                 if (relative == null || relative.isBlank() || source == null || source.isBlank()) continue;
-                Path target = javaRoot.resolve(relative).normalize();
-                if (!target.startsWith(javaRoot)) {
-                    log.warn("Refusing suspicious additional-file path from AI: {}", relative);
-                    continue;
-                }
+                Path target = additionalFilePathResolver.resolve(srcMainJava, relative, packageHint).orElse(null);
+                if (target == null) continue; // blank or escapes the tree (already logged)
                 if (Files.exists(target)) {
                     log.debug("Skipping additional file {} — already exists.", relative);
                     continue;
@@ -201,7 +276,8 @@ public class LogicInjectionService {
                     if (filePatcher.replaceEntireFile(target, source)) {
                         newFiles++;
                         anyWritten = true;
-                        log.info("[{}] wrote additional file {}", module.getServiceName(), relative);
+                        log.info("[{}] wrote additional file {}", module.getServiceName(),
+                                srcMainJava.relativize(target));
                     }
                 } catch (Exception ex) {
                     log.warn("Could not write additional file {}: {}", relative, ex.getMessage());
@@ -210,12 +286,11 @@ public class LogicInjectionService {
         }
 
         // ── Post-injection sanity check: warn if any stubs are still present ──
-        List<afb.astyann.codegeneration.domain.logic.StubMethod> remaining =
-                filePatcher.findStubMethods(serviceImplFile);
+        List<StubMethod> remaining = filePatcher.findStubMethods(serviceImplFile);
         if (!remaining.isEmpty()) {
             log.warn("[{}] {} stub method(s) still remain after AI pass: {}",
                     module.getServiceName(), remaining.size(),
-                    remaining.stream().map(afb.astyann.codegeneration.domain.logic.StubMethod::methodName).toList());
+                    remaining.stream().map(StubMethod::methodName).toList());
         }
 
         if (aiResponse.getNotes() != null && !aiResponse.getNotes().isBlank()) {

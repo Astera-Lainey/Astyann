@@ -18,4 +18,9 @@ public class GeneratedCodeDTO {
     private String downloadUrl;
     private String lastError;
     private LocalDateTime genDate;
+
+    /** AI logic-injection outcome (BACKEND only; null for other layers / before injection). */
+    private Integer modulesTotal;
+    private Integer modulesPatched;
+    private Integer stubMethodsRemaining;
 }

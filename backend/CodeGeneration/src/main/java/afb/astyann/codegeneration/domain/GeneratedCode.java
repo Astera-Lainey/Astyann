@@ -48,6 +48,25 @@ public class GeneratedCode {
     @Column(name = "snapshot_id")
     private UUID snapshotId;
 
+    // ── AI logic-injection outcome (BACKEND only; null until a generate/inject pass runs) ──
+
+    /** Total modules the projection asked the AI to implement. */
+    @Column(name = "modules_total")
+    private Integer modulesTotal;
+
+    /** Modules the AI actually patched (at least one file written). */
+    @Column(name = "modules_patched")
+    private Integer modulesPatched;
+
+    /**
+     * Count of methods still throwing {@code UnsupportedOperationException} after the injection
+     * pass. {@code 0} means logic-complete; {@code > 0} blocks approval (see
+     * {@code codegen.approve.require-complete}). Stubs compile, so this is the only signal that
+     * tells a still-stubbed backend apart from a fully-implemented one.
+     */
+    @Column(name = "stub_methods_remaining")
+    private Integer stubMethodsRemaining;
+
     @Column(name = "gen_date", updatable = false)
     private LocalDateTime genDate;
 

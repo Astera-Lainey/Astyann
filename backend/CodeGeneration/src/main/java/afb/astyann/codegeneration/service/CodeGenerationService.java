@@ -21,16 +21,20 @@ import afb.astyann.codegeneration.dto.ApiResponse;
 import afb.astyann.codegeneration.dto.ValidationCheckDTO;
 import afb.astyann.codegeneration.dto.ValidationReportDTO;
 import afb.astyann.codegeneration.exception.CodeNotFoundException;
+import afb.astyann.codegeneration.exception.CodeNotImplementedException;
 import afb.astyann.codegeneration.exception.CodeVersionNotFoundException;
 import afb.astyann.codegeneration.exception.DocumentsNotApprovedException;
 import afb.astyann.codegeneration.exception.DownstreamServiceException;
 import afb.astyann.codegeneration.exception.PcsfNotApprovedException;
 import afb.astyann.codegeneration.repository.CodeVersionArchiveRepository;
 import afb.astyann.codegeneration.repository.GeneratedCodeRepository;
+import afb.astyann.codegeneration.service.logic.AdditionalFilePathResolver;
 import afb.astyann.codegeneration.service.logic.FilePatcher;
 import afb.astyann.codegeneration.service.logic.LogicInjectionService;
 import afb.astyann.codegeneration.service.logic.MavenRunner;
+import afb.astyann.codegeneration.service.logic.NodeRunner;
 import afb.astyann.codegeneration.service.logic.PromptBuilder;
+import afb.astyann.codegeneration.service.logic.TsFilePatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -76,7 +80,7 @@ public class CodeGenerationService {
     private static final Pattern PACKAGE_DECL =
             Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     private final GeneratedCodeRepository repository;
     private final CodeVersionArchiveRepository archiveRepository;
@@ -91,7 +95,10 @@ public class CodeGenerationService {
     private final LogicInjectionService logicInjectionService;
     private final FilePatcher filePatcher;
     private final MavenRunner mavenRunner;
+    private final NodeRunner nodeRunner;
+    private final TsFilePatcher tsFilePatcher;
     private final PromptBuilder promptBuilder;
+    private final AdditionalFilePathResolver additionalFilePathResolver;
 
     @Qualifier("codeExecutor")
     private final Executor codeExecutor;
@@ -107,6 +114,15 @@ public class CodeGenerationService {
 
     @Value("${codegen.generate.auto-validate:false}")
     private boolean autoValidateAfterGenerate;
+
+    @Value("${codegen.approve.require-complete:true}")
+    private boolean requireCompleteForApproval;
+
+    @Value("${codegen.validate.frontend.enabled:false}")
+    private boolean frontendValidationEnabled;
+
+    @Value("${codegen.validate.frontend.max-attempts:3}")
+    private int frontendMaxAttempts;
 
     // ── Generate ────────────────────────────────────────────────────────────────
 
@@ -125,6 +141,17 @@ public class CodeGenerationService {
         List<CodeLayer> targetLayers = (layers == null || layers.isEmpty())
                 ? List.of(CodeLayer.values())
                 : layers.stream().distinct().toList();
+
+        // Idempotency guard: refuse to double-dispatch a layer that is already mid-generation
+        // (mirrors regenerate()). Without this, a second /generate call while the first is in
+        // flight would race on the same codeId.
+        for (CodeLayer layer : targetLayers) {
+            repository.findByProjectIdAndLayer(projectId, layer)
+                    .filter(c -> c.getStatus() == CodeStatus.GENERATING)
+                    .ifPresent(c -> {
+                        throw new IllegalStateException(layer + " is still generating.");
+                    });
+        }
 
         List<GeneratedCode> placeholders = new ArrayList<>();
         for (CodeLayer layer : targetLayers) {
@@ -166,6 +193,7 @@ public class CodeGenerationService {
 
         try {
             Path layerRoot = workDir.resolve(layer.name().toLowerCase());
+            LogicInjectionService.InjectionResult injection = null;
             switch (layer) {
                 case BACKEND -> {
                     BackendProjection projection = projectionBuilder.buildBackendProjection(pcsf);
@@ -174,7 +202,7 @@ public class CodeGenerationService {
                     // Runs against the freshly-rendered files in the working dir before the
                     // ZIP is packaged. Best-effort — failures leave stubs in place.
                     try {
-                        logicInjectionService.inject(projectId, layerRoot, projection, pcsf);
+                        injection = logicInjectionService.inject(projectId, layerRoot, projection, pcsf);
                     } catch (Exception aiEx) {
                         log.warn("Logic injection pass failed for project {}: {}",
                                 projectId, aiEx.getMessage(), aiEx);
@@ -191,6 +219,15 @@ public class CodeGenerationService {
             code.setCodePath(path);
             code.setDownloadUrl("/api/v1/code/" + projectId + "/download?layer=" + layer.name());
             code.setLastError(null);
+            if (injection != null) {
+                code.setModulesTotal(injection.modulesTotal());
+                code.setModulesPatched(injection.modulesPatched());
+                code.setStubMethodsRemaining(injection.stubMethodsRemaining());
+                if (injection.stubMethodsRemaining() > 0) {
+                    log.warn("Project {} BACKEND generated with {} un-implemented stub method(s): {}",
+                            projectId, injection.stubMethodsRemaining(), injection.stubDetails());
+                }
+            }
             repository.save(code);
 
             // Optional: automatically run the compile self-correction loop right after the
@@ -528,10 +565,19 @@ public class CodeGenerationService {
                 .filter(c -> c.getLayer() == CodeLayer.BACKEND)
                 .findFirst().orElse(null);
 
-        if (backend != null && backend.getCodePath() != null
+        boolean backendReady = backend != null && backend.getCodePath() != null
                 && backend.getStatus() != CodeStatus.FAILED
-                && backend.getStatus() != CodeStatus.GENERATING
-                && compileValidationEnabled) {
+                && backend.getStatus() != CodeStatus.GENERATING;
+
+        // ── Logic-completeness check (runs regardless of compile config). Stub bodies compile,
+        // so this is the only thing that catches a backend the AI never finished implementing. ──
+        if (backendReady) {
+            LogicCheckResult logic = runLogicCheck(projectId, backend);
+            checks.add(logic.check());
+            issues.addAll(logic.issues());
+        }
+
+        if (backendReady && compileValidationEnabled) {
             CompileLoopOutcome outcome = runCompileLoop(projectId, backend);
             attemptsUsed = outcome.attempts();
             checks.addAll(outcome.checks());
@@ -541,6 +587,24 @@ public class CodeGenerationService {
                     .message("compile-validation disabled via codegen.validate.compile.enabled=false").build());
         }
 
+        // ── Frontend compile + AI-fix loop (mirrors the backend). Gated behind
+        // codegen.validate.frontend.enabled because it needs Node on PATH and npm install. ──
+        GeneratedCode frontend = layers.stream()
+                .filter(c -> c.getLayer() == CodeLayer.FRONTEND)
+                .findFirst().orElse(null);
+        boolean frontendReady = frontend != null && frontend.getCodePath() != null
+                && frontend.getStatus() != CodeStatus.FAILED
+                && frontend.getStatus() != CodeStatus.GENERATING;
+        if (frontendReady && frontendValidationEnabled) {
+            CompileLoopOutcome outcome = runFrontendCompileLoop(projectId, frontend);
+            attemptsUsed = Math.max(attemptsUsed, outcome.attempts());
+            checks.addAll(outcome.checks());
+            issues.addAll(outcome.issues());
+        } else if (frontend != null && !frontendValidationEnabled) {
+            checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("WARNING")
+                    .message("frontend-validation disabled via codegen.validate.frontend.enabled=false").build());
+        }
+
         return ValidationReportDTO.builder()
                 .projectId(projectId)
                 .validationStatus(issues.isEmpty() ? "PASSED" : "FAILED")
@@ -548,6 +612,60 @@ public class CodeGenerationService {
                 .checks(checks)
                 .remainingIssues(issues)
                 .build();
+    }
+
+    private record LogicCheckResult(ValidationCheckDTO check, List<String> issues) {}
+
+    /**
+     * Unzips the backend and scans every {@code *.java} file for methods still throwing
+     * {@code UnsupportedOperationException}. Persists the fresh count onto the entity so
+     * {@code approve()}'s completeness gate acts on current data, not just the value stored at
+     * generation time.
+     */
+    private LogicCheckResult runLogicCheck(UUID projectId, GeneratedCode backend) {
+        Path workDir = null;
+        try {
+            workDir = Files.createTempDirectory("astyann-logic-" + projectId + "-");
+            unzipInto(storageService.loadZip(backend.getCodePath()), workDir);
+            Path javaRoot = findSrcMainJava(workDir);
+            FilePatcher.TreeScan scan = javaRoot == null
+                    ? new FilePatcher.TreeScan(List.of(), List.of())
+                    : filePatcher.scanTree(javaRoot);
+
+            backend.setStubMethodsRemaining(scan.blockingCount());
+            repository.save(backend);
+
+            if (scan.blockingCount() == 0) {
+                return new LogicCheckResult(ValidationCheckDTO.builder().name("logic:BACKEND")
+                        .status("PASSED").message("no un-implemented stubs or unparseable files").build(),
+                        List.of());
+            }
+
+            List<String> issues = new ArrayList<>();
+            if (!scan.stubs().isEmpty()) {
+                List<String> labels = scan.stubs().stream()
+                        .map(s -> s.className() + "." + s.methodName())
+                        .distinct().limit(20).toList();
+                issues.add("BACKEND has " + scan.stubs().size() + " un-implemented stub method(s): " + labels);
+            }
+            if (!scan.unparseable().isEmpty()) {
+                List<String> names = scan.unparseable().stream()
+                        .map(p -> p.getFileName().toString()).distinct().limit(20).toList();
+                issues.add("BACKEND has " + scan.unparseable().size() + " unparseable file(s): " + names);
+            }
+            return new LogicCheckResult(ValidationCheckDTO.builder().name("logic:BACKEND")
+                    .status("FAILED")
+                    .message(scan.stubs().size() + " stub method(s) and "
+                            + scan.unparseable().size() + " unparseable file(s)")
+                    .build(), issues);
+        } catch (Exception ex) {
+            log.warn("Logic-completeness check failed for project {}: {}", projectId, ex.getMessage());
+            return new LogicCheckResult(ValidationCheckDTO.builder().name("logic:BACKEND")
+                    .status("WARNING").message("could not scan for stubs: " + ex.getMessage()).build(),
+                    List.of());
+        } finally {
+            deleteQuietly(workDir);
+        }
     }
 
     private record CompileLoopOutcome(int attempts, List<ValidationCheckDTO> checks, List<String> issues) {}
@@ -646,6 +764,151 @@ public class CodeGenerationService {
         }
     }
 
+    /**
+     * Frontend equivalent of {@link #runCompileLoop}: unzip the Angular project, {@code npm
+     * install} once, then {@code npx tsc --noEmit}; on failure group TS errors by file, ask the
+     * AI Orchestrator for the corrected source, write it and re-check — up to
+     * {@code codegen.validate.frontend.max-attempts}. On eventual success the re-zipped project
+     * overwrites the stored artifact so downloads serve the fixed code.
+     */
+    private CompileLoopOutcome runFrontendCompileLoop(UUID projectId, GeneratedCode frontend) {
+        List<ValidationCheckDTO> checks = new ArrayList<>();
+        List<String> issues = new ArrayList<>();
+
+        Path workDir = null;
+        try {
+            workDir = Files.createTempDirectory("astyann-validate-fe-" + projectId + "-");
+            unzipInto(storageService.loadZip(frontend.getCodePath()), workDir);
+            Path projectDir = findFrontendProjectRoot(workDir);
+
+            if (!nodeRunner.isAvailable(projectDir)) {
+                checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("WARNING")
+                        .message("No working Node toolchain found (npm/npx). Install Node.js or set "
+                                + "codegen.validate.frontend.npm-command to an absolute path.").build());
+                return new CompileLoopOutcome(0, checks, issues);
+            }
+
+            var installResult = nodeRunner.install(projectDir);
+            if (!installResult.success()) {
+                issues.add("Frontend `npm install` failed:\n"
+                        + nodeRunner.extractFailureSummary(installResult.output()));
+                checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                        .message("npm install failed (exit=" + installResult.exitCode() + ")").build());
+                return new CompileLoopOutcome(0, checks, issues);
+            }
+
+            int attempt;
+            List<String> lastErrorSummaries = List.of();
+            for (attempt = 1; attempt <= Math.max(1, frontendMaxAttempts); attempt++) {
+                var result = nodeRunner.typeCheck(projectDir);
+                if (result.success()) {
+                    checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("PASSED")
+                            .message("type-checked successfully on attempt " + attempt).build());
+                    if (attempt > 1) {
+                        byte[] fixedZip = zipDirectoryExcludingNodeModules(projectDir);
+                        String newPath = storageService.saveZip(projectId, CodeLayer.FRONTEND, fixedZip);
+                        frontend.setCodePath(newPath);
+                        frontend.setLastError(null);
+                        repository.save(frontend);
+                    }
+                    return new CompileLoopOutcome(attempt, checks, issues);
+                }
+
+                var errors = nodeRunner.parseErrors(result.output());
+                if (errors.isEmpty()) {
+                    String failureSummary = nodeRunner.extractFailureSummary(result.output());
+                    issues.add("Frontend failed to type-check. tsc reported:\n" + failureSummary);
+                    checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                            .message("tsc failed (exit=" + result.exitCode() + "); see remainingIssues").build());
+                    return new CompileLoopOutcome(attempt, checks, issues);
+                }
+
+                lastErrorSummaries = errors.stream()
+                        .map(NodeRunner.TsErrorRow::formatted).distinct().limit(20).toList();
+
+                Map<String, List<String>> byFile = new HashMap<>();
+                for (var err : errors) {
+                    byFile.computeIfAbsent(err.file(), k -> new ArrayList<>()).add(err.formatted());
+                }
+                for (var entry : byFile.entrySet()) {
+                    Path file = projectDir.resolve(entry.getKey()).normalize();
+                    if (!file.startsWith(projectDir) || !Files.exists(file)) continue;
+                    tryFixTsFileWithAi(projectDir, file, entry.getValue());
+                }
+                checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("WARNING")
+                        .message("attempt " + attempt + ": " + errors.size() + " errors, applying AI fix").build());
+            }
+
+            issues.add("Frontend still fails to type-check after " + frontendMaxAttempts + " AI fix attempts.");
+            issues.addAll(lastErrorSummaries);
+            checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                    .message("exhausted retries").build());
+            return new CompileLoopOutcome(attempt - 1, checks, issues);
+
+        } catch (Exception ex) {
+            log.error("Frontend type-check loop errored for project {}: {}", projectId, ex.getMessage(), ex);
+            issues.add("Frontend type-check loop errored: " + ex.getMessage());
+            checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                    .message(ex.getMessage()).build());
+            return new CompileLoopOutcome(0, checks, issues);
+        } finally {
+            deleteQuietly(workDir);
+        }
+    }
+
+    private void tryFixTsFileWithAi(Path projectDir, Path file, List<String> errorLines) {
+        try {
+            String current = tsFilePatcher.read(file);
+            var response = aiOrchestratorClient.infer(new AiOrchestratorClient.InferenceRequest(
+                    aiModel,
+                    promptBuilder.systemPromptForTsFix(),
+                    promptBuilder.userPromptForTsFix(current, errorLines,
+                            projectDir.relativize(file).toString().replace('\\', '/'))));
+            String raw = response == null ? null : response.content();
+            if (raw == null || raw.isBlank()) {
+                log.warn("AI returned empty TS fix for {}", file.getFileName());
+                return;
+            }
+            if (!tsFilePatcher.writeIfSane(file, raw)) {
+                log.warn("AI-proposed TS fix for {} was empty — leaving file untouched.", file.getFileName());
+            }
+        } catch (Exception ex) {
+            log.warn("Could not fix {} via AI: {}", file.getFileName(), ex.getMessage());
+        }
+    }
+
+    /** Locates the Angular project root (the dir containing {@code package.json}). */
+    private static Path findFrontendProjectRoot(Path workDir) {
+        if (Files.exists(workDir.resolve("package.json"))) return workDir;
+        try (var walk = Files.walk(workDir, 3)) {
+            return walk.filter(p -> p.getFileName().toString().equals("package.json"))
+                    .map(Path::getParent).findFirst().orElse(workDir);
+        } catch (IOException e) {
+            return workDir;
+        }
+    }
+
+    /** Re-zips the project but skips {@code node_modules} so the stored artifact stays small. */
+    private byte[] zipDirectoryExcludingNodeModules(Path root) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(baos);
+             var paths = Files.walk(root)) {
+            List<Path> files = paths
+                    .filter(Files::isRegularFile)
+                    .filter(p -> !root.relativize(p).toString().replace('\\', '/').contains("node_modules/"))
+                    .toList();
+            for (Path file : files) {
+                String entryName = root.relativize(file).toString().replace('\\', '/');
+                ZipArchiveEntry entry = new ZipArchiveEntry(file.toFile(), entryName);
+                zos.putArchiveEntry(entry);
+                Files.copy(file, zos);
+                zos.closeArchiveEntry();
+            }
+            zos.finish();
+        }
+        return baos.toByteArray();
+    }
+
     private void tryFixFileWithAi(Path workDir, Path file, List<String> errorLines) {
         try {
             String current = filePatcher.read(file);
@@ -683,37 +946,16 @@ public class CodeGenerationService {
                     String relative = entry.getKey();
                     String source = entry.getValue();
                     if (relative == null || relative.isBlank() || source == null || source.isBlank()) continue;
-                    // Allow keys either as "com/pkg/dto/Foo.java" or "dto/Foo.java" (package-relative).
-                    String normalized = relative.replace('\\', '/').replaceFirst("^/+", "");
-                    if (!normalized.contains("/") && packageHint != null) {
-                        normalized = packageHint.replace('.', '/') + "/dto/" + normalized;
-                        if (!normalized.endsWith(".java")) normalized += ".java";
-                    } else if (packageHint != null && !normalized.contains(packageHint.replace('.', '/'))) {
-                        // package-relative path like "dto/Foo.java"
-                        if (!normalized.startsWith("com/") && !normalized.startsWith("org/")
-                                && !normalized.startsWith("afb/") && !normalized.contains("/")) {
-                            // bare filename handled above
-                        } else if (!normalized.matches("^[a-z]+(/[a-z0-9_]+)+/.*")) {
-                            // leave as-is if it already looks like a full package path
-                        }
-                        // If path starts with dto/, enums/, exception/, service/, etc., prefix package
-                        if (normalized.matches("^(dto|enums|enum|exception|service|controller|entity|repository)/.*")) {
-                            normalized = packageHint.replace('.', '/') + "/" + normalized;
-                        }
-                    }
-                    Path target = javaRoot.resolve(normalized).normalize();
-                    if (!target.startsWith(javaRoot)) {
-                        log.warn("Refusing suspicious additional-file path from AI: {}", relative);
-                        continue;
-                    }
+                    Path target = additionalFilePathResolver.resolve(javaRoot, relative, packageHint).orElse(null);
+                    if (target == null) continue; // blank or escapes javaRoot (already logged)
                     if (Files.exists(target)) {
-                        log.debug("additionalFiles: {} already exists — leaving it.", normalized);
+                        log.debug("additionalFiles: {} already exists — leaving it.", relative);
                         continue;
                     }
                     if (filePatcher.replaceEntireFile(target, stripCodeFences(source))) {
-                        log.info("Wrote missing type from compile-fix: {}", normalized);
+                        log.info("Wrote missing type from compile-fix: {}", javaRoot.relativize(target));
                     } else {
-                        log.warn("AI additional file {} did not parse — skipped.", normalized);
+                        log.warn("AI additional file {} did not parse — skipped.", relative);
                     }
                 }
             }
@@ -815,6 +1057,20 @@ public class CodeGenerationService {
         if (approvable.isEmpty()) {
             throw new IllegalStateException(
                     "No GENERATED / PENDING_APPROVAL layers to approve for project " + projectId);
+        }
+
+        // Completeness gate: a stub body compiles, so an APPROVED backend could still throw at
+        // runtime on every operation. Block approval while stubs remain (override with
+        // codegen.approve.require-complete=false). Only gates layers when we have a concrete
+        // count — a null count (legacy record, never injected/validated) is not treated as proof
+        // of incompleteness.
+        if (requireCompleteForApproval) {
+            for (GeneratedCode c : approvable) {
+                Integer stubs = c.getStubMethodsRemaining();
+                if (c.getLayer() == CodeLayer.BACKEND && stubs != null && stubs > 0) {
+                    throw new CodeNotImplementedException(c.getLayer(), stubs);
+                }
+            }
         }
 
         approvable.forEach(c -> {

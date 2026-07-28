@@ -1,21 +1,47 @@
 package afb.astyann.codegeneration.client;
 
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.UUID;
 
 /**
  * Semantic-search context lookup against the RAG service. Returns a plain-text blob of the
  * top-k passages (from documents, diagrams, prior code) most relevant to the query, scoped to
  * the given project.
+ *
+ * <p>Implemented with {@link RestClient} rather than Feign: the Feign decoder for a
+ * {@code String}-returning endpoint failed with {@code 'messageConverters' must not be empty}
+ * on this stack. RestClient ships its own default converters, so it avoids that wiring entirely.
+ * The lookup is best-effort — callers ({@code LogicInjectionService}) already swallow failures
+ * and continue without RAG context — so a short timeout keeps a dead RAG service from stalling
+ * code generation.
  */
-@FeignClient(name = "rag", url = "${services.rag.url:http://localhost:8090}")
-public interface RagClient {
+@Component
+@Slf4j
+public class RagClient {
 
-    @GetMapping("/api/v1/rag/context")
-    String getContext(@RequestParam("projectId") UUID projectId,
-                      @RequestParam("query") String query,
-                      @RequestParam(value = "k", defaultValue = "5") int k);
+    private final RestClient restClient;
+
+    public RagClient(@Value("${services.rag.url:http://localhost:8090}") String baseUrl) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(10));
+        this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+    }
+
+    public String getContext(UUID projectId, String query, int k) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/rag/context")
+                        .queryParam("projectId", projectId)
+                        .queryParam("query", query)
+                        .queryParam("k", k)
+                        .build())
+                .retrieve()
+                .body(String.class);
+    }
 }
