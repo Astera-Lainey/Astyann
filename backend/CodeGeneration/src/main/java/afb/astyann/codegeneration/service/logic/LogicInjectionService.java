@@ -51,29 +51,39 @@ public class LogicInjectionService {
     private final FilePatcher filePatcher;
     private final PromptBuilder promptBuilder;
     private final AdditionalFilePathResolver additionalFilePathResolver;
-    private final ObjectMapper objectMapper;
+    private final AiJsonExtractor aiJsonExtractor;
     private final Executor logicExecutor;
+
+    // Tolerant reader for model output. LLMs frequently emit JSON with unescaped control
+    // characters (raw newlines/tabs inside string values), trailing commas, or odd escapes —
+    // all of which the strict shared ObjectMapper rejects. This one accepts them.
+    private final ObjectMapper lenientJson = com.fasterxml.jackson.databind.json.JsonMapper.builder()
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_TRAILING_COMMA)
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER)
+            .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .build();
 
     public LogicInjectionService(AiOrchestratorClient aiClient,
                                  RagClient ragClient,
                                  FilePatcher filePatcher,
                                  PromptBuilder promptBuilder,
                                  AdditionalFilePathResolver additionalFilePathResolver,
-                                 ObjectMapper objectMapper,
+                                 AiJsonExtractor aiJsonExtractor,
                                  @Qualifier("logicExecutor") Executor logicExecutor) {
         this.aiClient = aiClient;
         this.ragClient = ragClient;
         this.filePatcher = filePatcher;
         this.promptBuilder = promptBuilder;
         this.additionalFilePathResolver = additionalFilePathResolver;
-        this.objectMapper = objectMapper;
+        this.aiJsonExtractor = aiJsonExtractor;
         this.logicExecutor = logicExecutor;
     }
 
     @Value("${codegen.ai.logic-injection.enabled:true}")
     private boolean enabled;
 
-    @Value("${codegen.ai.model:claude-sonnet-4-5}")
+    @Value("${codegen.ai.model:gpt-oss:120b-cloud}")
     private String model;
 
     @Value("${codegen.ai.rag.top-k:5}")
@@ -170,9 +180,14 @@ public class LogicInjectionService {
             }
             AiModuleResponse parsed = parseAiResponse(content);
             if (parsed != null) return parsed;
-            log.warn("Could not parse AI response for module {} (attempt {}/{}, first 200 chars): {}",
-                    module.getServiceName(), attempt, attempts,
-                    content.substring(0, Math.min(200, content.length())));
+            // Log head AND tail: a tail that ends mid-string (no closing brace) means the reply was
+            // truncated at the model's output-token limit — raise ai.ollama.num-predict. A malformed
+            // tail that ends with "}" points at a JSON-shape issue instead.
+            int len = content.length();
+            log.warn("Could not parse AI response for module {} (attempt {}/{}, {} chars).\n  head: {}\n  tail: {}",
+                    module.getServiceName(), attempt, attempts, len,
+                    content.substring(0, Math.min(200, len)),
+                    content.substring(Math.max(0, len - 200)));
         }
         return null;
     }
@@ -335,17 +350,45 @@ public class LogicInjectionService {
             if (trimmed.endsWith("```")) trimmed = trimmed.substring(0, trimmed.length() - 3);
         }
         try {
-            return objectMapper.readValue(trimmed, AiModuleResponse.class);
+            return lenientJson.readValue(trimmed, AiModuleResponse.class);
         } catch (Exception first) {
             Matcher m = JSON_ENVELOPE.matcher(trimmed);
             if (m.find()) {
                 try {
-                    return objectMapper.readValue(m.group(), AiModuleResponse.class);
+                    return lenientJson.readValue(m.group(), AiModuleResponse.class);
                 } catch (Exception ignored) {
+                    // fall through to field-level salvage
                 }
             }
-            return null;
+            // Structural parse failed — almost always a mis-escaped quote or backslash buried in
+            // the embedded Java source. Recover the fields individually instead of discarding a
+            // response that is otherwise usable.
+            log.debug("Structural JSON parse failed ({}), attempting field-level salvage.",
+                    first.getMessage());
+            return salvageModuleResponse(trimmed);
         }
+    }
+
+    /**
+     * Field-level recovery for a reply whose overall JSON is malformed. Returns {@code null} only
+     * when not even {@code serviceImpl} can be read — otherwise the recovered files are returned
+     * and each is still validated by {@code FilePatcher} before anything is written.
+     */
+    private AiModuleResponse salvageModuleResponse(String raw) {
+        String serviceImpl = aiJsonExtractor.stringField(raw, "serviceImpl").orElse(null);
+        if (serviceImpl == null) return null;
+        AiModuleResponse recovered = AiModuleResponse.builder()
+                .serviceImpl(serviceImpl)
+                .repository(aiJsonExtractor.stringField(raw, "repository").orElse(null))
+                .controller(aiJsonExtractor.stringField(raw, "controller").orElse(null))
+                .additionalFiles(aiJsonExtractor.stringMapField(raw, "additionalFiles"))
+                .notes(aiJsonExtractor.stringField(raw, "notes").orElse(null))
+                .build();
+        log.info("Salvaged malformed AI JSON: serviceImpl={} chars, repository={}, controller={}, additionalFiles={}",
+                serviceImpl.length(),
+                recovered.getRepository() != null, recovered.getController() != null,
+                recovered.getAdditionalFiles().size());
+        return recovered;
     }
 
     // ── PCSF lookups ───────────────────────────────────────────────────────

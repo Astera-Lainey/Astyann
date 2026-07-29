@@ -29,6 +29,7 @@ import afb.astyann.codegeneration.exception.PcsfNotApprovedException;
 import afb.astyann.codegeneration.repository.CodeVersionArchiveRepository;
 import afb.astyann.codegeneration.repository.GeneratedCodeRepository;
 import afb.astyann.codegeneration.service.logic.AdditionalFilePathResolver;
+import afb.astyann.codegeneration.service.logic.AiJsonExtractor;
 import afb.astyann.codegeneration.service.logic.FilePatcher;
 import afb.astyann.codegeneration.service.logic.LogicInjectionService;
 import afb.astyann.codegeneration.service.logic.MavenRunner;
@@ -80,7 +81,15 @@ public class CodeGenerationService {
     private static final Pattern PACKAGE_DECL =
             Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
 
-    private final ObjectMapper objectMapper;
+    // Tolerant reader for model output (unescaped control chars / trailing commas are common in
+    // LLM JSON). Initialized inline so Lombok's @RequiredArgsConstructor does not treat it as a
+    // dependency.
+    private final ObjectMapper objectMapper = com.fasterxml.jackson.databind.json.JsonMapper.builder()
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_TRAILING_COMMA)
+            .enable(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER)
+            .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .build();
 
     private final GeneratedCodeRepository repository;
     private final CodeVersionArchiveRepository archiveRepository;
@@ -99,11 +108,12 @@ public class CodeGenerationService {
     private final TsFilePatcher tsFilePatcher;
     private final PromptBuilder promptBuilder;
     private final AdditionalFilePathResolver additionalFilePathResolver;
+    private final AiJsonExtractor aiJsonExtractor;
 
     @Qualifier("codeExecutor")
     private final Executor codeExecutor;
 
-    @Value("${codegen.ai.model:claude-sonnet-4-5}")
+    @Value("${codegen.ai.model:gpt-oss:120b-cloud}")
     private String aiModel;
 
     @Value("${codegen.validate.compile.enabled:true}")
@@ -975,7 +985,17 @@ public class CodeGenerationService {
                 return objectMapper.readValue(m.group(), AiCompileFixResponse.class);
             }
         } catch (Exception ex) {
-            log.debug("Compile-fix reply was not JSON (will treat as raw Java): {}", ex.getMessage());
+            log.debug("Compile-fix reply was not valid JSON ({}), attempting field-level salvage.",
+                    ex.getMessage());
+            // Same failure mode as logic injection: a mis-escaped character inside the embedded
+            // Java source breaks the document. Recover the fields individually.
+            String fixedSource = aiJsonExtractor.stringField(trimmed, "fixedSource").orElse(null);
+            if (fixedSource != null) {
+                return AiCompileFixResponse.builder()
+                        .fixedSource(fixedSource)
+                        .additionalFiles(aiJsonExtractor.stringMapField(trimmed, "additionalFiles"))
+                        .build();
+            }
         }
         return null;
     }
