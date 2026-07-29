@@ -22,6 +22,10 @@ public class OllamaProvider implements AIProvider {
     @Value("${spring.ai.ollama.chat.options.model:minimax-m3:cloud}")
     private String modelName;
 
+    /** Output-token ceiling ({@code numPredict}) used when the caller did not set one. */
+    @Value("${ai.ollama.num-predict:16384}")
+    private int defaultNumPredict;
+
     public OllamaProvider(OllamaChatModel chatModel) {
         this.chatModel = chatModel;
     }
@@ -39,15 +43,33 @@ public class OllamaProvider implements AIProvider {
         }
         messages.add(new UserMessage(prompt));
 
-        int maxTokens = config.getMaxTokens() > 0 ? config.getMaxTokens() : 4096;
+        int maxTokens = config.getMaxTokens() > 0 ? config.getMaxTokens() : defaultNumPredict;
         Prompt p = new Prompt(messages, OllamaChatOptions.builder()
                 .model(effectiveModel)
                 .numPredict(maxTokens)
                 .build());
 
         var generation = chatModel.call(p).getResult();
-        if (generation == null || generation.getOutput() == null) return null;
-        return generation.getOutput().getText();
+        if (generation == null || generation.getOutput() == null) {
+            log.warn("Ollama model={} returned no generation (numPredict={})", effectiveModel, maxTokens);
+            return null;
+        }
+        String text = generation.getOutput().getText();
+        String finishReason = generation.getMetadata() != null
+                ? generation.getMetadata().getFinishReason() : null;
+        if (text == null || text.isBlank()) {
+            // Empty output usually means the token budget was consumed before a final answer was
+            // emitted — common with reasoning models. finishReason ("length" vs "stop") tells which:
+            //  - "length": raise ai.ollama.num-predict, OR use a lighter/non-reasoning model.
+            //  - "stop" with empty text: the model produced only reasoning; try a code-focused model.
+            log.warn("Ollama model={} returned EMPTY text (finishReason={}, numPredict={}). "
+                    + "Raise ai.ollama.num-predict or switch to a code-focused model.",
+                    effectiveModel, finishReason, maxTokens);
+        } else {
+            log.debug("Ollama model={} produced {} chars (finishReason={}, numPredict={})",
+                    effectiveModel, text.length(), finishReason, maxTokens);
+        }
+        return text;
     }
 
     @Override

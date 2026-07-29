@@ -43,6 +43,10 @@ public class AIServiceImpl implements IAIService {
     private final DocumentParserService   documentParserService;
     private final ObjectMapper            objectMapper;
 
+    /** Output-token ceiling for direct inference (code generation needs a large budget). */
+    @org.springframework.beans.factory.annotation.Value("${ai.ollama.num-predict:16384}")
+    private int inferMaxTokens;
+
     // ── Analyze Project Document ──────────────────────────────────────────────
 
     @Override
@@ -120,7 +124,7 @@ public class AIServiceImpl implements IAIService {
         log.debug("Direct inference model={}", model);
         ProviderConfig config = ProviderConfig.builder()
                 .systemPrompt(systemPrompt)
-                .maxTokens(16384)
+                .maxTokens(inferMaxTokens)
                 .modelOverride(model)
                 .build();
         return ollamaProvider.complete(userPrompt, config);
