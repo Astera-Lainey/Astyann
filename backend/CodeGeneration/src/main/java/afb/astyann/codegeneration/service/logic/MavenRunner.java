@@ -102,6 +102,81 @@ public class MavenRunner {
         return new CompileResult(exit, output);
     }
 
+    /**
+     * Runs {@code mvn test} against the generated project. Uses the same command resolution as
+     * {@link #compile(Path)}; {@code -DfailIfNoTests=false} keeps a project without tests from
+     * failing the run outright.
+     */
+    public CompileResult test(Path projectDir) throws IOException, InterruptedException {
+        String cmd = findWorkingCommand(projectDir).orElseThrow(() -> new IOException(
+                "No usable Maven command found. Tried: " + describeCandidates(projectDir)));
+
+        List<String> argv = new ArrayList<>();
+        argv.add(cmd);
+        argv.add("--batch-mode");
+        argv.add("-Dstyle.color=never");
+        argv.add("-DfailIfNoTests=false");
+        argv.add("test");
+
+        ProcessBuilder pb = new ProcessBuilder(argv)
+                .directory(projectDir.toFile())
+                .redirectErrorStream(true);
+        Process process = pb.start();
+        String output;
+        try (var in = process.getInputStream()) {
+            output = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        boolean finished = process.waitFor(15, TimeUnit.MINUTES);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new IOException("mvn test timed out after 15 minutes");
+        }
+        int exit = process.exitValue();
+        if (log.isDebugEnabled()) log.debug("mvn test output ({} bytes):\n{}", output.length(), output);
+        if (exit != 0) log.warn("mvn test failed (exit={}). Last {} lines:\n{}",
+                exit, MAX_TAIL_LINES, tail(output, MAX_TAIL_LINES));
+        return new CompileResult(exit, output);
+    }
+
+    /** Surefire's roll-up line, e.g. {@code Tests run: 7, Failures: 1, Errors: 0, Skipped: 0}. */
+    private static final Pattern TEST_SUMMARY = Pattern.compile(
+            "Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+),\\s*Skipped:\\s*(\\d+)");
+
+    /** Individual failure rows Surefire prints under {@code [ERROR] Failures:} / {@code Errors:}. */
+    private static final Pattern TEST_FAILURE_ROW = Pattern.compile(
+            "^\\[ERROR]\\s{2,}(\\S+?\\.\\S+?)\\s*[:»](.*)");
+
+    /**
+     * Extracts the totals from a {@code mvn test} run. Surefire prints one summary line per module
+     * plus a final roll-up; the LAST match is the roll-up, so that is the one returned.
+     */
+    public TestSummary parseTestSummary(String output) {
+        if (output == null || output.isBlank()) return new TestSummary(0, 0, 0, 0, List.of());
+        Matcher m = TEST_SUMMARY.matcher(output);
+        int run = 0, failures = 0, errors = 0, skipped = 0;
+        boolean found = false;
+        while (m.find()) {
+            run = Integer.parseInt(m.group(1));
+            failures = Integer.parseInt(m.group(2));
+            errors = Integer.parseInt(m.group(3));
+            skipped = Integer.parseInt(m.group(4));
+            found = true;
+        }
+        if (!found) return new TestSummary(0, 0, 0, 0, List.of());
+
+        List<String> failed = new ArrayList<>();
+        for (String line : output.split("\\r?\\n")) {
+            Matcher f = TEST_FAILURE_ROW.matcher(line.trim());
+            if (f.matches()) {
+                String name = f.group(1);
+                String detail = f.group(2).trim();
+                String row = detail.isEmpty() ? name : name + " — " + detail;
+                if (!failed.contains(row)) failed.add(row);
+            }
+        }
+        return new TestSummary(run, failures, errors, skipped, failed);
+    }
+
     public List<CompileErrorRow> parseErrors(String output) {
         List<CompileErrorRow> out = new ArrayList<>();
         if (output == null || output.isBlank()) return out;
@@ -314,6 +389,12 @@ public class MavenRunner {
 
     public record CompileResult(int exitCode, String output) {
         public boolean success() { return exitCode == 0; }
+    }
+
+    /** Totals from a {@code mvn test} run, plus the names of the tests that did not pass. */
+    public record TestSummary(int run, int failures, int errors, int skipped, List<String> failedTests) {
+        public boolean allPassed() { return failures == 0 && errors == 0; }
+        public int notPassed() { return failures + errors; }
     }
 
     public record CompileErrorRow(Path file, int line, int col, String message) {

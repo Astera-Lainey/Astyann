@@ -38,6 +38,13 @@ public class AiModuleResponse {
     @Builder.Default
     private Map<String, String> additionalFiles = new HashMap<>();
 
+    /**
+     * Optional JUnit 5 test class asserting the module's business rules, written to
+     * {@code src/test/java/…/service/impl/<ServiceImpl>BusinessRulesTest.java}. Only requested
+     * when {@code codegen.ai.logic-injection.generate-tests} is enabled.
+     */
+    private String testSource;
+
     /** Short human-readable summary of what the AI implemented. Logged for debugging. */
     private String notes;
 }

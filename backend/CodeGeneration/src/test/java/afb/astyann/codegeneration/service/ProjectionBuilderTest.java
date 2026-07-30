@@ -3,7 +3,9 @@ package afb.astyann.codegeneration.service;
 import afb.astyann.codegeneration.domain.pcsf.FieldValue;
 import afb.astyann.codegeneration.domain.pcsf.Pcsf;
 import afb.astyann.codegeneration.domain.pcsf.PcsfAttribute;
+import afb.astyann.codegeneration.domain.pcsf.PcsfConstraints;
 import afb.astyann.codegeneration.domain.pcsf.PcsfEntity;
+import afb.astyann.codegeneration.domain.projection.BackendField;
 import afb.astyann.codegeneration.domain.pcsf.PcsfModule;
 import afb.astyann.codegeneration.domain.pcsf.PcsfProject;
 import afb.astyann.codegeneration.domain.pcsf.PcsfUseCase;
@@ -71,6 +73,76 @@ class ProjectionBuilderTest {
         assertThat(module.getRequestMapping()).isEqualTo("/api/v1/products");
         // No crudOperations specified -> default CRUD -> at least the 5 standard endpoints
         assertThat(module.getEndpoints()).isNotEmpty();
+    }
+
+    @Test
+    void derivesSampleValuesPerTypeAndMarksEntityTestable() {
+        PcsfEntity e = PcsfEntity.builder().id("e1").name(fv("Thing"))
+                .attributes(List.of(
+                        PcsfAttribute.builder().name(fv("label")).javaType(fv("String")).build(),
+                        PcsfAttribute.builder().name(fv("count")).javaType(fv("Integer")).build(),
+                        PcsfAttribute.builder().name(fv("price")).javaType(fv("BigDecimal")).build(),
+                        PcsfAttribute.builder().name(fv("active")).javaType(fv("Boolean")).build(),
+                        PcsfAttribute.builder().name(fv("due")).javaType(fv("LocalDate")).build()))
+                .build();
+        Pcsf pcsf = Pcsf.builder()
+                .project(PcsfProject.builder().name(fv("P")).build())
+                .entities(List.of(e))
+                .modules(List.of(PcsfModule.builder().id("m1").name(fv("Things")).build()))
+                .build();
+
+        BackendEntity built = builder.buildBackendProjection(pcsf).getEntities().get(0);
+
+        assertThat(built.isTestable()).isTrue();
+        assertThat(built.getFields()).extracting(BackendField::getSampleValue)
+                .containsExactly("\"sample\"", "1", "new java.math.BigDecimal(\"1.00\")",
+                        "true", "java.time.LocalDate.now()");
+    }
+
+    @Test
+    void unknownRequiredTypeMakesEntityNotTestable() {
+        // An AI-introduced enum: we cannot construct a value, so a required field of that type
+        // must disable the persist round-trip test rather than emit code that won't compile.
+        PcsfConstraints required = PcsfConstraints.builder()
+                .required(FieldValue.<Boolean>builder().value(true).build()).build();
+        PcsfEntity e = PcsfEntity.builder().id("e1").name(fv("Thing"))
+                .attributes(List.of(
+                        PcsfAttribute.builder().name(fv("status")).javaType(fv("OrderStatus"))
+                                .constraints(required).build()))
+                .build();
+        Pcsf pcsf = Pcsf.builder()
+                .project(PcsfProject.builder().name(fv("P")).build())
+                .entities(List.of(e))
+                .modules(List.of(PcsfModule.builder().id("m1").name(fv("Things")).build()))
+                .build();
+
+        BackendEntity built = builder.buildBackendProjection(pcsf).getEntities().get(0);
+
+        assertThat(built.getFields().get(0).getSampleValue()).isNull();
+        assertThat(built.isTestable()).isFalse();
+    }
+
+    @Test
+    void sampleTextRespectsSizeBounds() {
+        PcsfConstraints bounds = PcsfConstraints.builder()
+                .minLength(FieldValue.<Integer>builder().value(10).build())
+                .maxLength(FieldValue.<Integer>builder().value(12).build()).build();
+        PcsfEntity e = PcsfEntity.builder().id("e1").name(fv("Thing"))
+                .attributes(List.of(PcsfAttribute.builder().name(fv("code")).javaType(fv("String"))
+                        .constraints(bounds).build()))
+                .build();
+        Pcsf pcsf = Pcsf.builder()
+                .project(PcsfProject.builder().name(fv("P")).build())
+                .entities(List.of(e))
+                .modules(List.of(PcsfModule.builder().id("m1").name(fv("Things")).build()))
+                .build();
+
+        String sample = builder.buildBackendProjection(pcsf).getEntities().get(0)
+                .getFields().get(0).getSampleValue();
+
+        // Quoted literal whose content satisfies min=10 and max=12.
+        String content = sample.substring(1, sample.length() - 1);
+        assertThat(content.length()).isBetween(10, 12);
     }
 
     @Test

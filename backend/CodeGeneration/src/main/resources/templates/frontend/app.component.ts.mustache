@@ -1,0 +1,42 @@
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { SidebarComponent } from './layout/sidebar/sidebar.component';
+
+/**
+ * Application shell. Renders the sidebar around the routed view for authenticated screens and
+ * bare content for the login page.
+ */
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterOutlet, SidebarComponent],
+  template: `
+    @if (showShell()) {
+      <div class="ast-layout">
+        <app-sidebar></app-sidebar>
+        <main class="ast-layout__content">
+          <router-outlet></router-outlet>
+        </main>
+      </div>
+    } @else {
+      <router-outlet></router-outlet>
+    }
+  `,
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class AppComponent {
+
+  private readonly router = inject(Router);
+
+  /** False on the login route, where the navigation shell should not be shown. */
+  readonly showShell = signal(false);
+
+  constructor() {
+    // The root component lives for the lifetime of the app, so this subscription needs no teardown.
+    this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.showShell.set(!event.urlAfterRedirects.startsWith('/login'));
+      }
+    });
+  }
+}

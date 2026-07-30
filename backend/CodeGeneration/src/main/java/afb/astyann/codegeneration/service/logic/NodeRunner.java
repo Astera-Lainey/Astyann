@@ -34,6 +34,14 @@ public class NodeRunner {
     private static final Pattern TS_ERROR_LINE = Pattern.compile(
             "^(.+?\\.ts)\\((\\d+),(\\d+)\\):\\s*error\\s+(TS\\d+):\\s*(.*)");
 
+    /** Angular/esbuild header line: {@code ✘ [ERROR] NG8001: 'x' is not a known element}. */
+    private static final Pattern NG_ERROR_HEADER = Pattern.compile(
+            "^(?:✘\\s*)?\\[ERROR]\\s*(NG\\d+|TS\\d+)?:?\\s*(.*)");
+
+    /** The indented location line esbuild prints below a header: {@code src/app/x.html:6:8:}. */
+    private static final Pattern NG_ERROR_LOCATION = Pattern.compile(
+            "^(\\S.*?\\.(?:ts|html)):(\\d+):(\\d+):?$");
+
     @Value("${codegen.validate.frontend.npm-command:}")
     private String npmCommandOverride;
 
@@ -67,18 +75,65 @@ public class NodeRunner {
         return run(projectDir, List.of(npx, "tsc", "--noEmit", "-p", tsconfig), 10);
     }
 
+    /**
+     * Runs the real Angular build ({@code ng build --configuration development}).
+     *
+     * <p>Preferred over {@link #typeCheck(Path)} whenever {@code angular.json} exists, because
+     * {@code tsc} only checks TypeScript — it never compiles component templates, so an invalid
+     * binding or an unknown element passes silently. The development configuration skips
+     * optimization and budget checks, which are irrelevant to correctness.
+     */
+    public NodeResult build(Path projectDir) throws IOException, InterruptedException {
+        String npx = resolveNpx(projectDir).orElseThrow(() ->
+                new IOException("No usable npx command found. Tried: " + describeNpx(projectDir)));
+        return run(projectDir, List.of(npx, "ng", "build", "--configuration", "development"), 15);
+    }
+
+    /** Whether the project carries an Angular CLI workspace file. */
+    public boolean hasAngularWorkspace(Path projectDir) {
+        return projectDir != null && Files.exists(projectDir.resolve("angular.json"));
+    }
+
+    /**
+     * Parses both error formats the toolchain produces: plain {@code tsc}
+     * ({@code file(line,col): error TSxxxx: msg}) and the Angular/esbuild build
+     * ({@code ✘ [ERROR] NGxxxx: msg} followed by an indented {@code file:line:col:} line).
+     */
     public List<TsErrorRow> parseErrors(String output) {
         List<TsErrorRow> out = new ArrayList<>();
         if (output == null || output.isBlank()) return out;
-        for (String raw : output.split("\\r?\\n")) {
-            Matcher m = TS_ERROR_LINE.matcher(raw.trim());
-            if (m.matches()) {
+        String[] lines = output.split("\\r?\\n");
+        for (int i = 0; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
+
+            Matcher tsc = TS_ERROR_LINE.matcher(trimmed);
+            if (tsc.matches()) {
                 out.add(new TsErrorRow(
-                        m.group(1).replace('\\', '/'),
-                        Integer.parseInt(m.group(2)),
-                        Integer.parseInt(m.group(3)),
-                        m.group(4),
-                        m.group(5).trim()));
+                        tsc.group(1).replace('\\', '/'),
+                        Integer.parseInt(tsc.group(2)),
+                        Integer.parseInt(tsc.group(3)),
+                        tsc.group(4),
+                        tsc.group(5).trim()));
+                continue;
+            }
+
+            Matcher header = NG_ERROR_HEADER.matcher(trimmed);
+            if (header.matches()) {
+                String code = header.group(1) != null ? header.group(1) : "NG";
+                String message = header.group(2).replace("[plugin angular-compiler]", "").trim();
+                // The location follows within the next few lines.
+                for (int j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+                    Matcher loc = NG_ERROR_LOCATION.matcher(lines[j].trim());
+                    if (loc.matches()) {
+                        out.add(new TsErrorRow(
+                                loc.group(1).replace('\\', '/'),
+                                Integer.parseInt(loc.group(2)),
+                                Integer.parseInt(loc.group(3)),
+                                code, message));
+                        i = j;
+                        break;
+                    }
+                }
             }
         }
         return out;

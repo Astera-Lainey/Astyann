@@ -398,17 +398,25 @@ public class ProjectionBuilder {
             if (isBlank(name) || RESERVED_ATTRIBUTE_NAMES.contains(name.toLowerCase(Locale.ROOT))) continue;
 
             PcsfConstraints c = a.getConstraints();
+            String javaType = mapJavaType(fv(a.getJavaType()));
+            Integer minLength = c != null ? fvInt(c.getMinLength()) : null;
+            Integer maxLength = c != null ? fvInt(c.getMaxLength()) : null;
             fields.add(BackendField.builder()
                     .name(name)
                     .columnName(coalesce(fv(a.getColumnName()), toSnakeCase(name)))
-                    .javaType(mapJavaType(fv(a.getJavaType())))
+                    .javaType(javaType)
                     .required(c != null && fvBool(c.getRequired(), false))
                     .unique(c != null && fvBool(c.getUnique(), false))
-                    .minLength(c != null ? fvInt(c.getMinLength()) : null)
-                    .maxLength(c != null ? fvInt(c.getMaxLength()) : null)
+                    .minLength(minLength)
+                    .maxLength(maxLength)
                     .id(false)
+                    .sampleValue(sampleValueFor(javaType, minLength, maxLength))
                     .build());
         }
+
+        // An entity is only persist-testable when every NOT NULL field can be given a value.
+        boolean testable = fields.stream()
+                .noneMatch(f -> f.isRequired() && f.getSampleValue() == null);
 
         String idStrategy = !isBlank(e.getPrimaryKeyStrategy()) ? e.getPrimaryKeyStrategy().toUpperCase(Locale.ROOT) : "UUID";
 
@@ -420,7 +428,43 @@ public class ProjectionBuilder {
                 .idStrategy(idStrategy)
                 .fields(fields)
                 .relationships(new ArrayList<>())
+                .testable(testable)
                 .build();
+    }
+
+    /**
+     * Builds a compilable Java literal/expression for {@code javaType}, or {@code null} when the
+     * type is not one we recognise (an AI-introduced enum, for instance). String values are sized
+     * to satisfy any {@code @Size(min, max)} the entity declares, so generated persist tests are
+     * not rejected by bean validation. Types are fully qualified to keep the templates free of
+     * import bookkeeping.
+     */
+    private String sampleValueFor(String javaType, Integer minLength, Integer maxLength) {
+        if (isBlank(javaType)) return null;
+        return switch (javaType) {
+            case "String" -> '"' + sizedSampleText(minLength, maxLength) + '"';
+            case "Integer" -> "1";
+            case "Long" -> "1L";
+            case "Double", "Float" -> "1.0";
+            case "BigDecimal" -> "new java.math.BigDecimal(\"1.00\")";
+            case "Boolean" -> "true";
+            case "LocalDate" -> "java.time.LocalDate.now()";
+            case "LocalDateTime" -> "java.time.LocalDateTime.now()";
+            case "UUID" -> "java.util.UUID.randomUUID()";
+            default -> null; // unknown/custom type — cannot construct safely
+        };
+    }
+
+    /** Sample text padded to {@code minLength} and clipped to {@code maxLength}. */
+    private String sizedSampleText(Integer minLength, Integer maxLength) {
+        String base = "sample";
+        if (minLength != null && minLength > base.length()) {
+            base = base + "x".repeat(minLength - base.length());
+        }
+        if (maxLength != null && maxLength > 0 && maxLength < base.length()) {
+            base = base.substring(0, maxLength);
+        }
+        return base;
     }
 
     private void applyRelationships(Pcsf pcsf, Map<String, BackendEntity> entitiesById,

@@ -5,6 +5,7 @@ import { {{module.serviceName}} } from '../../../core/services/{{module.serviceF
 import { {{module.entityClassName}} } from '../../../core/models/{{module.entityFileName}}.model';
 import { AstCardComponent } from '../../../shared/ui/ast-card/ast-card.component';
 import { AstTableComponent } from '../../../shared/ui/ast-table/ast-table.component';
+import { AstTableActionDirective } from '../../../shared/ui/ast-table/ast-table-action.directive';
 import { AstButtonComponent } from '../../../shared/ui/ast-button/ast-button.component';
 import { AstSpinnerComponent } from '../../../shared/ui/ast-spinner/ast-spinner.component';
 import { AstEmptyStateComponent } from '../../../shared/ui/ast-empty-state/ast-empty-state.component';
@@ -12,7 +13,7 @@ import { AstEmptyStateComponent } from '../../../shared/ui/ast-empty-state/ast-e
 @Component({
   selector: 'app-{{module.componentPrefix}}-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, AstCardComponent, AstTableComponent, AstButtonComponent, AstSpinnerComponent, AstEmptyStateComponent],
+  imports: [CommonModule, RouterLink, AstCardComponent, AstTableComponent, AstTableActionDirective, AstButtonComponent, AstSpinnerComponent, AstEmptyStateComponent],
   templateUrl: './{{module.componentPrefix}}-list.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -47,7 +48,7 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
         this.currentPage.set(res.page);
         this.loading.set(false);
       },
-      error: err => {
+      error: (err: any) => {
         this.error.set(err?.message ?? 'Failed to load {{module.entityInstanceName}} list.');
         this.loading.set(false);
       }
@@ -59,7 +60,7 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
     if (!confirm('Delete this {{module.entityInstanceName}}?')) return;
     this.service.delete(id).subscribe({
       next: () => this.load(this.currentPage()),
-      error: err => this.error.set(err?.message ?? 'Delete failed.')
+      error: (err: any) => this.error.set(err?.message ?? 'Delete failed.')
     });
   }
 {{/module.hasDelete}}

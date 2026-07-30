@@ -92,6 +92,9 @@ public class LogicInjectionService {
     @Value("${codegen.ai.logic-injection.max-attempts:2}")
     private int maxAiAttempts;
 
+    @Value("${codegen.ai.logic-injection.generate-tests:false}")
+    private boolean generateTests;
+
     /**
      * Outcome of a whole-layer injection pass, persisted onto {@code GeneratedCode} so callers
      * and {@code validate()} can tell a logic-complete backend from a still-stubbed one.
@@ -120,6 +123,7 @@ public class LogicInjectionService {
         String packagePath = projection.getProjectInfo().getPackagePath();
         Path srcMainJava = backendRoot.resolve("src/main/java");
         Path javaRoot = srcMainJava.resolve(packagePath);
+        Path testJavaRoot = backendRoot.resolve("src/test/java").resolve(packagePath);
         String packageHint = packagePath == null ? null : packagePath.replace('/', '.');
         int total = projection.getModules().size();
 
@@ -131,8 +135,8 @@ public class LogicInjectionService {
         List<CompletableFuture<Boolean>> futures = projection.getModules().stream()
                 .map(module -> CompletableFuture.supplyAsync(() -> {
                     try {
-                        return injectOneModule(projectId, javaRoot, srcMainJava, packageHint,
-                                module, projection, pcsf);
+                        return injectOneModule(projectId, javaRoot, srcMainJava, testJavaRoot,
+                                packageHint, module, projection, pcsf);
                     } catch (Exception ex) {
                         log.warn("Logic injection failed for module {} (entity {}): {}",
                                 module.getServiceName(), module.getEntityClassName(), ex.getMessage(), ex);
@@ -166,7 +170,9 @@ public class LogicInjectionService {
             String content;
             try {
                 var response = aiClient.infer(new AiOrchestratorClient.InferenceRequest(
-                        model, promptBuilder.systemPrompt(), userPrompt));
+                        model,
+                        generateTests ? promptBuilder.systemPromptWithTests() : promptBuilder.systemPrompt(),
+                        userPrompt));
                 content = response == null ? null : response.content();
             } catch (Exception ex) {
                 log.warn("AI Orchestrator call failed for module {} on attempt {}/{}: {}",
@@ -208,6 +214,7 @@ public class LogicInjectionService {
     private boolean injectOneModule(UUID projectId,
                                     Path javaRoot,
                                     Path srcMainJava,
+                                    Path testJavaRoot,
                                     String packageHint,
                                     BackendModule module,
                                     BackendProjection projection,
@@ -271,6 +278,25 @@ public class LogicInjectionService {
             if (filePatcher.replaceEntireFile(controllerFile, aiResponse.getController())) {
                 anyWritten = true;
                 log.debug("Patched {}", controllerFile.getFileName());
+            }
+        }
+
+        // ── Business-rule test class (opt-in via codegen.ai.logic-injection.generate-tests) ──
+        // Written only if it parses as Java; a malformed or missing test is skipped silently so a
+        // bad test can never break the build for an otherwise-good implementation.
+        if (generateTests && aiResponse.getTestSource() != null && !aiResponse.getTestSource().isBlank()) {
+            Path testFile = testJavaRoot.resolve("service/impl")
+                    .resolve(module.getServiceImplName() + "BusinessRulesTest.java");
+            try {
+                if (filePatcher.replaceEntireFile(testFile, aiResponse.getTestSource())) {
+                    log.info("[{}] wrote business-rule test {}",
+                            module.getServiceName(), testFile.getFileName());
+                } else {
+                    log.warn("[{}] AI business-rule test did not parse — skipped.", module.getServiceName());
+                }
+            } catch (Exception ex) {
+                log.warn("[{}] could not write business-rule test: {}",
+                        module.getServiceName(), ex.getMessage());
             }
         }
 
@@ -382,6 +408,7 @@ public class LogicInjectionService {
                 .repository(aiJsonExtractor.stringField(raw, "repository").orElse(null))
                 .controller(aiJsonExtractor.stringField(raw, "controller").orElse(null))
                 .additionalFiles(aiJsonExtractor.stringMapField(raw, "additionalFiles"))
+                .testSource(aiJsonExtractor.stringField(raw, "testSource").orElse(null))
                 .notes(aiJsonExtractor.stringField(raw, "notes").orElse(null))
                 .build();
         log.info("Salvaged malformed AI JSON: serviceImpl={} chars, repository={}, controller={}, additionalFiles={}",

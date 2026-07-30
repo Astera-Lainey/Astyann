@@ -155,6 +155,7 @@ a:hover { text-decoration: underline; }
 .ast-table th, .ast-table td { padding: var(--space-3); text-align: left; border-bottom: 1px solid var(--color-border); }
 .ast-table th { color: var(--color-muted); font-weight: var(--font-weight-medium); font-size: var(--font-size-sm); }
 .ast-table tr:hover { background: var(--color-neutral); }
+.ast-table__actions { display: flex; gap: var(--space-2); justify-content: flex-end; white-space: nowrap; }
 
 .ast-sidebar {
   display: flex; flex-direction: column; gap: var(--space-4);

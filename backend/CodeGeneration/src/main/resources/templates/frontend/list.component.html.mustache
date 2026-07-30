@@ -18,10 +18,10 @@
     <ast-card>
       <ast-table [columns]="columns" [rows]="items()">
 [[#module.hasUpdate]]
-        <button *tableAction="let row" class="ast-btn ast-btn--ghost" [routerLink]="['/[[module.componentPrefix]]', row.id, 'edit']">Edit</button>
+        <button *astTableAction="let row" class="ast-btn ast-btn--ghost" [routerLink]="['/[[module.componentPrefix]]', row.id, 'edit']">Edit</button>
 [[/module.hasUpdate]]
 [[#module.hasDelete]]
-        <button *tableAction="let row" class="ast-btn ast-btn--danger ast-btn--sm" (click)="onDelete(row.id)">Delete</button>
+        <button *astTableAction="let row" class="ast-btn ast-btn--danger ast-btn--sm" (click)="onDelete(row.id)">Delete</button>
 [[/module.hasDelete]]
       </ast-table>
     </ast-card>

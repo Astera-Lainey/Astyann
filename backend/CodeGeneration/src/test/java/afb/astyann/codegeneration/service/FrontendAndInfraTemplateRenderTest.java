@@ -104,7 +104,11 @@ class FrontendAndInfraTemplateRenderTest {
         String loginHtml = mustache.render("frontend/login.component.html.mustache", base);
         assertThat(loginHtml).contains("Sign in to Inventory").contains("{{error()}}");
         String sidebarTs = mustache.render("frontend/sidebar.component.ts.mustache", base);
-        assertThat(sidebarTs).contains("SidebarComponent").contains("Products");
+        assertThat(sidebarTs).contains("SidebarComponent").contains("Products")
+                // <iconify-icon> is a web component: without the schema and the registering
+                // side-effect import, `ng build` rejects it as an unknown element.
+                .contains("CUSTOM_ELEMENTS_SCHEMA")
+                .contains("import 'iconify-icon';");
         String sidebarHtml = mustache.render("frontend/sidebar.component.html.mustache", base);
         assertThat(sidebarHtml).contains("Inventory").contains("{{item.label}}");
         assertThat(mustache.render("frontend/jwt.interceptor.ts.mustache", base))
@@ -113,6 +117,121 @@ class FrontendAndInfraTemplateRenderTest {
                 .contains("authGuard");
         assertThat(freeMarker.render("frontend/styles.scss.ftl", base))
                 .contains("--color-primary: #CC0000").contains(".ast-btn ");
+
+        // ── Angular CLI scaffold ──
+        String angularJson = mustache.render("frontend/angular.json.mustache", base);
+        assertThat(angularJson)
+                .contains("\"inventory-web\":")
+                .contains("@angular-devkit/build-angular:application")
+                .contains("\"browser\": \"src/main.ts\"")
+                .contains("\"tsConfig\": \"tsconfig.app.json\"")
+                // The generator writes styles to src/styles/styles.scss, not src/styles.scss.
+                .contains("\"src/styles/styles.scss\"");
+
+        assertThat(mustache.render("frontend/tsconfig.json.mustache", base))
+                .contains("\"strict\": true").contains("\"strictTemplates\": true");
+        assertThat(mustache.render("frontend/tsconfig.app.json.mustache", base))
+                .contains("\"extends\": \"./tsconfig.json\"").contains("src/main.ts");
+        assertThat(mustache.render("frontend/index.html.mustache", base))
+                .contains("<app-root></app-root>").contains("<title>Inventory</title>");
+        assertThat(mustache.render("frontend/main.ts.mustache", base))
+                .contains("bootstrapApplication(AppComponent, appConfig)");
+        assertThat(mustache.render("frontend/app.component.ts.mustache", base))
+                .contains("class AppComponent")
+                .contains("selector: 'app-root'")
+                .contains("<router-outlet></router-outlet>")
+                .contains("SidebarComponent");
+    }
+
+    /**
+     * Pins the four defects that {@code ng build} caught on the first real run of the frontend
+     * validation loop. Each is a template bug that compiles as text but breaks the Angular build.
+     */
+    @Test
+    void frontend_templates_avoid_the_ng_build_failures() {
+        FrontendProjectInfo project = FrontendProjectInfo.builder()
+                .appName("Inventory").angularProjectName("inventory-web")
+                .apiBaseUrl("http://localhost:8080/api/v1").defaultRoute("/product").build();
+        FrontendEntity product = FrontendEntity.builder()
+                .className("Product").fileName("product").instanceName("product")
+                .fields(List.of(FrontendField.builder().name("name").tsType("string")
+                        .label("Name").required(true).build()))
+                .build();
+
+        Map<String, Object> base = new HashMap<>();
+        base.put("project", project);
+        base.put("entities", List.of(product));
+        base.put("navigation", List.of());
+
+        // (1) NG8116: the row-action directive must exist and be imported, and (4) the error
+        // callback must be explicitly typed under `strict`.
+        FrontendModule fullCrud = FrontendModule.builder()
+                .serviceName("ProductService").serviceFileName("product").componentPrefix("product")
+                .entityClassName("Product").entityFileName("product").entityInstanceName("product")
+                .apiPath("/api/v1/product")
+                .hasCreate(true).hasRead(true).hasUpdate(true).hasDelete(true)
+                .endpoints(List.of()).listColumns(List.of()).formFields(List.of())
+                .build();
+        Map<String, Object> fullModel = new HashMap<>(base);
+        fullModel.put("module", fullCrud);
+        fullModel.put("entity", product);
+
+        String listTs = mustache.render("frontend/list.component.ts.mustache", fullModel);
+        assertThat(listTs).contains("AstTableActionDirective")
+                .contains("ast-table/ast-table-action.directive")
+                .doesNotContain("error: err =>");
+        assertThat(mustache.render("frontend/list.component.html.mustache", fullModel))
+                .contains("*astTableAction=\"let row\"")
+                .doesNotContain("*tableAction=");
+
+        String fullForm = mustache.render("frontend/form.component.ts.mustache", fullModel);
+        assertThat(fullForm).contains("this.service.update(id, value)")
+                .contains("this.service.create(value)")
+                .doesNotContain("error: err =>");
+
+        // (3) TS2339: a module without UPDATE must not reference service.update(), because the
+        // service template only emits the methods the module declares.
+        FrontendModule createOnly = FrontendModule.builder()
+                .serviceName("StockMovementsService").serviceFileName("stock-movements")
+                .componentPrefix("stock-movements").entityClassName("StockMovement")
+                .entityFileName("stock-movement").entityInstanceName("stockMovement")
+                .apiPath("/api/v1/stock-movements")
+                .hasCreate(true).hasRead(true).hasUpdate(false).hasDelete(false)
+                .endpoints(List.of()).listColumns(List.of()).formFields(List.of())
+                .build();
+        Map<String, Object> createOnlyModel = new HashMap<>(base);
+        createOnlyModel.put("module", createOnly);
+        createOnlyModel.put("entity", product);
+
+        String createOnlyForm = mustache.render("frontend/form.component.ts.mustache", createOnlyModel);
+        assertThat(createOnlyForm).doesNotContain("this.service.update(")
+                .contains("this.service.create(value)");
+
+        // (2) TS2307: login sits one level deeper than the services, so it needs four `../`.
+        assertThat(mustache.render("frontend/login.component.ts.mustache", base))
+                .contains("from '../../../../environments/environment'");
+        assertThat(mustache.render("frontend/service.ts.mustache", fullModel))
+                .contains("from '../../../environments/environment'");
+    }
+
+    @Test
+    void generated_frontend_targets_angular_21_and_the_real_iconify_package() {
+        Map<String, Object> base = new HashMap<>();
+        base.put("project", FrontendProjectInfo.builder()
+                .appName("Inventory").angularProjectName("inventory-web")
+                .apiBaseUrl("http://localhost:8080/api/v1").defaultRoute("/product").build());
+
+        String packageJson = mustache.render("frontend/package.json.mustache", base);
+
+        assertThat(packageJson)
+                .contains("\"@angular/core\": \"^21.")
+                .contains("\"typescript\": \"^5.9")
+                // The previous value (@iconify/angular ^2.0.0) does not exist on npm — the web
+                // component package is what the sidebar template actually uses.
+                .contains("\"iconify-icon\":")
+                .doesNotContain("@iconify/angular")
+                // No karma/jasmine is generated, so a "test" script would be a broken command.
+                .doesNotContain("\"test\":");
     }
 
     @Test

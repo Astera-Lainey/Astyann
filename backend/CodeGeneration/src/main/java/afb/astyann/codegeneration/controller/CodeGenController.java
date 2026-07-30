@@ -21,6 +21,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,15 +41,19 @@ public class CodeGenController {
      * until no layer is left in GENERATING to find out the outcome per layer (GENERATED or
      * FAILED).
      *
-     * <p>Body is optional: no body / empty body / {@code { "layers": [] }} generates every
-     * layer. Pass {@code { "layers": ["BACKEND"] }} to generate a single layer.
+     * <p>Layer selection is optional and can come from either the body
+     * ({@code { "layers": ["BACKEND"] }}) or the query string ({@code ?layer=BACKEND}, repeatable,
+     * or {@code ?layers=BACKEND,FRONTEND}). Specifying neither generates every layer.
      */
     @PostMapping("/{projectId}/generate")
     public ResponseEntity<ApiResponse<GenerateCodeData>> generate(
             @PathVariable String projectId,
+            @RequestParam(name = "layer", required = false) List<CodeLayer> layerParam,
+            @RequestParam(name = "layers", required = false) List<CodeLayer> layersParam,
             @RequestBody(required = false) GenerateCodeRequest body) {
         UUID id = parseId(projectId);
-        List<CodeLayer> layers = body != null ? body.getLayers() : null;
+        List<CodeLayer> layers = resolveLayers(body != null ? body.getLayers() : null,
+                layerParam, layersParam);
         List<GeneratedCodeDTO> artifacts = service.generate(id, layers).stream().map(this::toDto).toList();
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.<GenerateCodeData>builder()
@@ -82,9 +88,18 @@ public class CodeGenController {
 
     // ── Validate ────────────────────────────────────────────────────────────────
 
+    /**
+     * Validates the generated code. Pass {@code ?layer=BACKEND} (repeatable, or a comma-separated
+     * {@code ?layers=BACKEND,FRONTEND}) to validate a single layer; omit it to validate all.
+     * The response echoes {@code layersValidated} so the effective scope is never ambiguous.
+     */
     @PostMapping("/{projectId}/validate")
-    public ResponseEntity<ApiResponse<ValidationReportDTO>> validate(@PathVariable String projectId) {
-        ValidationReportDTO report = service.validate(parseId(projectId));
+    public ResponseEntity<ApiResponse<ValidationReportDTO>> validate(
+            @PathVariable String projectId,
+            @RequestParam(name = "layer", required = false) List<CodeLayer> layerParam,
+            @RequestParam(name = "layers", required = false) List<CodeLayer> layersParam) {
+        List<CodeLayer> layers = resolveLayers(null, layerParam, layersParam);
+        ValidationReportDTO report = service.validate(parseId(projectId), layers);
         return ResponseEntity.ok(ApiResponse.<ValidationReportDTO>builder()
                 .status(200).message("Validation completed.").data(report).build());
     }
@@ -94,9 +109,12 @@ public class CodeGenController {
     @PostMapping("/{projectId}/approve")
     public ResponseEntity<ApiResponse<ApproveCodeResponse>> approve(
             @PathVariable String projectId,
+            @RequestParam(name = "layer", required = false) List<CodeLayer> layerParam,
+            @RequestParam(name = "layers", required = false) List<CodeLayer> layersParam,
             @RequestBody(required = false) ApproveCodeRequest body) {
         UUID id = parseId(projectId);
-        List<CodeLayer> layers = body != null ? body.getLayers() : null;
+        List<CodeLayer> layers = resolveLayers(body != null ? body.getLayers() : null,
+                layerParam, layersParam);
         String comment = body != null ? body.getApprovalComment() : null;
         CodeGenerationService.ApproveOutcome outcome = service.approve(id, layers, comment);
         return ResponseEntity.ok(ApiResponse.<ApproveCodeResponse>builder()
@@ -132,9 +150,12 @@ public class CodeGenController {
     @PostMapping("/{projectId}/regenerate")
     public ResponseEntity<ApiResponse<GenerateCodeData>> regenerate(
             @PathVariable String projectId,
+            @RequestParam(name = "layer", required = false) List<CodeLayer> layerParam,
+            @RequestParam(name = "layers", required = false) List<CodeLayer> layersParam,
             @RequestBody(required = false) RegenerateCodeRequest body) {
         UUID id = parseId(projectId);
-        List<CodeLayer> layers = body != null ? body.getLayers() : null;
+        List<CodeLayer> layers = resolveLayers(body != null ? body.getLayers() : null,
+                layerParam, layersParam);
         CodeGenerationService.RegenerateResult result = service.regenerate(id, layers);
         List<GeneratedCodeDTO> dtos = result.layers().stream().map(this::toDto).toList();
         return ResponseEntity.status(HttpStatus.ACCEPTED)
@@ -171,6 +192,28 @@ public class CodeGenController {
                 .modulesPatched(code.getModulesPatched())
                 .stubMethodsRemaining(code.getStubMethodsRemaining())
                 .build();
+    }
+
+    /**
+     * Merges the layer selection from the request body with the {@code ?layer=} / {@code ?layers=}
+     * query parameters, de-duplicated. Returns {@code null} when nothing was specified, which the
+     * service reads as "every layer".
+     *
+     * <p>Both spellings are accepted because {@code /download} and {@code /change-request} already
+     * take a singular {@code ?layer=}; supporting only a body field on the other endpoints meant a
+     * {@code ?layer=BACKEND} query param was silently ignored and every layer was processed.
+     */
+    private List<CodeLayer> resolveLayers(List<CodeLayer> fromBody,
+                                          List<CodeLayer> layerParam,
+                                          List<CodeLayer> layersParam) {
+        List<CodeLayer> merged = new ArrayList<>();
+        for (List<CodeLayer> source : Arrays.asList(fromBody, layerParam, layersParam)) {
+            if (source == null) continue;
+            for (CodeLayer layer : source) {
+                if (layer != null && !merged.contains(layer)) merged.add(layer);
+            }
+        }
+        return merged.isEmpty() ? null : merged;
     }
 
     private UUID parseId(String rawId) {

@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, CUSTOM_ELEMENTS_SCHEMA, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+// Side-effect import: registers the <iconify-icon> custom element with the browser.
+import 'iconify-icon';
 
 interface NavItem {
   label: string;
@@ -14,7 +16,10 @@ interface NavItem {
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './sidebar.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  // <iconify-icon> is a web component, not an Angular one — without this schema the template
+  // compiler rejects it as an unknown element and `ng build` fails.
+  schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class SidebarComponent {
 

@@ -75,8 +75,33 @@ public class PromptBuilder {
                additional files, set "additionalFiles" to an empty object {} or null.
             """;
 
+    private static final String TEST_INSTRUCTIONS = """
+
+            ADDITIONALLY, return a "testSource" field containing a JUnit 5 test class that proves
+            the business rules above are enforced.
+
+            TEST RULES:
+            a. Package: {packageName}.service.impl — class name <ServiceImplName>BusinessRulesTest.
+            b. Plain Mockito unit test — NO Spring context. Annotate with
+               @ExtendWith(MockitoExtension.class); use @Mock for every repository the service
+               constructor takes and @InjectMocks for the service implementation.
+            c. One @Test per business rule. Assert the RULE, not the plumbing: for a precondition
+               violation use assertThrows(...) and check the message; for a happy path verify the
+               saved entity's state.
+            d. Stub only what the method under test actually calls (Mockito is strict about
+               unnecessary stubbing — an unused when(...) fails the test).
+            e. Use ONLY types shown in the context. Do not invent DTO fields or entity getters.
+            f. Every test must compile and pass against the serviceImpl you are returning in this
+               same response.
+            """;
+
     public String systemPrompt() {
         return SYSTEM_PROMPT;
+    }
+
+    /** System prompt variant that also asks for a business-rule test class. */
+    public String systemPromptWithTests() {
+        return SYSTEM_PROMPT + TEST_INSTRUCTIONS;
     }
 
     public String userPrompt(BackendModule module,

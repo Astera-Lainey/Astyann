@@ -68,6 +68,48 @@ class MavenRunnerTest {
     }
 
     @Test
+    void parsesTestSummaryUsingFinalRollUp() {
+        String output = String.join("\n",
+                "[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0 -- in a.b.FooTest",
+                "[INFO] Results:",
+                "[ERROR] Tests run: 7, Failures: 1, Errors: 2, Skipped: 1");
+        var summary = runner.parseTestSummary(output);
+        assertThat(summary.run()).isEqualTo(7);
+        assertThat(summary.failures()).isEqualTo(1);
+        assertThat(summary.errors()).isEqualTo(2);
+        assertThat(summary.skipped()).isEqualTo(1);
+        assertThat(summary.allPassed()).isFalse();
+        assertThat(summary.notPassed()).isEqualTo(3);
+    }
+
+    @Test
+    void testSummaryAllPassedWhenNoFailuresOrErrors() {
+        var summary = runner.parseTestSummary("[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0");
+        assertThat(summary.allPassed()).isTrue();
+        assertThat(summary.run()).isEqualTo(5);
+    }
+
+    @Test
+    void collectsFailingTestNames() {
+        String output = String.join("\n",
+                "[ERROR] Failures:",
+                "[ERROR]   ProductServiceImplTest.rejectsNegativePrice:42 expected IllegalStateException",
+                "[ERROR]   UserServiceImplTest.enforcesUniqueEmail:17 expected exception",
+                "[ERROR] Tests run: 4, Failures: 2, Errors: 0, Skipped: 0");
+        var summary = runner.parseTestSummary(output);
+        assertThat(summary.failedTests()).hasSize(2);
+        assertThat(summary.failedTests().get(0)).contains("ProductServiceImplTest.rejectsNegativePrice");
+    }
+
+    @Test
+    void testSummaryOnOutputWithoutTestsIsEmpty() {
+        var summary = runner.parseTestSummary("[INFO] BUILD SUCCESS");
+        assertThat(summary.run()).isZero();
+        assertThat(summary.failedTests()).isEmpty();
+        assertThat(runner.parseTestSummary(null).run()).isZero();
+    }
+
+    @Test
     void formattedRowIsHumanReadable() {
         String output = "[ERROR] /p/src/main/java/A.java:[2,3] oops";
         CompileErrorRow row = runner.parseErrors(output).get(0);

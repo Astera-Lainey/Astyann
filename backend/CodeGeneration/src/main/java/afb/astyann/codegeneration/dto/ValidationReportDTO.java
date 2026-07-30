@@ -14,6 +14,8 @@ public class ValidationReportDTO {
     /** PASSED | FAILED */
     private String validationStatus;
     private int attemptsUsed;
+    /** The layers this run actually validated — echoes the {@code ?layer=} filter. */
+    private List<String> layersValidated;
     private List<ValidationCheckDTO> checks;
     private List<String> remainingIssues;
 }

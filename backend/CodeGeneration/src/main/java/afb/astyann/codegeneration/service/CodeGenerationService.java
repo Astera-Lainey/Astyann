@@ -134,6 +134,9 @@ public class CodeGenerationService {
     @Value("${codegen.validate.frontend.max-attempts:3}")
     private int frontendMaxAttempts;
 
+    @Value("${codegen.validate.test.enabled:true}")
+    private boolean testValidationEnabled;
+
     // ── Generate ────────────────────────────────────────────────────────────────
 
     /**
@@ -245,7 +248,7 @@ public class CodeGenerationService {
             // fixes applied). Off by default — see codegen.generate.auto-validate.
             if (autoValidateAfterGenerate && layer == CodeLayer.BACKEND) {
                 try {
-                    var report = validate(projectId);
+                    var report = validate(projectId, List.of(CodeLayer.BACKEND));
                     log.info("Auto-validate for project {}: status={}, attempts={}, issues={}",
                             projectId, report.getValidationStatus(), report.getAttemptsUsed(),
                             report.getRemainingIssues().size());
@@ -268,6 +271,8 @@ public class CodeGenerationService {
         var info = projection.getProjectInfo();
         Path javaRoot = backendRoot.resolve("src/main/java").resolve(info.getPackagePath());
         Path resources = backendRoot.resolve("src/main/resources");
+        Path testJavaRoot = backendRoot.resolve("src/test/java").resolve(info.getPackagePath());
+        Path testResources = backendRoot.resolve("src/test/resources");
         String appClassName = toPascalCase(info.getArtifactId()) + "Application";
 
         Map<String, Object> base = new HashMap<>();
@@ -284,6 +289,8 @@ public class CodeGenerationService {
                     freeMarkerEngine.render("backend/Entity.java.ftl", model));
             write(javaRoot.resolve("repository").resolve(entity.getClassName() + "Repository.java"),
                     freeMarkerEngine.render("backend/Repository.java.ftl", model));
+            write(testJavaRoot.resolve("repository").resolve(entity.getClassName() + "RepositoryTest.java"),
+                    freeMarkerEngine.render("backend/RepositoryTest.java.ftl", model));
             write(javaRoot.resolve("dto").resolve("Create" + entity.getClassName() + "Dto.java"),
                     freeMarkerEngine.render("backend/CreateDto.java.ftl", model));
             write(javaRoot.resolve("dto").resolve(entity.getClassName() + "ResponseDto.java"),
@@ -307,10 +314,19 @@ public class CodeGenerationService {
                     freeMarkerEngine.render("backend/ServiceImpl.java.ftl", model));
             write(javaRoot.resolve("controller").resolve(module.getControllerName() + ".java"),
                     freeMarkerEngine.render("backend/Controller.java.ftl", model));
+            write(testJavaRoot.resolve("controller").resolve(module.getControllerName() + "Test.java"),
+                    freeMarkerEngine.render("backend/ControllerTest.java.ftl", model));
         }
 
         write(javaRoot.resolve(appClassName + ".java"),
                 freeMarkerEngine.render("backend/Application.java.ftl", base));
+        write(javaRoot.resolve("config").resolve("JpaConfig.java"),
+                freeMarkerEngine.render("backend/JpaConfig.java.ftl", base));
+        // ── Deterministic test suite (rendered from the projection, not the AI) ──
+        write(testJavaRoot.resolve(appClassName + "SmokeTest.java"),
+                freeMarkerEngine.render("backend/ApplicationSmokeTest.java.ftl", base));
+        write(testResources.resolve("application-test.properties"),
+                freeMarkerEngine.render("backend/TestApplicationProperties.ftl", base));
         write(javaRoot.resolve("security").resolve("SecurityConfig.java"),
                 freeMarkerEngine.render("backend/SecurityConfig.java.ftl", base));
         write(javaRoot.resolve("security").resolve("JwtFilter.java"),
@@ -405,6 +421,21 @@ public class CodeGenerationService {
                 mustacheEngine.render("frontend/app.routes.ts.mustache", base));
         write(appRoot.resolve("app.config.ts"),
                 mustacheEngine.render("frontend/app.config.ts.mustache", base));
+        write(appRoot.resolve("app.component.ts"),
+                mustacheEngine.render("frontend/app.component.ts.mustache", base));
+
+        // ── Angular CLI scaffold: without these the folder is only sources, and neither
+        // `ng build` nor `ng serve` (nor the frontend validation loop) can run. ──
+        write(frontendRoot.resolve("angular.json"),
+                mustacheEngine.render("frontend/angular.json.mustache", base));
+        write(frontendRoot.resolve("tsconfig.json"),
+                mustacheEngine.render("frontend/tsconfig.json.mustache", base));
+        write(frontendRoot.resolve("tsconfig.app.json"),
+                mustacheEngine.render("frontend/tsconfig.app.json.mustache", base));
+        write(frontendRoot.resolve("src/index.html"),
+                mustacheEngine.render("frontend/index.html.mustache", base));
+        write(frontendRoot.resolve("src/main.ts"),
+                mustacheEngine.render("frontend/main.ts.mustache", base));
         write(appRoot.resolve("core/interceptors/jwt.interceptor.ts"),
                 mustacheEngine.render("frontend/jwt.interceptor.ts.mustache", base));
         write(appRoot.resolve("core/guards/auth.guard.ts"),
@@ -524,25 +555,48 @@ public class CodeGenerationService {
 
     // ── Validate (compile self-correction loop) ──────────────────────────────────
 
+    /** Validates every generated layer. */
+    public ValidationReportDTO validate(UUID projectId) {
+        return validate(projectId, null);
+    }
+
     /**
      * Full self-correction validation:
      * <ol>
-     *   <li>Presence check for every layer (ZIP exists, no FAILED layer).</li>
-     *   <li>Extract the BACKEND ZIP into a temp dir and run {@code mvn compile}.</li>
-     *   <li>If compilation fails, group errors by file and ask the AI Orchestrator to return
-     *       the corrected source; write the fix and recompile. Repeat up to
-     *       {@code codegen.validate.compile.max-attempts} times.</li>
-     *   <li>If compilation eventually succeeds, re-zip the fixed backend and update the
-     *       stored artifact so subsequent downloads serve the fixed code.</li>
+     *   <li>Presence check for each selected layer (ZIP exists, no FAILED layer).</li>
+     *   <li>BACKEND: scan for un-implemented stubs, then extract the ZIP and run
+     *       {@code mvn compile}. On failure, group errors by file, ask the AI Orchestrator for the
+     *       corrected source, write it and recompile — up to
+     *       {@code codegen.validate.compile.max-attempts} times. Once it compiles, run the
+     *       generated test suite.</li>
+     *   <li>FRONTEND: {@code npm install} then {@code ng build}, with the same AI fix loop.</li>
+     *   <li>If a fix loop succeeds after a repair, re-zip the layer and update the stored artifact
+     *       so subsequent downloads serve the fixed code.</li>
      * </ol>
      *
-     * The compile step can be disabled entirely via {@code codegen.validate.compile.enabled=false}
-     * (or is auto-skipped if {@code mvn} isn't on PATH), in which case validate() falls back to
-     * the deterministic presence check.
+     * Each phase can be disabled independently ({@code codegen.validate.compile.enabled},
+     * {@code codegen.validate.test.enabled}, {@code codegen.validate.frontend.enabled}), in which
+     * case validate() falls back to the deterministic presence check for that layer.
+     *
+     * @param targetLayers layers to validate; {@code null} / empty means every layer. Checks that
+     *                     do not apply to a selected layer are skipped entirely — asking for
+     *                     {@code BACKEND} runs no frontend build, and vice versa.
      */
-    public ValidationReportDTO validate(UUID projectId) {
-        List<GeneratedCode> layers = repository.findByProjectId(projectId);
-        if (layers.isEmpty()) throw new CodeNotFoundException(projectId);
+    public ValidationReportDTO validate(UUID projectId, List<CodeLayer> targetLayers) {
+        List<GeneratedCode> allLayers = repository.findByProjectId(projectId);
+        if (allLayers.isEmpty()) throw new CodeNotFoundException(projectId);
+
+        Set<CodeLayer> selected = (targetLayers == null || targetLayers.isEmpty())
+                ? java.util.EnumSet.allOf(CodeLayer.class)
+                : java.util.EnumSet.copyOf(targetLayers);
+        List<GeneratedCode> layers = allLayers.stream()
+                .filter(c -> selected.contains(c.getLayer()))
+                .toList();
+        if (layers.isEmpty()) {
+            throw new IllegalStateException("No generated code for layer(s) " + selected
+                    + " on project " + projectId + ". Generated layers: "
+                    + allLayers.stream().map(c -> c.getLayer().name()).toList());
+        }
 
         List<ValidationCheckDTO> checks = new ArrayList<>();
         List<String> issues = new ArrayList<>();
@@ -575,7 +629,8 @@ public class CodeGenerationService {
                 .filter(c -> c.getLayer() == CodeLayer.BACKEND)
                 .findFirst().orElse(null);
 
-        boolean backendReady = backend != null && backend.getCodePath() != null
+        boolean backendReady = selected.contains(CodeLayer.BACKEND)
+                && backend != null && backend.getCodePath() != null
                 && backend.getStatus() != CodeStatus.FAILED
                 && backend.getStatus() != CodeStatus.GENERATING;
 
@@ -602,7 +657,8 @@ public class CodeGenerationService {
         GeneratedCode frontend = layers.stream()
                 .filter(c -> c.getLayer() == CodeLayer.FRONTEND)
                 .findFirst().orElse(null);
-        boolean frontendReady = frontend != null && frontend.getCodePath() != null
+        boolean frontendReady = selected.contains(CodeLayer.FRONTEND)
+                && frontend != null && frontend.getCodePath() != null
                 && frontend.getStatus() != CodeStatus.FAILED
                 && frontend.getStatus() != CodeStatus.GENERATING;
         if (frontendReady && frontendValidationEnabled) {
@@ -619,6 +675,7 @@ public class CodeGenerationService {
                 .projectId(projectId)
                 .validationStatus(issues.isEmpty() ? "PASSED" : "FAILED")
                 .attemptsUsed(Math.max(1, attemptsUsed))
+                .layersValidated(layers.stream().map(c -> c.getLayer().name()).toList())
                 .checks(checks)
                 .remainingIssues(issues)
                 .build();
@@ -722,6 +779,9 @@ public class CodeGenerationService {
                         backend.setLastError(null);
                         repository.save(backend);
                     }
+                    // Compilation only proves the code is well-formed. Run the generated test
+                    // suite in the same working dir to check it actually behaves.
+                    runTestSuite(projectId, workDir, checks, issues);
                     return new CompileLoopOutcome(attempt, checks, issues);
                 }
 
@@ -807,13 +867,16 @@ public class CodeGenerationService {
                 return new CompileLoopOutcome(0, checks, issues);
             }
 
+            // Prefer the real Angular build — it compiles templates too, which `tsc` does not.
+            boolean useNgBuild = nodeRunner.hasAngularWorkspace(projectDir);
             int attempt;
             List<String> lastErrorSummaries = List.of();
             for (attempt = 1; attempt <= Math.max(1, frontendMaxAttempts); attempt++) {
-                var result = nodeRunner.typeCheck(projectDir);
+                var result = useNgBuild ? nodeRunner.build(projectDir) : nodeRunner.typeCheck(projectDir);
                 if (result.success()) {
                     checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("PASSED")
-                            .message("type-checked successfully on attempt " + attempt).build());
+                            .message((useNgBuild ? "built" : "type-checked")
+                                    + " successfully on attempt " + attempt).build());
                     if (attempt > 1) {
                         byte[] fixedZip = zipDirectoryExcludingNodeModules(projectDir);
                         String newPath = storageService.saveZip(projectId, CodeLayer.FRONTEND, fixedZip);
@@ -898,14 +961,22 @@ public class CodeGenerationService {
         }
     }
 
-    /** Re-zips the project but skips {@code node_modules} so the stored artifact stays small. */
+    /**
+     * Re-zips the project, skipping build artefacts ({@code node_modules}, {@code dist},
+     * {@code .angular} cache, {@code out-tsc}) so the stored ZIP stays a source archive.
+     */
     private byte[] zipDirectoryExcludingNodeModules(Path root) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(baos);
              var paths = Files.walk(root)) {
             List<Path> files = paths
                     .filter(Files::isRegularFile)
-                    .filter(p -> !root.relativize(p).toString().replace('\\', '/').contains("node_modules/"))
+                    .filter(p -> {
+                        String rel = root.relativize(p).toString().replace('\\', '/');
+                        return !rel.startsWith("node_modules/") && !rel.contains("/node_modules/")
+                                && !rel.startsWith("dist/") && !rel.startsWith(".angular/")
+                                && !rel.startsWith("out-tsc/");
+                    })
                     .toList();
             for (Path file : files) {
                 String entryName = root.relativize(file).toString().replace('\\', '/');
@@ -917,6 +988,56 @@ public class CodeGenerationService {
             zos.finish();
         }
         return baos.toByteArray();
+    }
+
+    /**
+     * Runs the generated backend test suite ({@code mvn test}) and records a {@code test:BACKEND}
+     * check. Deliberately report-only: unlike compile errors, a failing test is a statement about
+     * *behaviour*, and letting the AI "fix" it invites the model to weaken the assertion rather
+     * than the code. Failures are surfaced for a human to judge.
+     */
+    private void runTestSuite(UUID projectId, Path workDir,
+                              List<ValidationCheckDTO> checks, List<String> issues) {
+        if (!testValidationEnabled) {
+            checks.add(ValidationCheckDTO.builder().name("test:BACKEND").status("WARNING")
+                    .message("test-validation disabled via codegen.validate.test.enabled=false").build());
+            return;
+        }
+        try {
+            var result = mavenRunner.test(workDir);
+            var summary = mavenRunner.parseTestSummary(result.output());
+
+            if (summary.run() == 0) {
+                checks.add(ValidationCheckDTO.builder().name("test:BACKEND").status("WARNING")
+                        .message(result.success()
+                                ? "no tests were executed"
+                                : "test phase failed before any test ran; see logs").build());
+                if (!result.success()) {
+                    issues.add("Backend test phase failed to run:\n"
+                            + mavenRunner.extractFailureSummary(result.output()));
+                }
+                return;
+            }
+
+            if (summary.allPassed() && result.success()) {
+                checks.add(ValidationCheckDTO.builder().name("test:BACKEND").status("PASSED")
+                        .message(summary.run() + " test(s) passed").build());
+                return;
+            }
+
+            checks.add(ValidationCheckDTO.builder().name("test:BACKEND").status("FAILED")
+                    .message(summary.notPassed() + " of " + summary.run() + " test(s) did not pass")
+                    .build());
+            String detail = summary.failedTests().isEmpty()
+                    ? mavenRunner.extractFailureSummary(result.output())
+                    : String.join("\n", summary.failedTests().stream().limit(20).toList());
+            issues.add("Backend tests failing (" + summary.failures() + " failure(s), "
+                    + summary.errors() + " error(s)):\n" + detail);
+        } catch (Exception ex) {
+            log.warn("Test run failed for project {}: {}", projectId, ex.getMessage());
+            checks.add(ValidationCheckDTO.builder().name("test:BACKEND").status("WARNING")
+                    .message("could not run tests: " + ex.getMessage()).build());
+        }
     }
 
     private void tryFixFileWithAi(Path workDir, Path file, List<String> errorLines) {
