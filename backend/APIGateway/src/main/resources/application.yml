@@ -28,8 +28,12 @@ spring:
 
       # Graceful HTTP client settings
       httpclient:
-        connect-timeout: 5000   # 5s connect timeout
-        response-timeout: 60s   # default; AI-heavy routes override via per-route "response-timeout" metadata (see GatewayConfig)
+        connect-timeout: 5000   # 5s to establish a connection — still fails fast if a service is down
+        # No global response-timeout. Most routes on this platform wait on AI inference or on
+        # Maven/npm builds (code generation's /validate runs a compile + AI fix loop, the generated
+        # test suite and an Angular build), none of which have a predictable upper bound. A global
+        # cap only produced 504s on requests that were still succeeding downstream.
+        # connect-timeout above still bounds unreachable services.
 
 server:
   port: 8080
