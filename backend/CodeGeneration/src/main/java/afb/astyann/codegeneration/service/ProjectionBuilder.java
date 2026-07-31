@@ -70,7 +70,7 @@ public class ProjectionBuilder {
         for (BackendModule bm : backend.getModules()) {
             FrontendEntity entity = entityByClass.get(bm.getEntityClassName());
             if (entity == null) continue;
-            modules.add(buildFrontendModule(bm, entity, info));
+            modules.add(buildFrontendModule(bm, entity, info, pcsf));
         }
 
         List<FrontendNavItem> navigation = buildNavigation(pcsf, modules, roles);
@@ -125,6 +125,9 @@ public class ProjectionBuilder {
                         .label(toTitleCase(name))
                         .required(c != null && fvBool(c.getRequired(), false))
                         .unique(c != null && fvBool(c.getUnique(), false))
+                        .minLength(c != null ? fvInt(c.getMinLength()) : null)
+                        .maxLength(c != null ? fvInt(c.getMaxLength()) : null)
+                        .pattern(c != null ? fv(c.getPattern()) : null)
                         .build());
             }
             out.add(FrontendEntity.builder()
@@ -137,7 +140,8 @@ public class ProjectionBuilder {
         return out;
     }
 
-    private FrontendModule buildFrontendModule(BackendModule bm, FrontendEntity entity, FrontendProjectInfo info) {
+    private FrontendModule buildFrontendModule(BackendModule bm, FrontendEntity entity,
+                                               FrontendProjectInfo info, Pcsf pcsf) {
         String moduleKebab = bm.getRequestMapping().substring(bm.getRequestMapping().lastIndexOf('/') + 1);
         boolean hasCreate = bm.getEndpoints().stream().anyMatch(e -> "POST".equals(e.getHttpMethod()) && !e.isHasPathVariable());
         boolean hasRead   = bm.getEndpoints().stream().anyMatch(e -> "GET".equals(e.getHttpMethod()));
@@ -153,15 +157,38 @@ public class ProjectionBuilder {
                     .hasPathId(be.isHasPathVariable())
                     .hasBody(be.isHasRequestBody())
                     .returnType(mapEndpointReturnType(be.getReturnType(), entity.getClassName()))
+                    .crud(be.isCrud())
+                    .actionSegment(actionSegment(be.getPath()))
+                    // Capitalise in place rather than re-splitting: the method name is already a
+                    // valid camelCase identifier, so this cannot corrupt it.
+                    .methodNamePascal(capitaliseFirst(be.getMethodName()))
+                    .label(toSentenceCase(be.getMethodName()))
                     .build());
         }
+
+        // Use-case actions the backend exposes beyond CRUD. Without these the generated UI has no
+        // way to invoke endpoints the generated API provides.
+        List<FrontendEndpoint> customActions = endpoints.stream()
+                .filter(e -> !e.isCrud())
+                .filter(e -> !isBlank(e.getActionSegment()))
+                .toList();
+
+        // Status values are only known when the PCSF declares a state machine for this entity —
+        // without them there is no colour mapping to build, so the column stays plain text.
+        List<String> statusStates = statusStatesFor(pcsf, entity.getClassName());
+        String variantsExpression = statusStates.isEmpty() ? null : badgeVariantsExpression(statusStates);
 
         List<FrontendColumn> listColumns = new ArrayList<>();
         int count = 0;
         for (FrontendField f : entity.getFields()) {
             String lower = f.getName().toLowerCase(Locale.ROOT);
             if (lower.contains("password")) continue;
-            listColumns.add(FrontendColumn.builder().label(f.getLabel()).fieldName(f.getName()).build());
+            boolean isStatus = variantsExpression != null && (lower.equals("status") || lower.equals("state"));
+            listColumns.add(FrontendColumn.builder()
+                    .label(f.getLabel()).fieldName(f.getName())
+                    .badge(isStatus)
+                    .variantsExpression(isStatus ? variantsExpression : null)
+                    .build());
             if (++count >= 6) break;
         }
 
@@ -169,10 +196,15 @@ public class ProjectionBuilder {
         for (FrontendField f : entity.getFields()) {
             String lower = f.getName().toLowerCase(Locale.ROOT);
             if (Set.of("id", "createdat", "lastmodifiedat", "currentstock", "stockstatus").contains(lower)) continue;
+            String inputType = deriveInputType(f);
+            String validators = validatorsExpression(f, inputType);
             formFields.add(FrontendFormField.builder()
                     .label(f.getLabel()).fieldName(f.getName())
-                    .inputType(deriveInputType(f))
-                    .required(f.isRequired()).build());
+                    .inputType(inputType)
+                    .required(f.isRequired())
+                    .validatorsExpression(validators)
+                    .hasValidators(!isBlank(validators))
+                    .build());
         }
 
         return FrontendModule.builder()
@@ -182,10 +214,152 @@ public class ProjectionBuilder {
                 .entityClassName(entity.getClassName())
                 .entityFileName(entity.getFileName())
                 .entityInstanceName(entity.getInstanceName())
-                .apiPath(bm.getRequestMapping())
+                // Relative to apiBaseUrl, which already ends in the version prefix. Passing the
+                // full request mapping here produced ".../api/v1/api/v1/product" and 404'd every
+                // call the generated frontend made.
+                .apiPath(stripVersionPrefix(bm.getRequestMapping(), versionPrefix(pcsf)))
                 .hasCreate(hasCreate).hasRead(hasRead).hasUpdate(hasUpdate).hasDelete(hasDelete)
-                .endpoints(endpoints).listColumns(listColumns).formFields(formFields)
+                .endpoints(endpoints).customActions(customActions)
+                .hasCustomActions(!customActions.isEmpty())
+                .listColumns(listColumns).formFields(formFields)
                 .build();
+    }
+
+    /**
+     * Extracts the action segment from a custom endpoint path — {@code "/{id}/archive"} yields
+     * {@code "archive"}. Returns {@code null} for paths with no trailing segment (plain CRUD).
+     */
+    private String actionSegment(String path) {
+        if (isBlank(path)) return null;
+        String trimmed = path.replace("/{id}", "").replaceAll("^/+", "").replaceAll("/+$", "");
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** Uppercases the first character, leaving the rest of the identifier untouched. */
+    private String capitaliseFirst(String input) {
+        if (isBlank(input)) return "";
+        return Character.toUpperCase(input.charAt(0)) + input.substring(1);
+    }
+
+    /** {@code recordAStockEntry} → {@code "Record a stock entry"} — button-friendly text. */
+    private String toSentenceCase(String input) {
+        List<String> words = splitWords(input);
+        if (words.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < words.size(); i++) {
+            String word = words.get(i).toLowerCase(Locale.ROOT);
+            if (i == 0) {
+                sb.append(Character.toUpperCase(word.charAt(0)));
+                if (word.length() > 1) sb.append(word.substring(1));
+            } else {
+                sb.append(' ').append(word);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Builds the Angular validator list for a field, mirroring the constraints the backend enforces
+     * with {@code @NotNull} / {@code @Size} / {@code @Pattern}. Length rules only apply to text
+     * inputs — {@code Validators.minLength} on a number control checks the *string* length, which
+     * would reject valid values.
+     *
+     * @return e.g. {@code "Validators.required, Validators.maxLength(120)"}, or {@code null}
+     */
+    private String validatorsExpression(FrontendField field, String inputType) {
+        List<String> validators = new ArrayList<>();
+        if (field.isRequired()) validators.add("Validators.required");
+        if ("email".equals(inputType)) validators.add("Validators.email");
+
+        boolean textual = Set.of("text", "password", "email").contains(inputType);
+        if (textual) {
+            if (field.getMinLength() != null && field.getMinLength() > 0) {
+                validators.add("Validators.minLength(" + field.getMinLength() + ")");
+            }
+            if (field.getMaxLength() != null && field.getMaxLength() > 0) {
+                validators.add("Validators.maxLength(" + field.getMaxLength() + ")");
+            }
+            if (!isBlank(field.getPattern())) {
+                validators.add("Validators.pattern('" + escapeTsSingleQuoted(field.getPattern()) + "')");
+            }
+        }
+        return validators.isEmpty() ? null : String.join(", ", validators);
+    }
+
+    /** The configured API version prefix, defaulting to {@code /api/v1}. */
+    private String versionPrefix(Pcsf pcsf) {
+        PcsfApiConfig api = pcsf.getApiConfig();
+        return api != null && !isBlank(api.getVersionPrefix()) ? api.getVersionPrefix() : "/api/v1";
+    }
+
+    /**
+     * Removes the leading version prefix from a request mapping, because the frontend's
+     * {@code apiBaseUrl} already ends with it: {@code /api/v1/product} → {@code /product}.
+     */
+    private String stripVersionPrefix(String requestMapping, String versionPrefix) {
+        if (isBlank(requestMapping)) return "";
+        if (!isBlank(versionPrefix) && requestMapping.startsWith(versionPrefix)) {
+            String stripped = requestMapping.substring(versionPrefix.length());
+            return stripped.startsWith("/") ? stripped : "/" + stripped;
+        }
+        return requestMapping;
+    }
+
+    /** Escapes a value for embedding in a single-quoted TypeScript string literal. */
+    private String escapeTsSingleQuoted(String raw) {
+        return raw.replace("\\", "\\\\").replace("'", "\\'");
+    }
+
+    /** States declared by the PCSF status machine for {@code entityClassName}, or empty. */
+    private List<String> statusStatesFor(Pcsf pcsf, String entityClassName) {
+        for (PcsfStatusMachine machine : nullSafe(pcsf.getStatusMachines())) {
+            String target = machine.getEntityId();
+            if (isBlank(target) || isBlank(entityClassName)) continue;
+            if (!target.equalsIgnoreCase(entityClassName)) continue;
+            List<String> states = new ArrayList<>();
+            for (String state : nullSafe(machine.getStates())) {
+                if (!isBlank(state)) states.add(state.trim());
+            }
+            if (!states.isEmpty()) return states;
+        }
+        return List.of();
+    }
+
+    /**
+     * Maps each status value to an {@code ast-badge} variant, producing a TS object literal.
+     * Unrecognised states fall back to {@code neutral}, so an unexpected value is only ever a
+     * cosmetic miss rather than a broken column.
+     */
+    private String badgeVariantsExpression(List<String> states) {
+        StringBuilder sb = new StringBuilder("{ ");
+        for (int i = 0; i < states.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append('\'').append(escapeTsSingleQuoted(states.get(i))).append("': '")
+              .append(badgeVariantFor(states.get(i))).append('\'');
+        }
+        return sb.append(" }").toString();
+    }
+
+    private static final Set<String> SUCCESS_STATES = Set.of(
+            "ACTIVE", "APPROVED", "COMPLETED", "COMPLETE", "DONE", "PAID", "VALIDATED",
+            "CONFIRMED", "DELIVERED", "IN_STOCK", "ENABLED", "PUBLISHED", "CLOSED");
+    private static final Set<String> DANGER_STATES = Set.of(
+            "REJECTED", "CANCELLED", "CANCELED", "FAILED", "INACTIVE", "ARCHIVED", "BLOCKED",
+            "EXPIRED", "OUT_OF_STOCK", "DISABLED", "DELETED", "SUSPENDED");
+    private static final Set<String> WARNING_STATES = Set.of(
+            "PENDING", "DRAFT", "ON_HOLD", "WAITING", "SUBMITTED", "IN_REVIEW", "LOW_STOCK",
+            "RESERVED", "REQUESTED");
+    private static final Set<String> INFO_STATES = Set.of(
+            "IN_PROGRESS", "PROCESSING", "SHIPPED", "NEW", "ASSIGNED", "OPEN", "STARTED");
+
+    private String badgeVariantFor(String state) {
+        String key = normaliseEnum(state);
+        if (key == null) return "neutral";
+        if (SUCCESS_STATES.contains(key)) return "success";
+        if (DANGER_STATES.contains(key)) return "danger";
+        if (WARNING_STATES.contains(key)) return "warning";
+        if (INFO_STATES.contains(key)) return "info";
+        return "neutral";
     }
 
     private String mapEndpointReturnType(String backendReturnType, String entityClass) {
@@ -551,8 +725,11 @@ public class ProjectionBuilder {
                         createType, responseType, roleSet(pcsf, m, "CREATE", allRoleEnums)));
             }
             if (ops.contains("READ")) {
-                endpoints.add(endpoint("GET", "", "getAll" + pluralise(entityClass), "List<" + responseType + ">",
-                        false, false, null, responseType, roleSet(pcsf, m, "READ", allRoleEnums)));
+                BackendEndpoint list = endpoint("GET", "", "getAll" + pluralise(entityClass),
+                        "Page<" + responseType + ">",
+                        false, false, null, responseType, roleSet(pcsf, m, "READ", allRoleEnums));
+                list.setPaged(true);
+                endpoints.add(list);
                 endpoints.add(endpoint("GET", "/{id}", "get" + entityClass + "ById", responseType,
                         false, true, null, responseType, roleSet(pcsf, m, "READ", allRoleEnums)));
             }
@@ -747,6 +924,10 @@ public class ProjectionBuilder {
      */
     private List<String> splitWords(String input) {
         String spaced = input.trim()
+                // Split runs of capitals before a capitalised word: "recordAStockEntry" must yield
+                // "record A Stock Entry", not "record AStock Entry" (which round-trips to the
+                // malformed identifier "RecordAstockEntry").
+                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2")
                 .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
                 .replaceAll("[^A-Za-z0-9]+", " ")
                 .trim();

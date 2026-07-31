@@ -17,8 +17,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Runs {@code mvn compile} against a generated backend project directory and parses the
- * compiler output into structured records.
+ * Runs Maven against a generated backend project directory and parses the compiler output into
+ * structured records. {@link #compile(Path)} runs {@code test-compile} so that both main and test
+ * sources are checked; {@link #test(Path)} then runs the suite itself.
  *
  * <p>Command resolution is OS-aware: Java's {@code ProcessBuilder} on Windows does not do
  * {@code PATHEXT} resolution, so {@code new ProcessBuilder("mvn", ...)} fails with
@@ -78,7 +79,11 @@ public class MavenRunner {
         // "no error rows were parseable" result in the wild.
         argv.add("--batch-mode");
         argv.add("-Dstyle.color=never");
-        argv.add("compile");
+        // `test-compile`, not `compile`: the generated project ships tests, and a test source that
+        // does not compile is an unambiguous compile error the AI fix loop can repair. Compiling
+        // only main sources let those errors escape to `mvn test`, where they surfaced as
+        // "test phase failed before any test ran" — reported but never fixed.
+        argv.add("test-compile");
 
         ProcessBuilder pb = new ProcessBuilder(argv)
                 .directory(projectDir.toFile())

@@ -69,8 +69,9 @@ class GeneratedTestsRenderTest {
                 .entityClassName("Product").entityInstanceName("product")
                 .endpoints(List.of(
                         BackendEndpoint.builder().httpMethod("GET").path("").methodName("getAllProducts")
-                                .returnType("List<ProductResponseDto>").hasRequestBody(false)
+                                .returnType("Page<ProductResponseDto>").hasRequestBody(false)
                                 .hasPathVariable(false).responseType("ProductResponseDto").crud(true)
+                                .paged(true)
                                 .roles(List.of("STOCK_MANAGER")).build(),
                         BackendEndpoint.builder().httpMethod("GET").path("/{id}").methodName("getProductById")
                                 .returnType("ProductResponseDto").hasRequestBody(false)
@@ -147,7 +148,9 @@ class GeneratedTestsRenderTest {
         assertThat(source).contains("class ProductControllerTest")
                 .contains("@WebMvcTest(controllers = ProductController.class)")
                 .contains("addFilters = false")
-                .contains("when(service.getAllProducts()).thenReturn(java.util.List.of());")
+                // The service takes a Pageable now — stubbing the no-arg form would not compile,
+                // which is exactly what broke `mvn test` on the first paginated generation.
+                .contains("when(service.getAllProducts(any(Pageable.class))).thenReturn(Page.empty());")
                 .contains("get(\"/api/v1/product\")");
     }
 
@@ -170,6 +173,77 @@ class GeneratedTestsRenderTest {
 
         assertValidJava(source, "ControllerTest (no list endpoint)");
         assertThat(source).contains("controllerIsWired").doesNotContain("thenReturn");
+    }
+
+    /**
+     * The generated frontend calls {@code POST {versionPrefix}/auth/login} with
+     * {@code {email, password}} and expects {@code {token}}. {@code SecurityConfig} already permits
+     * {@code /auth/**}, but nothing served it — so no token could ever be obtained and every
+     * request came back 401.
+     */
+    @Test
+    void authControllerServesTheLoginEndpointTheFrontendCalls() {
+        Map<String, Object> base = baseModel();
+        base.put("roles", List.of(
+                afb.astyann.codegeneration.domain.projection.BackendRole.builder()
+                        .enumValue("STOCK_MANAGER").roleName("ROLE_STOCK_MANAGER").build()));
+
+        String source = engine.render("backend/AuthController.java.ftl", base);
+
+        assertValidJava(source, "AuthController");
+        assertThat(source)
+                .contains("@RequestMapping(\"/api/v1/auth\")")
+                .contains("@PostMapping(\"/login\")")
+                .contains("record LoginRequest(@NotBlank String email, @NotBlank String password)")
+                .contains("record LoginResponse(String token)")
+                // Claim name must match what JwtFilter reads.
+                .contains(".claim(\"roles\", roles)");
+    }
+
+    @Test
+    void corsConfigAllowsTheFrontendOrigin() {
+        String source = engine.render("backend/CorsConfig.java.ftl", baseModel());
+        assertValidJava(source, "CorsConfig");
+        assertThat(source)
+                .contains("CorsConfigurationSource corsConfigurationSource()")
+                .contains("app.cors.allowed-origins")
+                .contains("setAllowCredentials(true)");
+
+        // The filter chain must actually consult that bean.
+        assertThat(engine.render("backend/SecurityConfig.java.ftl", baseModel()))
+                .contains(".cors(Customizer.withDefaults())");
+    }
+
+    @Test
+    void collectionEndpointIsPagedOnBothSidesOfTheContract() {
+        Map<String, Object> model = baseModel();
+        model.put("entity", testableEntity());
+        model.put("module", BackendModule.builder()
+                .controllerName("ProductController").serviceName("ProductService")
+                .serviceImplName("ProductServiceImpl").repositoryName("ProductRepository")
+                .requestMapping("/api/v1/product").packageName("com.example.inventory")
+                .entityClassName("Product").entityInstanceName("product")
+                .endpoints(List.of(BackendEndpoint.builder()
+                        .httpMethod("GET").path("").methodName("getAllProducts")
+                        .returnType("Page<ProductResponseDto>")
+                        .hasRequestBody(false).hasPathVariable(false)
+                        .responseType("ProductResponseDto").crud(true).paged(true)
+                        .roles(List.of("STOCK_MANAGER")).build()))
+                .build());
+
+        String controller = engine.render("backend/Controller.java.ftl", model);
+        assertValidJava(controller, "Controller (paged)");
+        assertThat(controller)
+                .contains("ResponseEntity<Page<ProductResponseDto>> getAllProducts(@PageableDefault(size = 20) Pageable pageable)")
+                .contains("service.getAllProducts(pageable)");
+
+        String serviceInterface = engine.render("backend/ServiceInterface.java.ftl", model);
+        assertValidJava(serviceInterface, "ServiceInterface (paged)");
+        assertThat(serviceInterface).contains("Page<ProductResponseDto> getAllProducts(Pageable pageable);");
+
+        String serviceImpl = engine.render("backend/ServiceImpl.java.ftl", model);
+        assertValidJava(serviceImpl, "ServiceImpl (paged)");
+        assertThat(serviceImpl).contains("return repository.findAll(pageable).map(this::toResponse);");
     }
 
     @Test

@@ -4,6 +4,8 @@ import ${project.packageName}.dto.*;
 import ${project.packageName}.entity.${module.entityClassName};
 import ${project.packageName}.repository.${module.repositoryName};
 import ${project.packageName}.service.${module.serviceName};
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +25,13 @@ public class ${module.serviceImplName} implements ${module.serviceName} {
 
 <#list module.endpoints as ep>
     @Override
-    public ${ep.returnType} ${ep.methodName}(<#if ep.hasPathVariable>UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if>) {
+    public ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>) {
 <#if ep.crud && ep.httpMethod == "POST" && !ep.hasPathVariable>
         ${module.entityClassName} entity = new ${module.entityClassName}();
         applyValues(entity, request);
         return toResponse(repository.save(entity));
-<#elseif ep.crud && ep.httpMethod == "GET" && !ep.hasPathVariable>
-        return repository.findAll().stream().map(this::toResponse).toList();
+<#elseif ep.paged>
+        return repository.findAll(pageable).map(this::toResponse);
 <#elseif ep.crud && ep.httpMethod == "GET" && ep.hasPathVariable>
         return repository.findById(id).map(this::toResponse)
                 .orElseThrow(() -> new NoSuchElementException("${module.entityClassName} not found: " + id));

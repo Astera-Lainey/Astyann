@@ -55,9 +55,11 @@ class FrontendAndInfraTemplateRenderTest {
                         FrontendColumn.builder().label("Price").fieldName("price").build()))
                 .formFields(List.of(
                         FrontendFormField.builder().label("Name").fieldName("name")
-                                .inputType("text").required(true).build(),
+                                .inputType("text").required(true)
+                                .validatorsExpression("Validators.required").hasValidators(true).build(),
                         FrontendFormField.builder().label("Price").fieldName("price")
-                                .inputType("number").required(true).build()))
+                                .inputType("number").required(true)
+                                .validatorsExpression("Validators.required").hasValidators(true).build()))
                 .build();
 
         FrontendNavItem nav = FrontendNavItem.builder()
@@ -80,7 +82,7 @@ class FrontendAndInfraTemplateRenderTest {
         assertThat(mustache.render("frontend/model.ts.mustache", entityModel))
                 .contains("export interface Product").contains("name: string;");
         assertThat(mustache.render("frontend/service.ts.mustache", moduleModel))
-                .contains("class ProductService").contains("http://localhost:8080/api/v1/api/v1/product".substring(0, 0) + "")
+                .contains("class ProductService")
                 .contains("apiBaseUrl");
         assertThat(mustache.render("frontend/list.component.ts.mustache", moduleModel))
                 .contains("ProductListComponent").contains("fieldName: 'name'");
@@ -212,6 +214,139 @@ class FrontendAndInfraTemplateRenderTest {
                 .contains("from '../../../../environments/environment'");
         assertThat(mustache.render("frontend/service.ts.mustache", fullModel))
                 .contains("from '../../../environments/environment'");
+    }
+
+    /**
+     * Custom (non-CRUD) use-case actions must reach the UI. The backend exposes them as
+     * {@code POST /{id}/<action>}; before this the frontend dropped them entirely, so the generated
+     * app could not invoke endpoints the generated API provided.
+     */
+    @Test
+    void custom_use_case_actions_reach_the_frontend() {
+        FrontendProjectInfo project = FrontendProjectInfo.builder()
+                .appName("Inventory").angularProjectName("inventory-web")
+                .apiBaseUrl("http://localhost:8080/api/v1").defaultRoute("/stock-movements").build();
+        FrontendEntity movement = FrontendEntity.builder()
+                .className("StockMovement").fileName("stock-movement").instanceName("stockMovement")
+                .fields(List.of(FrontendField.builder().name("quantity").tsType("number")
+                        .label("Quantity").required(true).build()))
+                .build();
+
+        FrontendEndpoint action = FrontendEndpoint.builder()
+                .methodName("recordAStockEntry").httpMethod("POST").path("/{id}/recordAStockEntry")
+                .hasPathId(true).hasBody(false).returnType("StockMovement")
+                .crud(false).actionSegment("recordAStockEntry")
+                .methodNamePascal("RecordAStockEntry").label("Record a stock entry")
+                .build();
+
+        FrontendModule module = FrontendModule.builder()
+                .serviceName("StockMovementsService").serviceFileName("stock-movements")
+                .componentPrefix("stock-movements").entityClassName("StockMovement")
+                .entityFileName("stock-movement").entityInstanceName("stockMovement")
+                .apiPath("/api/v1/stock-movements")
+                .hasCreate(true).hasRead(true).hasUpdate(false).hasDelete(true)
+                .endpoints(List.of(action))
+                .customActions(List.of(action)).hasCustomActions(true)
+                .listColumns(List.of()).formFields(List.of())
+                .build();
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("project", project);
+        model.put("entities", List.of(movement));
+        model.put("navigation", List.of());
+        model.put("module", module);
+        model.put("entity", movement);
+
+        // Service gains a typed method hitting POST /{id}/<segment>.
+        String service = mustache.render("frontend/service.ts.mustache", model);
+        assertThat(service)
+                .contains("recordAStockEntry(id: string): Observable<StockMovement>")
+                .contains("`${this.baseUrl}/${id}/recordAStockEntry`");
+
+        // Component gains a handler plus the in-flight guard.
+        String listTs = mustache.render("frontend/list.component.ts.mustache", model);
+        assertThat(listTs)
+                .contains("readonly actionInFlight = signal<string | null>(null);")
+                .contains("onRecordAStockEntry(id: string): void")
+                .contains("this.service.recordAStockEntry(id)");
+
+        // Template gains a row button wired to that handler.
+        assertThat(mustache.render("frontend/list.component.html.mustache", model))
+                .contains("(click)=\"onRecordAStockEntry(row.id)\"")
+                .contains("[disabled]=\"actionInFlight() === row.id\"")
+                .contains(">Record a stock entry</button>");
+    }
+
+    /**
+     * Validators and badge variants are raw TypeScript containing quotes, so they must be
+     * interpolated with a triple-mustache — {@code DefaultMustacheFactory} HTML-escapes {@code {{ }}}
+     * and would turn {@code '} into {@code &#39;}, producing source that will not compile.
+     */
+    @Test
+    void validators_and_badge_variants_render_unescaped() {
+        Map<String, Object> model = new HashMap<>();
+        model.put("project", FrontendProjectInfo.builder().appName("CRM")
+                .angularProjectName("crm-web").apiBaseUrl("http://x").defaultRoute("/order").build());
+        model.put("entities", List.of());
+        model.put("navigation", List.of());
+        model.put("entity", FrontendEntity.builder().className("Order").fileName("order")
+                .instanceName("order").fields(List.of()).build());
+        model.put("module", FrontendModule.builder()
+                .serviceName("OrderService").serviceFileName("order").componentPrefix("order")
+                .entityClassName("Order").entityFileName("order").entityInstanceName("order")
+                .apiPath("/api/v1/order")
+                .hasCreate(true).hasRead(true).hasUpdate(true).hasDelete(true)
+                .endpoints(List.of()).customActions(List.of()).hasCustomActions(false)
+                .listColumns(List.of(
+                        FrontendColumn.builder().label("Reference").fieldName("reference").build(),
+                        FrontendColumn.builder().label("Status").fieldName("status").badge(true)
+                                .variantsExpression("{ 'DRAFT': 'warning', 'APPROVED': 'success' }").build()))
+                .formFields(List.of(
+                        FrontendFormField.builder().label("Name").fieldName("name").inputType("text")
+                                .required(true)
+                                .validatorsExpression("Validators.required, Validators.maxLength(120)")
+                                .hasValidators(true).build(),
+                        FrontendFormField.builder().label("Note").fieldName("note").inputType("text")
+                                .required(false).hasValidators(false).build()))
+                .build());
+
+        String listTs = mustache.render("frontend/list.component.ts.mustache", model);
+        assertThat(listTs)
+                .contains("{ label: 'Status', fieldName: 'status', kind: 'badge' as const, "
+                        + "variants: { 'DRAFT': 'warning', 'APPROVED': 'success' } }")
+                .contains("{ label: 'Reference', fieldName: 'reference' }")
+                .doesNotContain("&#39;");
+
+        String formTs = mustache.render("frontend/form.component.ts.mustache", model);
+        assertThat(formTs)
+                .contains("name: [null, [Validators.required, Validators.maxLength(120)]],")
+                // A field with no constraints must not emit an empty validator array.
+                .contains("note: [null],")
+                .doesNotContain("&#39;");
+    }
+
+    @Test
+    void modules_without_custom_actions_emit_no_action_scaffolding() {
+        Map<String, Object> model = new HashMap<>();
+        model.put("project", FrontendProjectInfo.builder().appName("Inventory")
+                .angularProjectName("inventory-web").apiBaseUrl("http://x").defaultRoute("/p").build());
+        model.put("entities", List.of());
+        model.put("navigation", List.of());
+        model.put("entity", FrontendEntity.builder().className("Product").fileName("product")
+                .instanceName("product").fields(List.of()).build());
+        model.put("module", FrontendModule.builder()
+                .serviceName("ProductService").serviceFileName("product").componentPrefix("product")
+                .entityClassName("Product").entityFileName("product").entityInstanceName("product")
+                .apiPath("/api/v1/product")
+                .hasCreate(true).hasRead(true).hasUpdate(true).hasDelete(true)
+                .endpoints(List.of()).customActions(List.of()).hasCustomActions(false)
+                .listColumns(List.of()).formFields(List.of())
+                .build());
+
+        assertThat(mustache.render("frontend/list.component.ts.mustache", model))
+                .doesNotContain("actionInFlight");
+        assertThat(mustache.render("frontend/list.component.html.mustache", model))
+                .doesNotContain("actionInFlight");
     }
 
     @Test

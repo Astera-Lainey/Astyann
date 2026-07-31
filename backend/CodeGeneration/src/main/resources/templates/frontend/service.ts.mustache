@@ -4,12 +4,15 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { {{module.entityClassName}}, Create{{module.entityClassName}}Dto } from '../models/{{module.entityFileName}}.model';
 
+/** Mirrors Spring Data's `Page` JSON. Note the current page index is `number`, not `page`. */
 export interface PageResponse<T> {
   content: T[];
   totalElements: number;
   totalPages: number;
-  page: number;
+  number: number;
   size: number;
+  first: boolean;
+  last: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -44,4 +47,11 @@ export class {{module.serviceName}} {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 {{/module.hasDelete}}
+{{#module.customActions}}
+
+  /** {{label}} — POST {{path}} */
+  {{methodName}}(id: string): Observable<{{module.entityClassName}}> {
+    return this.http.post<{{module.entityClassName}}>(`${this.baseUrl}/${id}/{{actionSegment}}`, {});
+  }
+{{/module.customActions}}
 }

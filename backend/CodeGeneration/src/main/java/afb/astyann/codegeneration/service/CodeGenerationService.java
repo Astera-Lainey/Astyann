@@ -322,6 +322,12 @@ public class CodeGenerationService {
                 freeMarkerEngine.render("backend/Application.java.ftl", base));
         write(javaRoot.resolve("config").resolve("JpaConfig.java"),
                 freeMarkerEngine.render("backend/JpaConfig.java.ftl", base));
+        // CORS + a login endpoint: without these the generated frontend cannot reach this API at
+        // all (browser preflight is rejected, and no token can ever be obtained).
+        write(javaRoot.resolve("config").resolve("CorsConfig.java"),
+                freeMarkerEngine.render("backend/CorsConfig.java.ftl", base));
+        write(javaRoot.resolve("controller").resolve("AuthController.java"),
+                freeMarkerEngine.render("backend/AuthController.java.ftl", base));
         // ── Deterministic test suite (rendered from the projection, not the AI) ──
         write(testJavaRoot.resolve(appClassName + "SmokeTest.java"),
                 freeMarkerEngine.render("backend/ApplicationSmokeTest.java.ftl", base));

@@ -12,4 +12,10 @@ public class FrontendField {
     private String label;
     private boolean required;
     private boolean unique;
+
+    // Constraints carried through from the PCSF so the generated form validates the same rules the
+    // backend enforces with @Size / @Pattern, instead of only checking `required`.
+    private Integer minLength;
+    private Integer maxLength;
+    private String pattern;
 }

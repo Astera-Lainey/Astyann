@@ -23,6 +23,11 @@
 [[#module.hasDelete]]
         <button *astTableAction="let row" class="ast-btn ast-btn--danger ast-btn--sm" (click)="onDelete(row.id)">Delete</button>
 [[/module.hasDelete]]
+[[#module.customActions]]
+        <button *astTableAction="let row" class="ast-btn ast-btn--ghost ast-btn--sm"
+                [disabled]="actionInFlight() === row.id"
+                (click)="on[[methodNamePascal]](row.id)">[[label]]</button>
+[[/module.customActions]]
       </ast-table>
     </ast-card>
   }

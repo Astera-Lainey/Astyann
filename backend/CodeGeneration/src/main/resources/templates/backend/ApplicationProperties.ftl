@@ -18,8 +18,14 @@ jwt.secret=<#noparse>${JWT_SECRET:change-me-please-use-a-long-random-secret-valu
 jwt.access-token-validity-ms=${project.jwtAccessTokenValidityMs?c}
 jwt.refresh-token-validity-ms=${project.jwtRefreshTokenValidityMs?c}
 
-# CORS
+# CORS — origins allowed to call this API (the generated frontend's dev server)
 app.cors.allowed-origins=${project.corsAllowedOriginsDev}
+
+# Scaffold authentication — see controller/AuthController.
+# Credentials for the single built-in user; replace with a real user store before production.
+app.auth.username=<#noparse>${AUTH_USERNAME:admin@example.com}</#noparse>
+app.auth.password=<#noparse>${AUTH_PASSWORD:admin}</#noparse>
+app.auth.roles=<#list roles as role>${role.enumValue}<#sep>,</#sep></#list>
 
 # Logging
 logging.level.root=INFO

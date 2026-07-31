@@ -23,5 +23,13 @@ public class BackendEndpoint {
     private String responseType;
     /** True for the standard CRUD operations; false for custom use-case actions. */
     @Builder.Default private boolean crud = true;
+
+    /**
+     * True for the collection endpoint, which takes a {@code Pageable} and returns a
+     * {@code Page<T>}. The generated frontend expects Spring's page envelope
+     * ({@code content}, {@code totalPages}, {@code number}, …) — returning a bare list here left
+     * the generated list view permanently empty.
+     */
+    @Builder.Default private boolean paged = false;
     @Builder.Default private List<String> roles = new ArrayList<>();
 }

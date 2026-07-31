@@ -29,7 +29,7 @@ export class {{module.entityClassName}}FormComponent implements OnInit {
 
   readonly form = this.fb.group({
 {{#module.formFields}}
-    {{fieldName}}: [{{^required}}null{{/required}}{{#required}}null, Validators.required{{/required}}],
+    {{fieldName}}: [null{{#hasValidators}}, [{{{validatorsExpression}}}]{{/hasValidators}}],
 {{/module.formFields}}
   });
 

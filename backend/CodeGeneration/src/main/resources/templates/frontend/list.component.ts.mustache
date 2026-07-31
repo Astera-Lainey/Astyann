@@ -27,10 +27,14 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly totalPages = signal(0);
   readonly currentPage = signal(0);
+{{#module.hasCustomActions}}
+  /** Row id whose use-case action is currently running — disables that row's buttons. */
+  readonly actionInFlight = signal<string | null>(null);
+{{/module.hasCustomActions}}
 
   readonly columns = [
 {{#module.listColumns}}
-    { label: '{{label}}', fieldName: '{{fieldName}}' },
+    { label: '{{label}}', fieldName: '{{fieldName}}'{{#badge}}, kind: 'badge' as const, variants: {{{variantsExpression}}}{{/badge}} },
 {{/module.listColumns}}
   ];
 
@@ -43,9 +47,9 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
     this.error.set(null);
     this.service.getAll(page).subscribe({
       next: res => {
-        this.items.set(res.content);
-        this.totalPages.set(res.totalPages);
-        this.currentPage.set(res.page);
+        this.items.set(res.content ?? []);
+        this.totalPages.set(res.totalPages ?? 0);
+        this.currentPage.set(res.number ?? 0);
         this.loading.set(false);
       },
       error: (err: any) => {
@@ -64,4 +68,21 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
     });
   }
 {{/module.hasDelete}}
+{{#module.customActions}}
+
+  /** Invokes the {{label}} use-case action, then refreshes the current page. */
+  on{{methodNamePascal}}(id: string): void {
+    this.actionInFlight.set(id);
+    this.service.{{methodName}}(id).subscribe({
+      next: () => {
+        this.actionInFlight.set(null);
+        this.load(this.currentPage());
+      },
+      error: (err: any) => {
+        this.actionInFlight.set(null);
+        this.error.set(err?.message ?? '{{label}} failed.');
+      }
+    });
+  }
+{{/module.customActions}}
 }

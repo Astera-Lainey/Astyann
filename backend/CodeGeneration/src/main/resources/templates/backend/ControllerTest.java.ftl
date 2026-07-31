@@ -6,9 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,7 +40,11 @@ class ${module.controllerName}Test {
 
     @Test
     void listEndpointIsMappedAndReturnsOk() throws Exception {
+<#if listEp.paged>
+        when(service.${listEp.methodName}(any(Pageable.class))).thenReturn(Page.empty());
+<#else>
         when(service.${listEp.methodName}()).thenReturn(java.util.List.of());
+</#if>
 
         mockMvc.perform(get("${module.requestMapping}"))
                 .andExpect(status().isOk());

@@ -8,7 +8,15 @@
   <tbody>
     @for (row of rows; track $index) {
       <tr>
-        @for (col of columns; track col.fieldName) { <td>{{ row[col.fieldName] }}</td> }
+        @for (col of columns; track col.fieldName) {
+          <td>
+            @if (col.kind === 'badge') {
+              <ast-badge [variant]="badgeVariant(col, row)">{{ row[col.fieldName] }}</ast-badge>
+            } @else {
+              {{ row[col.fieldName] }}
+            }
+          </td>
+        }
         @if (actionTemplates.length) {
           <td class="ast-table__actions">
             @for (tpl of actionTemplates; track $index) {
