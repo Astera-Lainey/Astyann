@@ -304,8 +304,12 @@ public class CodeGenerationService {
             model.put("module", module);
             BackendEntity moduleEntity = entityByClass.get(module.getEntityClassName());
             if (moduleEntity == null) {
+                // Fallback for a module whose entity was not projected. idType must be set
+                // explicitly — the module templates interpolate it, and a null would render the
+                // literal "null" as a Java type.
                 moduleEntity = BackendEntity.builder().className(module.getEntityClassName())
-                        .instanceName(module.getEntityInstanceName()).build();
+                        .instanceName(module.getEntityInstanceName())
+                        .idStrategy("UUID").idType("UUID").build();
             }
             model.put("entity", moduleEntity);
             write(javaRoot.resolve("service").resolve(module.getServiceName() + ".java"),

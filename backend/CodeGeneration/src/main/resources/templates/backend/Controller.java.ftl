@@ -31,12 +31,12 @@ public class ${module.controllerName} {
 </#if>
     @${mappingAnnotations[ep.httpMethod]}<#if ep.path?has_content>("${ep.path}")</#if>
 <#if ep.returnType == "void">
-    public ResponseEntity<Void> ${ep.methodName}(<#if ep.hasPathVariable>@PathVariable UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if>) {
+    public ResponseEntity<Void> ${ep.methodName}(<#if ep.hasPathVariable>@PathVariable ${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if>) {
         service.${ep.methodName}(<#if ep.hasPathVariable>id</#if>);
         return ResponseEntity.noContent().build();
     }
 <#else>
-    public ResponseEntity<${ep.returnType}> ${ep.methodName}(<#if ep.paged>@PageableDefault(size = 20) Pageable pageable<#else><#if ep.hasPathVariable>@PathVariable UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if></#if>) {
+    public ResponseEntity<${ep.returnType}> ${ep.methodName}(<#if ep.paged>@PageableDefault(size = 20) Pageable pageable<#else><#if ep.hasPathVariable>@PathVariable ${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if></#if>) {
         return ResponseEntity.status(HttpStatus.<#if ep.httpMethod == "POST">CREATED<#else>OK</#if>)
                 .body(service.${ep.methodName}(<#if ep.paged>pageable<#else><#if ep.hasPathVariable>id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>request</#if></#if>));
     }

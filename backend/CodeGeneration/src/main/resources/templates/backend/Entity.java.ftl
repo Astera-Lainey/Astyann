@@ -25,13 +25,8 @@ import java.util.UUID;
 </#if>public class ${entity.className} {
 
     @Id
-<#if entity.idStrategy == "IDENTITY">
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-<#else>
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-</#if>
+    @GeneratedValue(strategy = GenerationType.<#if entity.idStrategy == "IDENTITY">IDENTITY<#else>UUID</#if>)
+    private ${entity.idType} id;
 
 <#list entity.fields as field>
     @Column(name = "${field.columnName}"<#if field.unique>, unique = true</#if><#if field.required>, nullable = false</#if>)

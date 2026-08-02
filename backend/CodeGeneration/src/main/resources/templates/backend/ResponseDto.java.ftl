@@ -12,11 +12,7 @@ import java.util.UUID;
 @Setter
 public class ${entity.className}ResponseDto {
 
-<#if entity.idStrategy == "IDENTITY">
-    private Long id;
-<#else>
-    private UUID id;
-</#if>
+    private ${entity.idType} id;
 <#list entity.fields as field>
     private ${field.javaType} ${field.name};
 </#list>

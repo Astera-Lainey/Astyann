@@ -10,6 +10,6 @@ import java.util.UUID;
 public interface ${module.serviceName} {
 
 <#list module.endpoints as ep>
-    ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>);
+    ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>);
 </#list>
 }

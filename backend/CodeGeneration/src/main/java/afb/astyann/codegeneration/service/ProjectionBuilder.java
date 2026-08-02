@@ -600,6 +600,7 @@ public class ProjectionBuilder {
                 .instanceName(toLowerCamelCase(className))
                 .audited(e.isAuditFields())
                 .idStrategy(idStrategy)
+                .idType("IDENTITY".equals(idStrategy) ? "Long" : "UUID")
                 .fields(fields)
                 .relationships(new ArrayList<>())
                 .testable(testable)

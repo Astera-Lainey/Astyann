@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Repository
-public interface ${entity.className}Repository extends JpaRepository<${entity.className}, <#if entity.idStrategy == "IDENTITY">Long<#else>UUID</#if>> {
+public interface ${entity.className}Repository extends JpaRepository<${entity.className}, ${entity.idType}> {
 <#list entity.fields as field>
 <#if field.name == "active" || field.name == "archived">
     List<${entity.className}> findBy${field.name?cap_first}(boolean ${field.name});

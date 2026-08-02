@@ -25,7 +25,7 @@ public class ${module.serviceImplName} implements ${module.serviceName} {
 
 <#list module.endpoints as ep>
     @Override
-    public ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>UUID id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>) {
+    public ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>) {
 <#if ep.crud && ep.httpMethod == "POST" && !ep.hasPathVariable>
         ${module.entityClassName} entity = new ${module.entityClassName}();
         applyValues(entity, request);

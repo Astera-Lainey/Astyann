@@ -246,6 +246,69 @@ class GeneratedTestsRenderTest {
         assertThat(serviceImpl).contains("return repository.findAll(pageable).map(this::toResponse);");
     }
 
+    /**
+     * Every template that mentions the primary key must agree on its type. Entity/Repository/
+     * ResponseDto once honoured {@code idStrategy} while Controller/Service hardcoded {@code UUID},
+     * so an {@code IDENTITY} entity generated a project that could not compile — and the AI fix
+     * loop oscillated forever, because making the impl match the interface broke the interface.
+     */
+    @Test
+    void identityStrategyUsesLongConsistentlyAcrossEveryTemplate() {
+        BackendEntity identityEntity = BackendEntity.builder()
+                .className("Product").tableName("products").instanceName("product")
+                .audited(true).idStrategy("IDENTITY").idType("Long").testable(true)
+                .fields(List.of(BackendField.builder().name("name").columnName("name")
+                        .javaType("String").required(true).sampleValue("\"sample\"").build()))
+                .build();
+
+        Map<String, Object> model = baseModel();
+        model.put("entity", identityEntity);
+        model.put("module", BackendModule.builder()
+                .controllerName("ProductController").serviceName("ProductService")
+                .serviceImplName("ProductServiceImpl").repositoryName("ProductRepository")
+                .requestMapping("/api/v1/product").packageName("com.example.inventory")
+                .entityClassName("Product").entityInstanceName("product")
+                .endpoints(List.of(BackendEndpoint.builder()
+                        .httpMethod("GET").path("/{id}").methodName("getProductById")
+                        .returnType("ProductResponseDto").hasRequestBody(false)
+                        .hasPathVariable(true).responseType("ProductResponseDto").crud(true)
+                        .roles(List.of("STOCK_MANAGER")).build()))
+                .build());
+
+        String entity = engine.render("backend/Entity.java.ftl", model);
+        String repository = engine.render("backend/Repository.java.ftl", model);
+        String responseDto = engine.render("backend/ResponseDto.java.ftl", model);
+        String controller = engine.render("backend/Controller.java.ftl", model);
+        String serviceInterface = engine.render("backend/ServiceInterface.java.ftl", model);
+        String serviceImpl = engine.render("backend/ServiceImpl.java.ftl", model);
+
+        for (String source : List.of(entity, repository, responseDto, controller,
+                serviceInterface, serviceImpl)) {
+            assertValidJava(source, "IDENTITY-strategy source");
+        }
+
+        assertThat(entity).contains("private Long id;").contains("GenerationType.IDENTITY");
+        assertThat(repository).contains("JpaRepository<Product, Long>");
+        assertThat(responseDto).contains("private Long id;");
+        // The three that used to hardcode UUID:
+        assertThat(controller).contains("@PathVariable Long id").doesNotContain("@PathVariable UUID id");
+        assertThat(serviceInterface).contains("getProductById(Long id)").doesNotContain("(UUID id)");
+        assertThat(serviceImpl).contains("getProductById(Long id)").doesNotContain("(UUID id)");
+    }
+
+    @Test
+    void uuidStrategyRemainsTheDefaultEverywhere() {
+        Map<String, Object> model = baseModel();
+        model.put("entity", testableEntity()); // idType defaults to UUID
+        model.put("module", module());
+
+        assertThat(engine.render("backend/Entity.java.ftl", model)).contains("private UUID id;");
+        assertThat(engine.render("backend/Repository.java.ftl", model))
+                .contains("JpaRepository<Product, UUID>");
+        assertThat(engine.render("backend/Controller.java.ftl", model))
+                .contains("@PathVariable UUID id");
+    }
+
     @Test
     void testPropertiesPointAtInMemoryH2() {
         String props = engine.render("backend/TestApplicationProperties.ftl", baseModel());

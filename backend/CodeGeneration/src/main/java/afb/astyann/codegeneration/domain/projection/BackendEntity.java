@@ -19,6 +19,16 @@ public class BackendEntity {
     private boolean audited;
     /** UUID or IDENTITY. */
     private String idStrategy;
+
+    /**
+     * The Java type of the primary key — {@code Long} for {@code IDENTITY}, otherwise {@code UUID}.
+     *
+     * <p>Every template that mentions an id must use this. Entity/Repository/ResponseDto once
+     * honoured {@code idStrategy} while Controller/Service hardcoded {@code UUID}, so an
+     * {@code IDENTITY} entity produced a project that could not compile — and one the AI fix loop
+     * could never repair, because satisfying the interface broke the impl and vice versa.
+     */
+    @Builder.Default private String idType = "UUID";
     @Builder.Default private List<BackendField> fields = new ArrayList<>();
     @Builder.Default private List<BackendRelationship> relationships = new ArrayList<>();
 
