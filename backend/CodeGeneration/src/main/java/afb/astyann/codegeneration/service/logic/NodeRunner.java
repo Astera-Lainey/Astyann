@@ -152,6 +152,56 @@ public class NodeRunner {
         return tail(output, MAX_TAIL_LINES);
     }
 
+    /** {@code npm error code ETARGET} */
+    private static final Pattern NPM_ERROR_CODE = Pattern.compile(
+            "^npm (?:ERR!|error)\\s+code\\s+([A-Z0-9_]+)\\s*$");
+
+    /** {@code No matching version found for @jsonjoy.com/fs-node@4.66.0.} */
+    private static final Pattern NPM_NO_MATCHING_VERSION = Pattern.compile(
+            "No matching version found for\\s+(\\S+?)@([^\\s.]+(?:\\.[^\\s.]+)*?)\\.?\\s*$");
+
+    /** {@code 404  '@iconify/angular@^2.0.0' is not in this registry.} */
+    private static final Pattern NPM_NOT_IN_REGISTRY = Pattern.compile(
+            "'([^']+?)@([^']+)'\\s+is not in this registry");
+
+    /**
+     * npm codes that mean dependency resolution or the registry failed — the project's own sources
+     * were never looked at. Distinguishing these matters: a package the generator itself declares
+     * is a defect in the templates, whereas a transitive one is an upstream or network problem, and
+     * reporting both as "frontend compile FAILED" sends you hunting through generated code for a
+     * fault that is not there.
+     */
+    private static final List<String> RESOLUTION_ERROR_CODES = List.of(
+            "ETARGET", "E404", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET",
+            "ETIMEDOUT", "ERR_SOCKET_TIMEOUT", "EAGAIN", "ENETUNREACH", "E429", "EINTEGRITY");
+
+    /**
+     * Extracts the npm failure code and, where npm names one, the package whose version could not
+     * be resolved. Returns empty when the output carries no recognisable npm error code — in which
+     * case the failure is something else (a lifecycle script, a permissions problem) and should be
+     * reported verbatim rather than explained away.
+     */
+    public Optional<InstallFailure> classifyInstallFailure(String output) {
+        if (output == null || output.isBlank()) return Optional.empty();
+        String code = null;
+        String pkg = null;
+        for (String raw : output.split("\\r?\\n")) {
+            String line = raw.trim();
+            if (code == null) {
+                Matcher m = NPM_ERROR_CODE.matcher(line);
+                if (m.matches()) { code = m.group(1); continue; }
+            }
+            if (pkg == null) {
+                Matcher m = NPM_NO_MATCHING_VERSION.matcher(line);
+                if (m.find()) { pkg = m.group(1); continue; }
+                m = NPM_NOT_IN_REGISTRY.matcher(line);
+                if (m.find()) pkg = m.group(1);
+            }
+        }
+        if (code == null) return Optional.empty();
+        return Optional.of(new InstallFailure(code, pkg, RESOLUTION_ERROR_CODES.contains(code)));
+    }
+
     // ── Process execution ──────────────────────────────────────────────────
 
     private NodeResult run(Path projectDir, List<String> argv, int timeoutMinutes)
@@ -237,4 +287,12 @@ public class NodeRunner {
     public record TsErrorRow(String file, int line, int col, String code, String message) {
         public String formatted() { return file + ":" + line + ":" + col + " " + code + " " + message; }
     }
+
+    /**
+     * @param npmCode           npm's own error code, e.g. {@code ETARGET}
+     * @param packageName       the package npm named, or {@code null} if it named none
+     * @param dependencyProblem whether this is dependency resolution / registry rather than a
+     *                          failure of the project's own code
+     */
+    public record InstallFailure(String npmCode, String packageName, boolean dependencyProblem) {}
 }

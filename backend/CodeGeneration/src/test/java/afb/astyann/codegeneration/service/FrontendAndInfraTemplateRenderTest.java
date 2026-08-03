@@ -384,15 +384,136 @@ class FrontendAndInfraTemplateRenderTest {
         base.put("infra", infra);
 
         assertThat(freeMarker.render("infrastructure/docker-compose.yml.ftl", base))
-                .contains("inventory-db:").contains("inventory-backend:").contains("inventory-frontend:")
-                .contains("${DB_PASSWORD}");
+                .contains("inventory-db:").contains("inventory-backend:").contains("inventory-frontend:");
         assertThat(freeMarker.render("infrastructure/env.example.ftl", base))
                 .contains("DB_NAME=inventory_db").contains("JWT_SECRET=");
         assertThat(freeMarker.render("infrastructure/schema.sql.ftl", base))
                 .contains("CREATE DATABASE IF NOT EXISTS inventory_db");
-        assertThat(mustache.render("infrastructure/FrontendDockerfile.mustache", base))
-                .contains("FROM node:20-alpine AS build").contains("EXPOSE 80");
-        assertThat(mustache.render("infrastructure/NginxConf.mustache", base))
-                .contains("proxy_pass http://inventory-backend:8080/api/;");
+    }
+
+    @Test
+    void compose_refuses_to_start_without_the_secrets_instead_of_failing_as_unhealthy() {
+        InfraProjection infra = InfraProjection.builder()
+                .appName("Inventory").artifactId("inventory")
+                .backendServiceName("inventory-backend")
+                .frontendServiceName("inventory-frontend")
+                .databaseServiceName("inventory-db")
+                .databaseName("inventory_db").databaseUser("inv")
+                .backendPort(8080).frontendPort(4200).deploymentTarget("VPS")
+                .build();
+        Map<String, Object> base = new HashMap<>();
+        base.put("infra", infra);
+
+        String compose = freeMarker.render("infrastructure/docker-compose.yml.ftl", base);
+
+        // Blank secrets let MySQL start and then die with "Database is uninitialized and password
+        // option is not specified" — surfacing to the user only as "container is unhealthy", with
+        // nothing pointing at the real cause. `:?` makes compose name the variable up front.
+        assertThat(compose)
+                .contains("${DB_PASSWORD:?missing - copy .env.example to .env and set DB_PASSWORD}")
+                .contains("${DB_ROOT_PASSWORD:?missing - copy .env.example to .env and set DB_ROOT_PASSWORD}")
+                .contains("${JWT_SECRET:?missing - copy .env.example to .env and set JWT_SECRET")
+                // A bare reference would silently default to an empty string.
+                .doesNotContain("${DB_PASSWORD}")
+                .doesNotContain("${DB_ROOT_PASSWORD}")
+                .doesNotContain("${JWT_SECRET}");
+
+        // Non-secret settings keep working defaults so a filled-in .env stays minimal.
+        assertThat(compose)
+                .contains("${DB_NAME:-inventory_db}")
+                .contains("${DB_USER:-inv}")
+                // .env.example advertises these two, so compose has to actually honour them.
+                .contains("${BACKEND_PORT:-8080}:8080")
+                .contains("${FRONTEND_PORT:-4200}:80");
+
+        // Compose warns that `version` is obsolete and ignores it.
+        assertThat(compose).doesNotContain("version:");
+    }
+
+    /** The model the frontend layer renders its container files from — {@code project} + {@code infra}. */
+    private Map<String, Object> containerModel() {
+        Map<String, Object> base = new HashMap<>();
+        base.put("project", FrontendProjectInfo.builder()
+                .appName("Inventory").angularProjectName("inventory-web")
+                .apiBaseUrl("http://localhost:8080/api/v1").defaultRoute("/products").build());
+        base.put("infra", InfraProjection.builder()
+                .appName("Inventory").artifactId("inventory")
+                .backendServiceName("inventory-backend").backendPort(8080)
+                .frontendServiceName("inventory-frontend").frontendPort(4200)
+                .build());
+        return base;
+    }
+
+    @Test
+    void frontend_dockerfile_installs_without_a_lockfile_and_copies_the_real_build_output() {
+        String dockerfile = mustache.render("frontend/Dockerfile.mustache", containerModel());
+
+        // No package-lock.json is generated, and `npm ci` refuses to run without one — so the
+        // install must fall back to `npm install` rather than failing the build outright.
+        assertThat(dockerfile)
+                .contains("npm install --no-audit --no-fund")
+                .contains("if [ -f package-lock.json ]");
+
+        // The Angular application builder emits dist/<project>/browser. Copying dist/ itself would
+        // leave index.html two directories below nginx's root and every route would 404. The name
+        // comes from the same `project` object angular.json's outputPath does, so they cannot drift.
+        assertThat(dockerfile)
+                .contains("COPY --from=build /app/dist/inventory-web/browser /usr/share/nginx/html");
+
+        // nginx listens on 80 regardless of which host port compose publishes.
+        assertThat(dockerfile).contains("EXPOSE 80");
+    }
+
+    @Test
+    void frontend_dockerfile_survives_a_flaky_network() {
+        String dockerfile = mustache.render("frontend/Dockerfile.mustache", containerModel());
+
+        // npm's defaults are 2 retries with short timeouts — not enough for a ~1000-package
+        // install over a connection that stalls, which is how ECONNRESET shows up in Docker.
+        assertThat(dockerfile)
+                .contains("NPM_CONFIG_FETCH_RETRIES=5")
+                .contains("NPM_CONFIG_FETCH_TIMEOUT=600000");
+
+        // Three attempts, and the last one unguarded so a total failure still fails the build
+        // instead of producing an image with no node_modules.
+        assertThat(dockerfile).containsSubsequence(
+                "npm_install()", "|| {", "npm_install; }", "|| {", "npm_install; }");
+        assertThat(dockerfile).doesNotContain("|| true");
+
+        // Line continuations would carry a stray \r into /bin/sh on a CRLF checkout.
+        assertThat(dockerfile.lines().filter(l -> l.startsWith("RUN ") || l.startsWith("ENV "))
+                .filter(l -> l.endsWith("\\")).toList()).isEmpty();
+    }
+
+    @Test
+    void frontend_nginx_conf_renders_with_the_backend_service_as_the_api_upstream() {
+        assertThat(mustache.render("frontend/nginx.conf.mustache", containerModel()))
+                .contains("proxy_pass http://inventory-backend:8080/api/;")
+                // SPA fallback: without it a deep-linked route 404s on refresh.
+                .contains("try_files $uri $uri/ /index.html;");
+    }
+
+    /**
+     * docker-compose declares {@code context: ../frontend} with {@code dockerfile: Dockerfile}, and
+     * COPY paths resolve against that context — so these three must be emitted into the frontend
+     * layer, next to the sources, not into the infrastructure layer.
+     */
+    @Test
+    void container_files_are_copied_relative_to_the_frontend_build_context() {
+        assertThat(mustache.render("frontend/Dockerfile.mustache", containerModel()))
+                // A bare filename, so it only resolves if nginx.conf sits in the frontend layer
+                // alongside package.json — not under infrastructure/, where Docker never looks.
+                .contains("COPY nginx.conf /etc/nginx/conf.d/default.conf")
+                .contains("COPY package.json package-lock.json* ./");
+    }
+
+    @Test
+    void frontend_dockerignore_keeps_the_host_node_modules_out_of_the_image() {
+        // `COPY . .` runs after the install; without this the host's node_modules (native binaries
+        // built for the developer's OS) would overwrite the one installed inside alpine.
+        assertThat(mustache.render("frontend/dockerignore.mustache", new HashMap<>()))
+                .contains("node_modules")
+                .contains("dist")
+                .contains(".angular");
     }
 }

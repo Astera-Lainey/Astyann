@@ -33,11 +33,24 @@ Three independent artifacts, each generated, validated, and approved separately:
 
 | Value | Contents |
 |---|---|
-| `BACKEND` | Spring Boot 3.3 project (entities, repositories, services, controllers, security, tests) |
-| `FRONTEND` | Angular 21 project (models, services, list/form components, shell, CLI scaffold) |
-| `INFRASTRUCTURE` | `docker-compose.yml`, `.env.example`, DB schema, Dockerfiles, nginx config |
+| `BACKEND` | Spring Boot 3.3 project (entities, repositories, services, controllers, security, tests) + its `Dockerfile` |
+| `FRONTEND` | Angular 21 project (models, services, list/form components, shell, CLI scaffold) + its `Dockerfile`, `nginx.conf`, `.dockerignore` |
+| `INFRASTRUCTURE` | `docker-compose.yml`, `.env.example`, DB schema |
 
 > Enum values are **case-sensitive**: `BACKEND` works, `backend` returns `400`.
+
+> **Layout for `docker compose up`.** Compose declares `context: ../backend` and
+> `context: ../frontend`, so unzip the three layers as siblings and run from the
+> infrastructure folder. Each application layer carries its own `Dockerfile`, because
+> Docker resolves it — and every `COPY` inside it — against the build context, not
+> against the compose file:
+>
+> ```
+> project/
+>   backend/          # BACKEND layer   — contains Dockerfile
+>   frontend/         # FRONTEND layer  — contains Dockerfile, nginx.conf, .dockerignore
+>   infrastructure/   # INFRASTRUCTURE layer — run `docker compose up --build` here
+> ```
 
 ### Status lifecycle
 

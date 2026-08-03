@@ -36,6 +36,7 @@ import afb.astyann.codegeneration.service.logic.MavenRunner;
 import afb.astyann.codegeneration.service.logic.NodeRunner;
 import afb.astyann.codegeneration.service.logic.PromptBuilder;
 import afb.astyann.codegeneration.service.logic.TsFilePatcher;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -223,7 +224,10 @@ public class CodeGenerationService {
                                 projectId, aiEx.getMessage(), aiEx);
                     }
                 }
-                case FRONTEND -> renderFrontend(projectionBuilder.buildFrontendProjection(pcsf), layerRoot);
+                // The frontend layer ships its own Dockerfile/nginx.conf — which need service names
+                // and ports — so it takes the infra projection too.
+                case FRONTEND -> renderFrontend(projectionBuilder.buildFrontendProjection(pcsf),
+                        projectionBuilder.buildInfraProjection(pcsf), layerRoot);
                 case INFRASTRUCTURE -> renderInfrastructure(projectionBuilder.buildInfraProjection(pcsf), layerRoot);
             }
             byte[] zip = zipDirectory(layerRoot);
@@ -385,7 +389,8 @@ public class CodeGenerationService {
 
     // ── Frontend rendering ───────────────────────────────────────────────────────
 
-    private void renderFrontend(FrontendProjection projection, Path frontendRoot) throws IOException {
+    private void renderFrontend(FrontendProjection projection, InfraProjection infra, Path frontendRoot)
+            throws IOException {
         var info = projection.getProjectInfo();
         Path appRoot = frontendRoot.resolve("src/app");
         Path modelsRoot = appRoot.resolve("core/models");
@@ -397,6 +402,7 @@ public class CodeGenerationService {
 
         Map<String, Object> base = new HashMap<>();
         base.put("project", info);
+        base.put("infra", infra);
         base.put("entities", projection.getEntities());
         base.put("modules", projection.getModules());
         base.put("navigation", projection.getNavigation());
@@ -456,6 +462,16 @@ public class CodeGenerationService {
                 mustacheEngine.render("frontend/environment.ts.mustache", base));
         write(frontendRoot.resolve("package.json"),
                 mustacheEngine.render("frontend/package.json.mustache", base));
+        // ── Container packaging. docker-compose.yml declares `context: ../frontend` with
+        // `dockerfile: Dockerfile`, and COPY paths (nginx.conf) plus .dockerignore all resolve
+        // against that context — so all three belong here, next to the sources, exactly as the
+        // backend layer carries its own Dockerfile. ──
+        write(frontendRoot.resolve("Dockerfile"),
+                mustacheEngine.render("frontend/Dockerfile.mustache", base));
+        write(frontendRoot.resolve("nginx.conf"),
+                mustacheEngine.render("frontend/nginx.conf.mustache", base));
+        write(frontendRoot.resolve(".dockerignore"),
+                mustacheEngine.render("frontend/dockerignore.mustache", base));
         write(featuresRoot.resolve("auth/login").resolve("login.component.ts"),
                 mustacheEngine.render("frontend/login.component.ts.mustache", base));
         write(featuresRoot.resolve("auth/login").resolve("login.component.html"),
@@ -505,10 +521,9 @@ public class CodeGenerationService {
                 freeMarkerEngine.render("infrastructure/env.example.ftl", base));
         write(infraRoot.resolve("db/schema.sql"),
                 freeMarkerEngine.render("infrastructure/schema.sql.ftl", base));
-        write(infraRoot.resolve("frontend/Dockerfile"),
-                mustacheEngine.render("infrastructure/FrontendDockerfile.mustache", base));
-        write(infraRoot.resolve("frontend/nginx.conf"),
-                mustacheEngine.render("infrastructure/NginxConf.mustache", base));
+        // The frontend Dockerfile and nginx.conf are deliberately NOT written here: Docker resolves
+        // them against the build context (`../frontend`), so a copy under infrastructure/ would be
+        // one the build never reads. They live in the frontend layer instead.
     }
 
     // ── ZIP / IO ─────────────────────────────────────────────────────────────────
@@ -969,12 +984,12 @@ public class CodeGenerationService {
                 return new CompileLoopOutcome(0, checks, issues);
             }
 
+            // Recorded before the install, because a successful install creates one.
+            boolean hadLockfile = Files.exists(projectDir.resolve("package-lock.json"));
+
             var installResult = nodeRunner.install(projectDir);
             if (!installResult.success()) {
-                issues.add("Frontend `npm install` failed:\n"
-                        + nodeRunner.extractFailureSummary(installResult.output()));
-                checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
-                        .message("npm install failed (exit=" + installResult.exitCode() + ")").build());
+                checks.add(describeInstallFailure(projectDir, installResult, issues));
                 return new CompileLoopOutcome(0, checks, issues);
             }
 
@@ -988,7 +1003,13 @@ public class CodeGenerationService {
                     checks.add(ValidationCheckDTO.builder().name("compile:FRONTEND").status("PASSED")
                             .message((useNgBuild ? "built" : "type-checked")
                                     + " successfully on attempt " + attempt).build());
-                    if (attempt > 1) {
+                    // Re-store when the AI fixed something, and also on the first run that produced
+                    // a lockfile. Without one, every later `npm install` — and every Docker build —
+                    // re-resolves floating transitive ranges and can break on an upstream release
+                    // that has nothing to do with this project. Capturing the lockfile that just
+                    // built successfully makes those installs reproducible.
+                    boolean lockfileNowExists = Files.exists(projectDir.resolve("package-lock.json"));
+                    if (attempt > 1 || (!hadLockfile && lockfileNowExists)) {
                         byte[] fixedZip = zipDirectoryExcludingNodeModules(projectDir);
                         String newPath = storageService.saveZip(projectId, CodeLayer.FRONTEND, fixedZip);
                         frontend.setCodePath(newPath);
@@ -1082,6 +1103,72 @@ public class CodeGenerationService {
      * Re-zips the project, skipping build artefacts ({@code node_modules}, {@code dist},
      * {@code .angular} cache, {@code out-tsc}) so the stored ZIP stays a source archive.
      */
+    /**
+     * Turns a failed {@code npm install} into a check that says whose problem it is.
+     *
+     * <p>A package the generated {@code package.json} declares itself is a defect in the templates
+     * and fails validation. A package that only appears transitively cannot be fixed by changing
+     * anything this service emits — it is an upstream publish or a network problem — so it is
+     * reported as a WARNING and left out of {@code remainingIssues}, exactly like a missing Node
+     * toolchain: the frontend was not verified, but nothing says it is broken.
+     */
+    private ValidationCheckDTO describeInstallFailure(
+            Path projectDir, NodeRunner.NodeResult result, List<String> issues) {
+        String summary = nodeRunner.extractFailureSummary(result.output());
+        var classified = nodeRunner.classifyInstallFailure(result.output());
+
+        if (classified.isPresent() && classified.get().dependencyProblem()) {
+            var failure = classified.get();
+            String pkg = failure.packageName();
+            Set<String> declared = readDeclaredDependencies(projectDir);
+            boolean ours = pkg != null && declared.contains(pkg);
+
+            if (!ours) {
+                String who = pkg != null
+                        ? "`" + pkg + "`, which the generated package.json does not declare — it is "
+                          + "pulled in transitively by the Angular toolchain"
+                        : "a dependency the generated package.json does not declare";
+                log.warn("Frontend npm install hit an upstream dependency problem ({}): {}",
+                        failure.npmCode(), pkg);
+                return ValidationCheckDTO.builder().name("compile:FRONTEND").status("WARNING")
+                        .message("npm install could not resolve " + who + " (npm " + failure.npmCode()
+                                + "). The generated code was never compiled, so this is not evidence "
+                                + "of a defect in it. Retry once the registry recovers, or pin the "
+                                + "package via an `overrides` entry.\n" + summary)
+                        .build();
+            }
+
+            issues.add("Frontend `npm install` failed on `" + pkg + "`, which the generated "
+                    + "package.json declares directly (npm " + failure.npmCode() + "). This is a "
+                    + "template defect — the wrong package name or an unpublished version.\n" + summary);
+            return ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                    .message("npm install failed on declared dependency " + pkg
+                            + " (npm " + failure.npmCode() + ")").build();
+        }
+
+        issues.add("Frontend `npm install` failed:\n" + summary);
+        return ValidationCheckDTO.builder().name("compile:FRONTEND").status("FAILED")
+                .message("npm install failed (exit=" + result.exitCode() + ")").build();
+    }
+
+    /** Every package named directly in the generated {@code package.json}, across all dep blocks. */
+    private Set<String> readDeclaredDependencies(Path projectDir) {
+        Set<String> names = new HashSet<>();
+        Path manifest = projectDir.resolve("package.json");
+        if (!Files.exists(manifest)) return names;
+        try {
+            JsonNode root = objectMapper.readTree(Files.readString(manifest, StandardCharsets.UTF_8));
+            for (String block : List.of("dependencies", "devDependencies", "peerDependencies",
+                    "optionalDependencies")) {
+                JsonNode node = root.get(block);
+                if (node != null && node.isObject()) node.fieldNames().forEachRemaining(names::add);
+            }
+        } catch (Exception ex) {
+            log.warn("Could not read generated package.json at {}: {}", manifest, ex.getMessage());
+        }
+        return names;
+    }
+
     private byte[] zipDirectoryExcludingNodeModules(Path root) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(baos);

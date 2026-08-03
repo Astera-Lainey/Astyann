@@ -11,6 +11,60 @@ class NodeRunnerTest {
 
     private final NodeRunner runner = new NodeRunner();
 
+    /** Verbatim from a real run: memfs@4.66.0 pinned a sibling that was never published. */
+    @Test
+    void classifiesAnUnpublishedTransitiveVersionAsADependencyProblem() {
+        String output = String.join("\n",
+                "npm error code ETARGET",
+                "npm error notarget No matching version found for @jsonjoy.com/fs-node@4.66.0.",
+                "npm error notarget In most cases you or one of your dependencies are requesting",
+                "npm error A complete log of this run can be found in: C:\\Users\\x\\_logs\\debug-0.log");
+
+        var failure = runner.classifyInstallFailure(output);
+
+        assertThat(failure).isPresent();
+        assertThat(failure.get().npmCode()).isEqualTo("ETARGET");
+        assertThat(failure.get().packageName()).isEqualTo("@jsonjoy.com/fs-node");
+        assertThat(failure.get().dependencyProblem()).isTrue();
+    }
+
+    @Test
+    void classifiesAPackageMissingFromTheRegistry() {
+        // The shape of the earlier @iconify/angular failure — a name the generator itself emitted.
+        String output = String.join("\n",
+                "npm error code E404",
+                "npm error 404 Not Found - GET https://registry.npmjs.org/@iconify%2fangular",
+                "npm error 404  '@iconify/angular@^2.0.0' is not in this registry.");
+
+        var failure = runner.classifyInstallFailure(output);
+
+        assertThat(failure).isPresent();
+        assertThat(failure.get().npmCode()).isEqualTo("E404");
+        assertThat(failure.get().packageName()).isEqualTo("@iconify/angular");
+        assertThat(failure.get().dependencyProblem()).isTrue();
+    }
+
+    @Test
+    void treatsNonResolutionFailuresAsSomethingElse() {
+        // A lifecycle-script failure is the project's own problem and must not be explained away
+        // as an upstream registry hiccup.
+        var failure = runner.classifyInstallFailure(String.join("\n",
+                "npm error code ELIFECYCLE",
+                "npm error errno 1",
+                "npm error postinstall script failed"));
+
+        assertThat(failure).isPresent();
+        assertThat(failure.get().npmCode()).isEqualTo("ELIFECYCLE");
+        assertThat(failure.get().dependencyProblem()).isFalse();
+    }
+
+    @Test
+    void returnsEmptyWhenThereIsNoRecognisableNpmErrorCode() {
+        assertThat(runner.classifyInstallFailure("something exploded")).isEmpty();
+        assertThat(runner.classifyInstallFailure("")).isEmpty();
+        assertThat(runner.classifyInstallFailure(null)).isEmpty();
+    }
+
     @Test
     void parsesTscErrorRows() {
         String output = String.join("\n",

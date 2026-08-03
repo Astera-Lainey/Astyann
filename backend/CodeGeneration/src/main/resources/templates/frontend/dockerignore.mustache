@@ -1,0 +1,13 @@
+# Without this, `COPY . .` in the Dockerfile overwrites the node_modules that was just
+# installed inside the image with the host's copy — which on Windows or macOS contains
+# native binaries an alpine container cannot execute.
+node_modules
+dist
+.angular
+npm-debug.log*
+.git
+.gitignore
+Dockerfile
+.dockerignore
+.env
+.env.*
