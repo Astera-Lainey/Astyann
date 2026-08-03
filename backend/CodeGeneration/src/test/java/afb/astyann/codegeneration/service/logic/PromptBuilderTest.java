@@ -68,6 +68,55 @@ class PromptBuilderTest {
     }
 
     @Test
+    void compileFixPromptCarriesRelatedFilesAsReadOnlyContext() {
+        // Without the interface in view, a signature mismatch is unfixable: satisfying the impl
+        // breaks the interface and the loop oscillates.
+        String prompt = builder.userPromptForCompileFix(
+                "class ProductServiceImpl {}",
+                List.of("ProductServiceImpl.java:46 incompatible types: Long cannot be converted to UUID"),
+                "com.example.app",
+                new java.util.LinkedHashMap<>(java.util.Map.of(
+                        "service/ProductService.java  (interface this class implements)",
+                        "interface ProductService { ProductResponseDto getProductById(UUID id); }")));
+
+        assertThat(prompt)
+                .contains("RELATED FILES")
+                .contains("read-only")
+                .contains("interface this class implements")
+                .contains("getProductById(UUID id)")
+                // The model must be told which file it is actually editing.
+                .contains("CURRENT FILE (this is the one to fix)")
+                // And be given an escape hatch rather than guessing.
+                .contains("leave \"fixedSource\" unchanged");
+    }
+
+    @Test
+    void compileFixPromptOmitsTheContextSectionWhenThereIsNone() {
+        String prompt = builder.userPromptForCompileFix("class Foo {}",
+                List.of("Foo.java:1 boom"), "com.example.app");
+        assertThat(prompt).doesNotContain("RELATED FILES");
+    }
+
+    @Test
+    void angularTemplateFixPromptAsksForHtmlNotTypeScript() {
+        assertThat(builder.systemPromptForAngularTemplateFix())
+                .containsIgnoringCase("template")
+                .contains("TypeScript")   // ...as something NOT to return
+                .contains("must remain an Angular template, not a component class");
+
+        String user = builder.userPromptForAngularTemplateFix(
+                "<div><iconify-icon></iconify-icon></div>",
+                List.of("sidebar.component.html:6:8 NG8001 'iconify-icon' is not a known element"),
+                "src/app/layout/sidebar/sidebar.component.html");
+
+        assertThat(user)
+                .contains("TEMPLATE FILE")
+                .contains("sidebar.component.html")
+                .contains("NG8001")
+                .contains("Return the full corrected HTML template");
+    }
+
+    @Test
     void tsFixPromptsCarryErrorsAndPath() {
         assertThat(builder.systemPromptForTsFix()).containsIgnoringCase("TypeScript");
         String user = builder.userPromptForTsFix("export class Foo {}",

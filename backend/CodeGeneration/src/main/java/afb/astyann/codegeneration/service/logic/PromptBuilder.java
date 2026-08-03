@@ -233,6 +233,18 @@ public class PromptBuilder {
 
     public String userPromptForCompileFix(String currentSource, List<String> errorLines,
                                           String packagePathHint) {
+        return userPromptForCompileFix(currentSource, errorLines, packagePathHint, java.util.Map.of());
+    }
+
+    /**
+     * @param relatedSources read-only context keyed by a descriptive label — typically the
+     *                       interface the file must satisfy and any other files failing in the same
+     *                       round. Supplying these is what allows a signature mismatch to be fixed
+     *                       coherently instead of ping-ponging between two files.
+     */
+    public String userPromptForCompileFix(String currentSource, List<String> errorLines,
+                                          String packagePathHint,
+                                          java.util.Map<String, String> relatedSources) {
         StringBuilder sb = new StringBuilder();
         sb.append("## COMPILE ERRORS\n");
         for (String e : errorLines) sb.append("- ").append(e).append('\n');
@@ -241,7 +253,19 @@ public class PromptBuilder {
               .append(packagePathHint.replace('.', '/'))
               .append("/dto/YourType.java\n");
         }
-        sb.append("\n## CURRENT FILE\n").append(currentSource);
+
+        if (relatedSources != null && !relatedSources.isEmpty()) {
+            sb.append("\n## RELATED FILES (read-only context — you are NOT editing these)\n")
+              .append("Your fix must remain compatible with them. If the only way to satisfy the\n")
+              .append("errors is to change one of these files instead, say so in \"notes\" and\n")
+              .append("leave \"fixedSource\" unchanged rather than guessing.\n\n");
+            for (var entry : relatedSources.entrySet()) {
+                sb.append("### ").append(entry.getKey()).append("\n```java\n")
+                  .append(truncate(entry.getValue(), 3000)).append("\n```\n");
+            }
+        }
+
+        sb.append("\n## CURRENT FILE (this is the one to fix)\n").append(currentSource);
         sb.append("\n\nReturn the JSON fix now.");
         return sb.toString();
     }
@@ -264,6 +288,42 @@ public class PromptBuilder {
                4. Keep the existing import style and formatting.
                5. Output the ENTIRE file, not a diff or a fragment.
                """;
+    }
+
+    /**
+     * Angular template (.html) repair. Kept separate from {@link #systemPromptForTsFix()} because
+     * template errors ({@code NG8001} and friends) report a {@code .html} location — asking for
+     * "the corrected TypeScript file" while handing over HTML makes the model rewrite it as a
+     * component class and destroy the template.
+     */
+    public String systemPromptForAngularTemplateFix() {
+        return """
+               You are a senior Angular 21 engineer fixing errors in a single component TEMPLATE
+               file (.html). Templates use the modern control-flow syntax (@if / @for / @switch).
+
+               Return ONLY the full corrected HTML template — no prose, no markdown fences, and no
+               TypeScript. The output must remain an Angular template, not a component class.
+
+               HARD RULES:
+               1. Fix every listed error without introducing new bindings or elements.
+               2. Preserve all existing structure, CSS classes, bindings and control-flow blocks
+                  that are not implicated in an error.
+               3. Do NOT rename or invent component inputs, outputs or template variables.
+               4. If an element is unknown, prefer removing the offending attribute over deleting
+                  the element, unless the error says the element itself is unknown.
+               5. Output the ENTIRE template file, not a fragment or a diff.
+               """;
+    }
+
+    public String userPromptForAngularTemplateFix(String currentSource, List<String> errorLines,
+                                                  String relativePath) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## TEMPLATE FILE\n").append(relativePath == null ? "(unknown)" : relativePath).append("\n\n");
+        sb.append("## ERRORS\n");
+        for (String e : errorLines) sb.append("- ").append(e).append('\n');
+        sb.append("\n## CURRENT TEMPLATE\n").append(currentSource);
+        sb.append("\n\nReturn the full corrected HTML template now.");
+        return sb.toString();
     }
 
     public String userPromptForTsFix(String currentSource, List<String> errorLines,

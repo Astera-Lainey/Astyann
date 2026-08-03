@@ -59,6 +59,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -745,6 +747,65 @@ public class CodeGenerationService {
         }
     }
 
+    /**
+     * A stable fingerprint of a compile failure: the distinct {@code file:message} pairs, sorted.
+     * Line and column are excluded on purpose — an edit shifts them, and we want
+     * "the same problems as before" to compare equal even when the text moved.
+     */
+    private static String errorSignature(List<MavenRunner.CompileErrorRow> errors) {
+        return errors.stream()
+                .map(e -> e.file().getFileName() + "|" + e.message())
+                .distinct()
+                .sorted()
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    /** Reads every {@code *.java} file under {@code root} into memory so it can be restored. */
+    private Map<Path, String> snapshotSources(Path root) {
+        Map<Path, String> snapshot = new HashMap<>();
+        try (var paths = Files.walk(root)) {
+            paths.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> {
+                        try {
+                            snapshot.put(p, Files.readString(p, StandardCharsets.UTF_8));
+                        } catch (IOException ignored) {
+                            // A file we cannot read is simply not restorable.
+                        }
+                    });
+        } catch (IOException ex) {
+            log.debug("Could not snapshot sources under {}: {}", root, ex.getMessage());
+        }
+        return snapshot;
+    }
+
+    /**
+     * Restores a snapshot taken by {@link #snapshotSources(Path)}, and deletes any {@code .java}
+     * file created after it — otherwise a class the AI invented would survive the rollback and
+     * keep breaking the build.
+     */
+    private void restoreSources(Path root, Map<Path, String> snapshot) {
+        if (snapshot == null || snapshot.isEmpty()) return;
+        try (var paths = Files.walk(root)) {
+            List<Path> current = paths.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .toList();
+            for (Path path : current) {
+                if (!snapshot.containsKey(path)) Files.deleteIfExists(path);
+            }
+        } catch (IOException ex) {
+            log.debug("Could not prune files during rollback under {}: {}", root, ex.getMessage());
+        }
+        snapshot.forEach((path, content) -> {
+            try {
+                Files.createDirectories(path.getParent());
+                Files.writeString(path, content, StandardCharsets.UTF_8);
+            } catch (IOException ex) {
+                log.warn("Could not restore {}: {}", path.getFileName(), ex.getMessage());
+            }
+        });
+    }
+
     private record CompileLoopOutcome(int attempts, List<ValidationCheckDTO> checks, List<String> issues) {}
 
     private CompileLoopOutcome runCompileLoop(UUID projectId, GeneratedCode backend) {
@@ -776,6 +837,15 @@ public class CodeGenerationService {
 
             int attempt;
             List<String> lastErrorSummaries = List.of();
+            // Cycle detection: an error signature we have already seen means the fixes are
+            // undoing each other (a contradiction spanning files), so further attempts cannot
+            // converge — see bailOnCycle below.
+            Set<String> seenSignatures = new HashSet<>();
+            // Best-known state: a fix attempt can make things worse, and without this the loop
+            // would leave the project in whatever state the last (possibly worst) attempt produced.
+            Map<Path, String> bestSnapshot = null;
+            int bestErrorCount = Integer.MAX_VALUE;
+
             for (attempt = 1; attempt <= Math.max(1, compileMaxAttempts); attempt++) {
                 var result = mavenRunner.compile(workDir);
                 if (result.success()) {
@@ -815,19 +885,50 @@ public class CodeGenerationService {
                         .limit(20)
                         .toList();
 
-                Set<Path> filesToFix = new HashSet<>();
+                // Keep the least-broken state seen so far, so the loop can never hand back a
+                // project that is worse than the one it was given.
+                if (errors.size() < bestErrorCount) {
+                    bestErrorCount = errors.size();
+                    bestSnapshot = snapshotSources(workDir);
+                }
+
+                // A repeated signature means we are cycling between the same error sets: the fixes
+                // contradict one another, and burning the remaining attempts cannot help.
+                String signature = errorSignature(errors);
+                if (!seenSignatures.add(signature)) {
+                    restoreSources(workDir, bestSnapshot);
+                    log.warn("Compile fix loop for project {} is cycling — the same error set "
+                            + "reappeared on attempt {}. Stopping early.", projectId, attempt);
+                    issues.add("Backend compile errors are contradictory across files — the same "
+                            + "error set reappeared on attempt " + attempt + ", so the AI fix loop "
+                            + "cannot converge. This normally means two generated files disagree "
+                            + "(for example an interface and its implementation), which no "
+                            + "single-file fix can reconcile. Fix the template, not the output.");
+                    issues.addAll(lastErrorSummaries);
+                    checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
+                            .message("stopped after " + attempt + " attempt(s): contradictory errors, "
+                                    + "fixes are undoing each other").build());
+                    return new CompileLoopOutcome(attempt, checks, issues);
+                }
+
+                Set<Path> filesToFix = new LinkedHashSet<>();
                 for (var err : errors) filesToFix.add(err.file());
                 for (Path file : filesToFix) {
                     if (!Files.exists(file)) continue;
                     List<String> perFile = errors.stream().filter(e -> e.file().equals(file))
                             .map(MavenRunner.CompileErrorRow::formatted).toList();
-                    tryFixFileWithAi(workDir, file, perFile);
+                    // Pass the other failing files as read-only context: a signature mismatch can
+                    // only be resolved coherently if the model can see the contract it must meet.
+                    tryFixFileWithAi(workDir, file, perFile, filesToFix);
                 }
                 checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("WARNING")
                         .message("attempt " + attempt + ": " + errors.size() + " errors, applying AI fix").build());
             }
 
-            issues.add("Backend still fails to compile after " + compileMaxAttempts + " AI fix attempts.");
+            restoreSources(workDir, bestSnapshot);
+            issues.add("Backend still fails to compile after " + compileMaxAttempts + " AI fix attempts."
+                    + (bestErrorCount < Integer.MAX_VALUE
+                       ? " Restored the least-broken state seen (" + bestErrorCount + " error(s))." : ""));
             issues.addAll(lastErrorSummaries);
             checks.add(ValidationCheckDTO.builder().name("compile:BACKEND").status("FAILED")
                     .message("exhausted retries").build());
@@ -942,18 +1043,24 @@ public class CodeGenerationService {
     private void tryFixTsFileWithAi(Path projectDir, Path file, List<String> errorLines) {
         try {
             String current = tsFilePatcher.read(file);
+            String relative = projectDir.relativize(file).toString().replace('\\', '/');
+            // Angular reports template errors against the .html file. Sending HTML to the
+            // TypeScript prompt makes the model return a component class and destroy the template.
+            boolean isTemplate = relative.endsWith(".html");
             var response = aiOrchestratorClient.infer(new AiOrchestratorClient.InferenceRequest(
                     aiModel,
-                    promptBuilder.systemPromptForTsFix(),
-                    promptBuilder.userPromptForTsFix(current, errorLines,
-                            projectDir.relativize(file).toString().replace('\\', '/'))));
+                    isTemplate ? promptBuilder.systemPromptForAngularTemplateFix()
+                               : promptBuilder.systemPromptForTsFix(),
+                    isTemplate ? promptBuilder.userPromptForAngularTemplateFix(current, errorLines, relative)
+                               : promptBuilder.userPromptForTsFix(current, errorLines, relative)));
             String raw = response == null ? null : response.content();
             if (raw == null || raw.isBlank()) {
-                log.warn("AI returned empty TS fix for {}", file.getFileName());
+                log.warn("AI returned empty fix for {}", file.getFileName());
                 return;
             }
-            if (!tsFilePatcher.writeIfSane(file, raw)) {
-                log.warn("AI-proposed TS fix for {} was empty — leaving file untouched.", file.getFileName());
+            if (!tsFilePatcher.writeIfSane(file, raw, current)) {
+                log.warn("AI-proposed fix for {} failed the sanity check — leaving file untouched.",
+                        file.getFileName());
             }
         } catch (Exception ex) {
             log.warn("Could not fix {} via AI: {}", file.getFileName(), ex.getMessage());
@@ -1050,14 +1157,17 @@ public class CodeGenerationService {
         }
     }
 
-    private void tryFixFileWithAi(Path workDir, Path file, List<String> errorLines) {
+    private void tryFixFileWithAi(Path workDir, Path file, List<String> errorLines,
+                                  Set<Path> allFailingFiles) {
         try {
             String current = filePatcher.read(file);
             String packageHint = extractPackageName(current);
+            Map<String, String> relatedSources = collectRelatedSources(workDir, file, allFailingFiles);
             var response = aiOrchestratorClient.infer(new AiOrchestratorClient.InferenceRequest(
                     aiModel,
                     promptBuilder.systemPromptForCompileFix(),
-                    promptBuilder.userPromptForCompileFix(current, errorLines, packageHint)));
+                    promptBuilder.userPromptForCompileFix(current, errorLines, packageHint,
+                            relatedSources)));
             String raw = response == null ? null : response.content();
             if (raw == null || raw.isBlank()) {
                 log.warn("AI returned empty fix for {}", file.getFileName());
@@ -1104,6 +1214,46 @@ public class CodeGenerationService {
             log.warn("Could not fix {} via AI: {}", file.getFileName(), ex.getMessage());
         }
     }
+
+    /**
+     * Gathers read-only context for a compile fix: the other files that are currently failing,
+     * plus the service interface a {@code *ServiceImpl} must satisfy.
+     *
+     * <p>Without this the model sees one file at a time, so a signature disagreement between an
+     * interface and its implementation is unfixable — satisfying one breaks the other, and the loop
+     * oscillates until it runs out of attempts.
+     */
+    private Map<String, String> collectRelatedSources(Path workDir, Path target, Set<Path> allFailingFiles) {
+        Map<String, String> related = new LinkedHashMap<>();
+        Path javaRoot = findSrcMainJava(workDir);
+
+        java.util.function.BiConsumer<Path, String> add = (path, why) -> {
+            if (path == null || path.equals(target) || !Files.exists(path)) return;
+            if (related.size() >= MAX_RELATED_CONTEXT_FILES) return;
+            try {
+                String label = (javaRoot != null && path.startsWith(javaRoot)
+                        ? javaRoot.relativize(path).toString().replace('\\', '/')
+                        : path.getFileName().toString()) + "  (" + why + ")";
+                related.put(label, filePatcher.read(path));
+            } catch (IOException ignored) {
+                // Context is best-effort; a file we cannot read is simply omitted.
+            }
+        };
+
+        // The interface an implementation must match — the classic contradiction pair.
+        String name = target.getFileName().toString();
+        if (name.endsWith("ServiceImpl.java") && javaRoot != null) {
+            String interfaceName = name.replace("ServiceImpl.java", "Service.java");
+            add.accept(javaRoot.resolve("service").resolve(interfaceName), "interface this class implements");
+        }
+        for (Path other : allFailingFiles) {
+            add.accept(other, "also failing to compile");
+        }
+        return related;
+    }
+
+    /** Context is capped so a large failure does not blow past the model's usable window. */
+    private static final int MAX_RELATED_CONTEXT_FILES = 4;
 
     private AiCompileFixResponse parseCompileFixResponse(String content) {
         String trimmed = stripCodeFences(content.trim());
