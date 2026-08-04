@@ -47,6 +47,27 @@ class ProjectionBuilderTest {
     }
 
     @Test
+    void navigationIconFallbackIsTheSameWhetherOrNotThePcsfDeclaresNavigation() {
+        // An explicit icon always wins; a declared item that merely omits one gets the same guess
+        // a derived item would, instead of always landing on the generic list glyph.
+        Pcsf pcsf = minimalPcsf();
+        pcsf.setUserInterface(afb.astyann.codegeneration.domain.pcsf.PcsfUserInterface.builder()
+                .navigation(List.of(
+                        afb.astyann.codegeneration.domain.pcsf.PcsfNavItem.builder()
+                                .label("Reports").routePath("/reports").build(),
+                        afb.astyann.codegeneration.domain.pcsf.PcsfNavItem.builder()
+                                .label("Anything").routePath("/anything").icon("mdi:custom").build(),
+                        afb.astyann.codegeneration.domain.pcsf.PcsfNavItem.builder()
+                                .label("Widgets").routePath("/widgets").build()))
+                .build());
+
+        var nav = builder.buildFrontendProjection(pcsf).getNavigation();
+
+        assertThat(nav).extracting(n -> n.getIcon())
+                .containsExactly("mdi:chart-bar", "mdi:custom", "mdi:view-list");
+    }
+
+    @Test
     void buildsProjectInfoWithDefaultPackage() {
         BackendProjection p = builder.buildBackendProjection(minimalPcsf());
         assertThat(p.getProjectInfo().getPackageName()).isEqualTo("com.example.app");

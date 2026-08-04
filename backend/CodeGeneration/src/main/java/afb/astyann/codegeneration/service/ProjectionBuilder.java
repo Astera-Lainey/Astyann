@@ -394,7 +394,11 @@ public class ProjectionBuilder {
                 out.add(FrontendNavItem.builder()
                         .label(!isBlank(n.getLabel()) ? n.getLabel() : toTitleCase(n.getRoutePath()))
                         .path(n.getRoutePath())
-                        .icon(!isBlank(n.getIcon()) ? n.getIcon() : "mdi:view-list")
+                        // Same fallback as the derived path below: a declared nav item that simply
+                        // omits an icon should get the same guess as one the PCSF never mentioned,
+                        // rather than always landing on the generic list glyph.
+                        .icon(!isBlank(n.getIcon()) ? n.getIcon()
+                                : iconForModule(!isBlank(n.getLabel()) ? n.getLabel() : n.getRoutePath()))
                         .roles(!nullSafe(n.getVisibleToRoles()).isEmpty() ? new ArrayList<>(n.getVisibleToRoles()) : new ArrayList<>(roleEnums))
                         .build());
             }
@@ -411,7 +415,13 @@ public class ProjectionBuilder {
         return out;
     }
 
+    /**
+     * Best-effort sidebar glyph for a module with no icon of its own. Purely cosmetic — it never
+     * affects generated code — and every unmatched name lands on a neutral list icon, so an
+     * unrecognised domain is styled plainly rather than wrongly.
+     */
     private String iconForModule(String moduleName) {
+        if (isBlank(moduleName)) return "mdi:view-list";
         String lower = moduleName.toLowerCase(Locale.ROOT);
         if (lower.matches(".*(user|account|member).*")) return "mdi:account-group";
         if (lower.matches(".*(product|item|stock|inventory).*")) return "mdi:package-variant";

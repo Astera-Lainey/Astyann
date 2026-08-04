@@ -117,6 +117,38 @@ public class PromptBuilder {
                              java.util.Map<String, String> allRepositorySources,
                              java.util.List<String> allDtoClassNames,
                              String ragContext) {
+        return userPrompt(module, pcsfModule, primaryEntity, rules, serviceImplSource,
+                repositorySource, controllerSource, primaryEntitySource, repositoryMethodSignatures,
+                allEntitySources, allRepositorySources, allDtoClassNames, ragContext,
+                java.util.Map.of(), List.of(), List.of());
+    }
+
+    /**
+     * Full prompt, including the cross-module context a single-module view cannot supply.
+     *
+     * @param otherServiceApis  other modules' service interfaces as name → method signatures.
+     *                          Signatures only: the bodies are irrelevant and would dominate the
+     *                          prompt. Without these the model cannot know a collaborator exists,
+     *                          so it reimplements the behaviour inline or drops it.
+     * @param collaborators     which of those services this module is actually related to, and how
+     * @param sharedRules       business rules another module is implementing the other half of
+     */
+    public String userPrompt(BackendModule module,
+                             PcsfModule pcsfModule,
+                             PcsfEntity primaryEntity,
+                             List<PcsfBusinessRule> rules,
+                             String serviceImplSource,
+                             String repositorySource,
+                             String controllerSource,
+                             String primaryEntitySource,
+                             List<String> repositoryMethodSignatures,
+                             java.util.Map<String, String> allEntitySources,
+                             java.util.Map<String, String> allRepositorySources,
+                             java.util.List<String> allDtoClassNames,
+                             String ragContext,
+                             java.util.Map<String, List<String>> otherServiceApis,
+                             List<ModuleDependencyResolver.Collaborator> collaborators,
+                             List<ModuleDependencyResolver.SharedRule> sharedRules) {
 
         StringBuilder sb = new StringBuilder();
 
@@ -162,6 +194,8 @@ public class PromptBuilder {
             sb.append('\n');
         }
 
+        appendCrossModuleContext(sb, module, otherServiceApis, collaborators, sharedRules);
+
         sb.append("## CURRENT — Controller (for reference, usually needs no change)\n```java\n")
           .append(controllerSource).append("\n```\n\n");
 
@@ -202,6 +236,60 @@ public class PromptBuilder {
 
         sb.append("Return the JSON object now.");
         return sb.toString();
+    }
+
+    /**
+     * Emits the three cross-module sections. Each is skipped entirely when empty, so a
+     * single-module project's prompt is byte-for-byte what it was before.
+     */
+    private void appendCrossModuleContext(StringBuilder sb,
+                                          BackendModule module,
+                                          java.util.Map<String, List<String>> otherServiceApis,
+                                          List<ModuleDependencyResolver.Collaborator> collaborators,
+                                          List<ModuleDependencyResolver.SharedRule> sharedRules) {
+
+        if (otherServiceApis != null && !otherServiceApis.isEmpty()) {
+            sb.append("## OTHER MODULE SERVICES YOU MAY INJECT\n")
+              .append("Constructor-inject any of these instead of reimplementing what they already do.\n")
+              .append("Signatures only — call them, do not redefine them.\n");
+            for (var entry : otherServiceApis.entrySet()) {
+                if (entry.getKey().equals(module.getServiceName())) continue;
+                sb.append("### ").append(entry.getKey()).append('\n');
+                for (String sig : entry.getValue()) sb.append("  - ").append(sig).append('\n');
+            }
+            sb.append("\nCIRCULAR DEPENDENCY RULE: if injecting one of these would make two services\n")
+              .append("depend on each other, inject that module's *Repository* instead. Spring rejects\n")
+              .append("circular bean references and the application will fail to start.\n\n");
+        }
+
+        if (collaborators != null && !collaborators.isEmpty()) {
+            sb.append("## MODULE DEPENDENCIES (from the project's entity relationships)\n");
+            for (var c : collaborators) {
+                sb.append("- ").append(module.getEntityClassName())
+                  .append(c.outgoing() ? " -> " : " <- ").append(c.entityClassName());
+                if (c.cardinality() != null && !c.cardinality().isBlank()) {
+                    sb.append(" (").append(c.cardinality()).append(')');
+                }
+                sb.append(", owned by module \"").append(c.moduleName())
+                  .append("\" via ").append(c.serviceName());
+                if (c.owningSide()) sb.append(" — this module owns the foreign key");
+                sb.append('\n');
+            }
+            sb.append('\n');
+        }
+
+        if (sharedRules != null && !sharedRules.isEmpty()) {
+            sb.append("## RULES SHARED WITH OTHER MODULES\n")
+              .append("These rules are being implemented on BOTH sides, in a separate request you\n")
+              .append("cannot see. Implement only this module's half, and call the named service for\n")
+              .append("the rest rather than duplicating it.\n");
+            for (var r : sharedRules) {
+                sb.append("- ").append(r.description())
+                  .append("  (other side: module \"").append(r.otherModule())
+                  .append("\", ").append(r.otherService()).append(")\n");
+            }
+            sb.append('\n');
+        }
     }
 
     public String systemPromptForCompileFix() {

@@ -56,6 +56,87 @@ class PromptBuilderTest {
                 .contains("RAG_SNIPPET_XYZ");
     }
 
+    private static BackendModule productModule() {
+        return BackendModule.builder()
+                .entityClassName("Product")
+                .requestMapping("/api/v1/products")
+                .serviceName("ProductService")
+                .build();
+    }
+
+    private String crossModulePrompt(Map<String, List<String>> serviceApis,
+                                     List<ModuleDependencyResolver.Collaborator> collaborators,
+                                     List<ModuleDependencyResolver.SharedRule> sharedRules) {
+        return builder.userPrompt(productModule(),
+                PcsfModule.builder().name(fv("Products")).build(), null, List.of(),
+                "class ProductServiceImpl {}", "interface ProductRepository {}",
+                "class ProductController {}", "class Product {}",
+                List.of(), Map.of("Product", "class Product {}"),
+                Map.of("ProductRepository", "interface ProductRepository {}"),
+                List.of("ProductResponseDto"), null,
+                serviceApis, collaborators, sharedRules);
+    }
+
+    @Test
+    void promptOffersOtherModuleServicesAsInjectableCollaborators() {
+        String prompt = crossModulePrompt(
+                Map.of("StockMovementService", List.of(
+                        "StockMovementResponseDto recordMovement(UUID productId, int quantity)")),
+                List.of(new ModuleDependencyResolver.Collaborator(
+                        "StockMovement", "Stock Movements", "StockMovementService",
+                        "one-to-many", true, false)),
+                List.of());
+
+        assertThat(prompt)
+                .contains("## OTHER MODULE SERVICES YOU MAY INJECT")
+                .contains("StockMovementService")
+                .contains("recordMovement(UUID productId, int quantity)")
+                // A cycle makes Spring refuse to start the context, so the escape hatch is stated.
+                .contains("CIRCULAR DEPENDENCY RULE")
+                .contains("Repository");
+
+        assertThat(prompt)
+                .contains("## MODULE DEPENDENCIES")
+                .contains("Product -> StockMovement (one-to-many)")
+                .contains("owned by module \"Stock Movements\" via StockMovementService");
+    }
+
+    @Test
+    void promptNamesTheFarSideOfARuleTwoModulesShare() {
+        String prompt = crossModulePrompt(Map.of(), List.of(),
+                List.of(new ModuleDependencyResolver.SharedRule(
+                        "Reserving stock must record a movement",
+                        "Stock Movements", "StockMovementService")));
+
+        assertThat(prompt)
+                .contains("## RULES SHARED WITH OTHER MODULES")
+                .contains("Reserving stock must record a movement")
+                .contains("other side: module \"Stock Movements\", StockMovementService")
+                // Each side implements half; duplicating the other half is the failure mode.
+                .contains("Implement only this module's half");
+    }
+
+    @Test
+    void promptOmitsCrossModuleSectionsEntirelyWhenThereAreNone() {
+        // A single-module project must produce exactly the prompt it did before this existed.
+        String prompt = crossModulePrompt(Map.of(), List.of(), List.of());
+
+        assertThat(prompt)
+                .doesNotContain("OTHER MODULE SERVICES")
+                .doesNotContain("MODULE DEPENDENCIES")
+                .doesNotContain("RULES SHARED WITH OTHER MODULES")
+                .doesNotContain("CIRCULAR DEPENDENCY RULE");
+    }
+
+    @Test
+    void promptNeverOffersAModuleItsOwnServiceToInject() {
+        String prompt = crossModulePrompt(
+                Map.of("ProductService", List.of("ProductResponseDto getProductById(UUID id)")),
+                List.of(), List.of());
+
+        assertThat(prompt).doesNotContain("getProductById(UUID id)");
+    }
+
     @Test
     void compileFixPromptsCarryErrorsAndPackageHint() {
         assertThat(builder.systemPromptForCompileFix()).contains("fixedSource");

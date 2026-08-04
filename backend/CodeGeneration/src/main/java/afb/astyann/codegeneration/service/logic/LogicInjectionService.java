@@ -52,6 +52,7 @@ public class LogicInjectionService {
     private final PromptBuilder promptBuilder;
     private final AdditionalFilePathResolver additionalFilePathResolver;
     private final AiJsonExtractor aiJsonExtractor;
+    private final ModuleDependencyResolver moduleDependencyResolver;
     private final Executor logicExecutor;
 
     // Tolerant reader for model output. LLMs frequently emit JSON with unescaped control
@@ -70,6 +71,7 @@ public class LogicInjectionService {
                                  PromptBuilder promptBuilder,
                                  AdditionalFilePathResolver additionalFilePathResolver,
                                  AiJsonExtractor aiJsonExtractor,
+                                 ModuleDependencyResolver moduleDependencyResolver,
                                  @Qualifier("logicExecutor") Executor logicExecutor) {
         this.aiClient = aiClient;
         this.ragClient = ragClient;
@@ -77,6 +79,7 @@ public class LogicInjectionService {
         this.promptBuilder = promptBuilder;
         this.additionalFilePathResolver = additionalFilePathResolver;
         this.aiJsonExtractor = aiJsonExtractor;
+        this.moduleDependencyResolver = moduleDependencyResolver;
         this.logicExecutor = logicExecutor;
     }
 
@@ -240,6 +243,13 @@ public class LogicInjectionService {
         Map<String, String> allRepositorySources = loadJavaSources(javaRoot.resolve("repository"));
         List<String> allDtoClassNames = new ArrayList<>(loadJavaSources(javaRoot.resolve("dto")).keySet());
 
+        // Cross-module context. Prompting is per-module, so without these the model cannot know a
+        // collaborating service exists and either reimplements its behaviour inline or drops it.
+        Map<String, List<String>> otherServiceApis =
+                loadServiceApis(javaRoot.resolve("service"), module.getServiceName());
+        var collaborators = moduleDependencyResolver.collaboratorsFor(pcsf, projection, module);
+        var sharedRules = moduleDependencyResolver.sharedRulesFor(pcsf, projection, module);
+
         PcsfModule pcsfModule = findMatchingPcsfModule(pcsf, module);
         PcsfEntity primaryEntity = findMatchingPcsfEntity(pcsf, module);
         List<PcsfBusinessRule> rules = filterBusinessRules(pcsf, module, pcsfModule);
@@ -250,7 +260,8 @@ public class LogicInjectionService {
 
         String userPrompt = promptBuilder.userPrompt(module, pcsfModule, primaryEntity, rules,
                 serviceImplSource, repositorySource, controllerSource, entitySource,
-                repoSignatures, allEntitySources, allRepositorySources, allDtoClassNames, ragContext);
+                repoSignatures, allEntitySources, allRepositorySources, allDtoClassNames, ragContext,
+                otherServiceApis, collaborators, sharedRules);
 
         // Ask the AI to implement the module, retrying on an empty or unparseable reply — a single
         // blank response (seen from some models) otherwise leaves the whole module stubbed for good.
@@ -343,6 +354,29 @@ public class LogicInjectionService {
 
     /** Reads every {@code *.java} file directly under {@code dir} into a
      *  {@code ClassName -> source} map. Missing directories return empty. */
+    /**
+     * Method signatures of every service interface except this module's own, keyed by interface
+     * name. Signatures rather than sources on purpose: the bodies teach the model nothing about
+     * how to call a collaborator, and would crowd out the rest of the prompt on a large project.
+     */
+    private Map<String, List<String>> loadServiceApis(Path serviceDir, String ownServiceName) {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        if (!Files.exists(serviceDir)) return out;
+        try (Stream<Path> files = Files.list(serviceDir)) {
+            files.filter(f -> f.getFileName().toString().endsWith(".java"))
+                    .sorted()
+                    .forEach(f -> {
+                        String name = f.getFileName().toString().replace(".java", "");
+                        if (name.equals(ownServiceName)) return;
+                        List<String> signatures = filePatcher.methodSignatures(f);
+                        if (!signatures.isEmpty()) out.put(name, signatures);
+                    });
+        } catch (IOException ex) {
+            log.debug("Could not list service interfaces in {}: {}", serviceDir, ex.getMessage());
+        }
+        return out;
+    }
+
     private Map<String, String> loadJavaSources(Path dir) {
         Map<String, String> out = new LinkedHashMap<>();
         if (!Files.exists(dir)) return out;
