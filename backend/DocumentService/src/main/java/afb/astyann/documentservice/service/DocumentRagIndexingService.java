@@ -23,8 +23,24 @@ public class DocumentRagIndexingService {
     private final DocumentRepository repository;
     private final RAGServiceClient ragServiceClient;
 
+    /**
+     * Indexes a document's text for retrieval.
+     *
+     * <p>Called only once a document is APPROVED — and again whenever the approved content changes
+     * (a restore to an earlier snapshot, or a late snapshot stamp). Indexing at generation time
+     * instead would put text into the index that a reviewer had not accepted, and might never
+     * accept, with nothing downstream able to tell the difference.
+     *
+     * <p>RAGService replaces by {@code sourceId}, so calling this repeatedly for one document
+     * leaves exactly one version stored: the current one.
+     *
+     * <p>Reads the document's current {@code snapshotId} from the database rather than taking it
+     * as an argument, so a caller inside a transaction cannot stamp a snapshot that later rolls
+     * back. A null snapshotId is indexed as-is — the content is still correct, and
+     * {@code retryPendingSnapshots} re-indexes once the snapshot lands.
+     */
     @Async("documentExecutor")
-    public void indexDocumentAsync(UUID documentId) {
+    public void indexApprovedDocumentAsync(UUID documentId) {
         try {
             Document doc = repository.findById(documentId).orElse(null);
             if (doc == null || doc.getPath() == null) {
@@ -41,13 +57,16 @@ public class DocumentRagIndexingService {
                     .projectId(doc.getProjectId())
                     .sourceType("DOCUMENT")
                     .sourceId(doc.getDocumentId())
+                    .snapshotId(doc.getSnapshotId())
                     .content(text)
                     .metadata(Map.of("documentType", doc.getType().name()))
                     .build());
-            log.info("RAG indexing completed for documentId={}", documentId);
+            log.info("RAG indexing completed for documentId={} (snapshotId={})",
+                    documentId, doc.getSnapshotId());
         } catch (Exception ex) {
-            // Indexing failure must never affect the document's generated status.
+            // Indexing failure must never affect the document's approved status.
             log.warn("RAG indexing failed for documentId={}: {}", documentId, ex.getMessage());
         }
     }
+
 }

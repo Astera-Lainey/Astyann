@@ -34,12 +34,19 @@ public class RagClient {
         this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
-    public String getContext(UUID projectId, String query, int k) {
+    /**
+     * @param topK how many passages to retrieve. The parameter name must stay in sync with
+     *             {@code RAGController.getContext}, which binds it as {@code topK} — an unknown
+     *             query parameter is silently ignored there and the endpoint's own default is used
+     *             instead, so a mismatch makes {@code codegen.ai.rag.top-k} a dead knob rather than
+     *             an error.
+     */
+    public String getContext(UUID projectId, String query, int topK) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/api/v1/rag/context")
                         .queryParam("projectId", projectId)
                         .queryParam("query", query)
-                        .queryParam("k", k)
+                        .queryParam("topK", topK)
                         .build())
                 .retrieve()
                 .body(String.class);

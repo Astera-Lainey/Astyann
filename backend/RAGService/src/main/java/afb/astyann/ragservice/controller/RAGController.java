@@ -36,44 +36,74 @@ public class RAGController {
     /** Returns plain concatenated context string — matches AIOrchestrator RAGServiceClient */
     @GetMapping("/context")
     public ResponseEntity<String> getContext(
-            @RequestParam UUID projectId,
+            @RequestParam String projectId,
             @RequestParam String query,
             @RequestParam(defaultValue = "5") int topK) {
-        RetrievalResponseDTO response = ragService.retrieveContext(projectId, query, topK, null);
+        RetrievalResponseDTO response = ragService.retrieveContext(parseId(projectId), query, topK, null);
         return ResponseEntity.ok(response.getContext());
     }
 
     /** Returns list of source section names — matches AIOrchestrator RAGServiceClient */
     @GetMapping("/sources")
     public ResponseEntity<List<String>> getSources(
-            @RequestParam UUID projectId,
+            @RequestParam String projectId,
             @RequestParam String query) {
-        RetrievalResponseDTO response = ragService.retrieveContext(projectId, query, 10, null);
+        RetrievalResponseDTO response = ragService.retrieveContext(parseId(projectId), query, 10, null);
         return ResponseEntity.ok(response.getSources());
     }
 
     /** Full retrieval response with chunks, sources, and scores */
     @GetMapping("/retrieve")
     public ResponseEntity<RetrievalResponseDTO> retrieve(
-            @RequestParam UUID projectId,
+            @RequestParam String projectId,
             @RequestParam String query,
             @RequestParam(defaultValue = "5") int topK,
             @RequestParam(required = false) String sourceTypeFilter) {
-        return ResponseEntity.ok(ragService.retrieveContext(projectId, query, topK, sourceTypeFilter));
+        return ResponseEntity.ok(ragService.retrieveContext(parseId(projectId), query, topK, sourceTypeFilter));
+    }
+
+    /**
+     * Removes one source's chunks — for a deleted document, or to drop stale text without
+     * clearing the whole project index.
+     */
+    @DeleteMapping("/{projectId}/source/{sourceId}")
+    public ResponseEntity<Map<String, Object>> deleteBySource(
+            @PathVariable String projectId,
+            @PathVariable String sourceId,
+            @RequestParam(required = false) String sourceType) {
+        int removed = ragService.deleteBySource(parseId(projectId), sourceType, parseId(sourceId));
+        return ResponseEntity.ok(Map.of("sourceId", sourceId, "chunksRemoved", removed));
     }
 
     @DeleteMapping("/{projectId}")
-    public ResponseEntity<Void> deleteIndex(@PathVariable UUID projectId) {
-        ragService.deleteIndex(projectId);
+    public ResponseEntity<Void> deleteIndex(@PathVariable String projectId) {
+        ragService.deleteIndex(parseId(projectId));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{projectId}/rebuild")
-    public ResponseEntity<Map<String, String>> rebuildIndex(@PathVariable UUID projectId) {
-        ragService.rebuildIndex(projectId);
+    public ResponseEntity<Map<String, String>> rebuildIndex(@PathVariable String projectId) {
+        ragService.rebuildIndex(parseId(projectId));
         return ResponseEntity.ok(Map.of(
                 "status",  "INDEX_CLEARED",
                 "message", "Index cleared for project " + projectId +
                            ". Re-trigger via POST /api/v1/requirements/" + projectId + "/approve"));
+    }
+    private UUID parseId(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new IllegalArgumentException("X-User-Id header is missing");
+        }
+        String s = rawId.trim();
+        // Strip 0x prefix if present
+        if (s.startsWith("0x") || s.startsWith("0X")) {
+            s = s.substring(2);
+        }
+        // Insert dashes if raw 32-char hex (no dashes)
+        if (s.length() == 32 && !s.contains("-")) {
+            s = s.substring(0, 8) + "-" + s.substring(8, 12) + "-"
+                    + s.substring(12, 16) + "-" + s.substring(16, 20) + "-"
+                    + s.substring(20);
+        }
+        return UUID.fromString(s);
     }
 }

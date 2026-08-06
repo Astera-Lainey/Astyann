@@ -13,6 +13,8 @@ public class RagIndexItemDTO {
     private UUID projectId;
     private String sourceType;
     private UUID sourceId;
+    /** Approved version this text was extracted from; null until the snapshot is confirmed. */
+    private UUID snapshotId;
     private String content;
     private Map<String, String> metadata;
 }

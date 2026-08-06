@@ -31,6 +31,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -163,12 +165,10 @@ public class DocumentGenerationService {
             return markFailed(doc, "Could not retrieve RAG context: " + ex.getMessage());
         }
 
-        Document result = runGenerationPipeline(projectId, doc, schema,
+        // Not indexed here: a PENDING_APPROVAL document has not been accepted by anyone, and may
+        // never be. Indexing happens in approveDocument().
+        return runGenerationPipeline(projectId, doc, schema,
                 DocumentPromptTemplates.userPrompt(type, context, objectMapper));
-        if (result.getStatus() == DocumentStatus.PENDING_APPROVAL) {
-            ragIndexingService.indexDocumentAsync(result.getDocumentId());
-        }
-        return result;
     }
 
     /**
@@ -198,7 +198,8 @@ public class DocumentGenerationService {
         if (result.getStatus() == DocumentStatus.PENDING_APPROVAL) {
             result.setChangeInstructions(null); // consumed on success; left intact on failure for retry
             result = repository.save(result);
-            ragIndexingService.indexDocumentAsync(result.getDocumentId());
+            // Again, no indexing until approval. The previously approved text stays in the index
+            // and remains the retrievable version until this regeneration is itself approved.
         }
         return result;
     }
@@ -277,6 +278,11 @@ public class DocumentGenerationService {
         String reason = (validationNote != null && !validationNote.isBlank()) ? validationNote : "Document approved";
         UUID snapshotId = attemptSnapshot(projectId, doc, reason);
         repository.save(doc);
+
+        // Only now does this text become the project's accepted version, so only now does it
+        // belong in the retrieval index. RAGService replaces by sourceId, so this supersedes any
+        // previously approved text for the same document rather than piling up beside it.
+        indexAfterCommit(doc.getDocumentId());
 
         // Deliberately not calling ProjectService to update project status here — same reasoning
         // as DiagramGenerationService.approve(): ProjectStatus has no per-stage "documents
@@ -418,6 +424,10 @@ public class DocumentGenerationService {
                     "in VersionService: {}", documentId, snapshotId, ex.getMessage());
         }
 
+        // The live file just changed. Without this the index would keep serving the text of the
+        // version that was rolled back — the exact case a restore is meant to undo.
+        indexAfterCommit(documentId);
+
         return saved;
     }
 
@@ -435,8 +445,34 @@ public class DocumentGenerationService {
         for (Document d : pending) {
             if (attemptSnapshot(d.getProjectId(), d, "Document approved (retried snapshot creation)") != null) {
                 repository.save(d);
+                // Approval already indexed this text, but with an empty snapshotId because the
+                // snapshot did not exist yet. Re-index so the stored chunks name the version they
+                // actually came from.
+                indexAfterCommit(d.getDocumentId());
             }
         }
+    }
+
+    /**
+     * Schedules RAG indexing for after the current transaction commits.
+     *
+     * <p>The indexer runs on another thread and re-reads the document to pick up its path and
+     * snapshotId. Firing it inside the transaction would race the commit: the indexing thread can
+     * reach the database first and index the document's pre-approval state — or, if the
+     * transaction then rolls back, index a version that never existed. Falls back to indexing
+     * immediately when there is no active transaction.
+     */
+    private void indexAfterCommit(UUID documentId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            ragIndexingService.indexApprovedDocumentAsync(documentId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                ragIndexingService.indexApprovedDocumentAsync(documentId);
+            }
+        });
     }
 
     private UUID findActiveSnapshotId(UUID projectId, UUID documentId) {
