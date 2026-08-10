@@ -30,15 +30,19 @@ public class ${module.controllerName} {
     @PreAuthorize("hasAnyRole(<#list ep.roles as role>'${role}'<#sep>, </#list>)")
 </#if>
     @${mappingAnnotations[ep.httpMethod]}<#if ep.path?has_content>("${ep.path}")</#if>
+<#-- Path variables are named by the PCSF (/{productId}), so they are rendered from the projection
+     rather than assumed to be "id", and the declaration order is the parameter order. -->
+<#assign pathParams><#list ep.pathVariables as pv>@PathVariable ${entity.idType} ${pv}<#sep>, </#sep></#list></#assign>
+<#assign pathArgs><#list ep.pathVariables as pv>${pv}<#sep>, </#sep></#list></#assign>
 <#if ep.returnType == "void">
-    public ResponseEntity<Void> ${ep.methodName}(<#if ep.hasPathVariable>@PathVariable ${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if>) {
-        service.${ep.methodName}(<#if ep.hasPathVariable>id</#if>);
+    public ResponseEntity<Void> ${ep.methodName}(${pathParams}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if>) {
+        service.${ep.methodName}(${pathArgs}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>request</#if>);
         return ResponseEntity.noContent().build();
     }
 <#else>
-    public ResponseEntity<${ep.returnType}> ${ep.methodName}(<#if ep.paged>@PageableDefault(size = 20) Pageable pageable<#else><#if ep.hasPathVariable>@PathVariable ${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if></#if>) {
+    public ResponseEntity<${ep.returnType}> ${ep.methodName}(<#if ep.paged>@PageableDefault(size = 20) Pageable pageable<#else>${pathParams}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>@Valid @RequestBody ${ep.requestBodyType} request</#if></#if>) {
         return ResponseEntity.status(HttpStatus.<#if ep.httpMethod == "POST">CREATED<#else>OK</#if>)
-                .body(service.${ep.methodName}(<#if ep.paged>pageable<#else><#if ep.hasPathVariable>id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>request</#if></#if>));
+                .body(service.${ep.methodName}(<#if ep.paged>pageable<#else>${pathArgs}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>request</#if></#if>));
     }
 </#if>
 

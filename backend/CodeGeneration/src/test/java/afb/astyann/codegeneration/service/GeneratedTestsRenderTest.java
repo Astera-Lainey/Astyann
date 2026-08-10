@@ -70,12 +70,12 @@ class GeneratedTestsRenderTest {
                 .endpoints(List.of(
                         BackendEndpoint.builder().httpMethod("GET").path("").methodName("getAllProducts")
                                 .returnType("Page<ProductResponseDto>").hasRequestBody(false)
-                                .hasPathVariable(false).responseType("ProductResponseDto").crud(true)
+                                .pathVariables(java.util.List.of()).responseType("ProductResponseDto").crud(true)
                                 .paged(true)
                                 .roles(List.of("STOCK_MANAGER")).build(),
                         BackendEndpoint.builder().httpMethod("GET").path("/{id}").methodName("getProductById")
                                 .returnType("ProductResponseDto").hasRequestBody(false)
-                                .hasPathVariable(true).responseType("ProductResponseDto").crud(true)
+                                .pathVariables(java.util.List.of("id")).responseType("ProductResponseDto").crud(true)
                                 .roles(List.of("STOCK_MANAGER")).build()))
                 .build();
     }
@@ -163,7 +163,7 @@ class GeneratedTestsRenderTest {
                 .entityClassName("Report").entityInstanceName("report")
                 .endpoints(List.of(BackendEndpoint.builder().httpMethod("POST").path("/{id}/run")
                         .methodName("runReport").returnType("ReportResponseDto")
-                        .hasRequestBody(false).hasPathVariable(true).crud(false)
+                        .hasRequestBody(false).pathVariables(java.util.List.of("id")).crud(false)
                         .roles(List.of("ADMIN")).build()))
                 .build();
         Map<String, Object> model = baseModel();
@@ -226,7 +226,7 @@ class GeneratedTestsRenderTest {
                 .endpoints(List.of(BackendEndpoint.builder()
                         .httpMethod("GET").path("").methodName("getAllProducts")
                         .returnType("Page<ProductResponseDto>")
-                        .hasRequestBody(false).hasPathVariable(false)
+                        .hasRequestBody(false).pathVariables(java.util.List.of())
                         .responseType("ProductResponseDto").crud(true).paged(true)
                         .roles(List.of("STOCK_MANAGER")).build()))
                 .build());
@@ -271,7 +271,7 @@ class GeneratedTestsRenderTest {
                 .endpoints(List.of(BackendEndpoint.builder()
                         .httpMethod("GET").path("/{id}").methodName("getProductById")
                         .returnType("ProductResponseDto").hasRequestBody(false)
-                        .hasPathVariable(true).responseType("ProductResponseDto").crud(true)
+                        .pathVariables(java.util.List.of("id")).responseType("ProductResponseDto").crud(true)
                         .roles(List.of("STOCK_MANAGER")).build()))
                 .build());
 

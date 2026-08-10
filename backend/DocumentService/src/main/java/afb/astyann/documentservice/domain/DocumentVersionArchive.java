@@ -35,6 +35,14 @@ public class DocumentVersionArchive {
     @Column(name = "file_path")
     private String filePath;
 
+    /**
+     * The structured JSON behind {@link #filePath}'s {@code .docx}, captured together with it so a
+     * restore can put both back. Restoring only the file would leave the document's live JSON
+     * describing the version that was rolled away from.
+     */
+    @Column(name = "content_json", columnDefinition = "LONGTEXT")
+    private String contentJson;
+
     @Column(name = "page_count")
     private Integer pageCount;
 

@@ -24,8 +24,9 @@ public class ${module.serviceImplName} implements ${module.serviceName} {
     }
 
 <#list module.endpoints as ep>
+<#assign pathParams><#list ep.pathVariables as pv>${entity.idType} ${pv}<#sep>, </#sep></#list></#assign>
     @Override
-    public ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>) {
+    public ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else>${pathParams}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>) {
 <#if ep.crud && ep.httpMethod == "POST" && !ep.hasPathVariable>
         ${module.entityClassName} entity = new ${module.entityClassName}();
         applyValues(entity, request);
@@ -33,15 +34,15 @@ public class ${module.serviceImplName} implements ${module.serviceName} {
 <#elseif ep.paged>
         return repository.findAll(pageable).map(this::toResponse);
 <#elseif ep.crud && ep.httpMethod == "GET" && ep.hasPathVariable>
-        return repository.findById(id).map(this::toResponse)
-                .orElseThrow(() -> new NoSuchElementException("${module.entityClassName} not found: " + id));
+        return repository.findById(${ep.idVariable}).map(this::toResponse)
+                .orElseThrow(() -> new NoSuchElementException("${module.entityClassName} not found: " + ${ep.idVariable}));
 <#elseif ep.crud && ep.httpMethod == "PUT" && ep.hasPathVariable>
-        ${module.entityClassName} entity = repository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("${module.entityClassName} not found: " + id));
+        ${module.entityClassName} entity = repository.findById(${ep.idVariable})
+                .orElseThrow(() -> new NoSuchElementException("${module.entityClassName} not found: " + ${ep.idVariable}));
         applyValues(entity, request);
         return toResponse(repository.save(entity));
 <#elseif ep.crud && ep.httpMethod == "DELETE">
-        repository.deleteById(id);
+        repository.deleteById(${ep.idVariable});
 <#else>
         // TODO: implement ${ep.methodName} logic
         throw new UnsupportedOperationException("${ep.methodName} not yet implemented");
@@ -51,7 +52,8 @@ public class ${module.serviceImplName} implements ${module.serviceName} {
 </#list>
     private void applyValues(${module.entityClassName} entity, Create${module.entityClassName}Dto request) {
 <#list entity.fields as field>
-<#if field.name != "currentStock" && field.name != "stockStatus" && field.name != "status">
+<#-- Mirrors CreateDto's filter exactly; see BackendField.serverManaged. -->
+<#if !field.serverManaged>
         entity.set${field.name?cap_first}(request.get${field.name?cap_first}());
 </#if>
 </#list>

@@ -10,8 +10,10 @@ import afb.astyann.documentservice.domain.DocumentStatus;
 import afb.astyann.documentservice.domain.DocumentType;
 import afb.astyann.documentservice.domain.DocumentVersionArchive;
 import afb.astyann.documentservice.dto.ApiResponse;
+import afb.astyann.documentservice.dto.DocumentContentDTO;
 import afb.astyann.documentservice.dto.ValidationReportDTO;
 import afb.astyann.documentservice.exception.DiagramsNotApprovedException;
+import afb.astyann.documentservice.exception.DocumentContentNotAvailableException;
 import afb.astyann.documentservice.exception.DocumentNotFoundException;
 import afb.astyann.documentservice.exception.DocumentVersionNotFoundException;
 import afb.astyann.documentservice.exception.DownstreamServiceException;
@@ -70,6 +72,8 @@ public class DocumentGenerationService {
     private final VersionServiceClient versionServiceClient;
     private final DocumentValidationService validationService;
     private final ObjectMapper objectMapper;
+    private final ApiContractDeriver apiContractDeriver;
+    private final ApiContractOverlay apiContractOverlay;
 
     @Qualifier("documentExecutor")
     private final Executor documentExecutor;
@@ -151,6 +155,66 @@ public class DocumentGenerationService {
         return storageService.loadDocument(archive.getFilePath());
     }
 
+    /** The live structured content of a document. */
+    public DocumentContentDTO getContent(UUID projectId, UUID documentId) {
+        Document doc = repository.findById(documentId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DocumentNotFoundException(projectId, documentId));
+        return toContent(doc, doc.getContentJson(), doc.getSnapshotId());
+    }
+
+    /**
+     * One archived version's content, independent of which version is currently live — the same
+     * relationship {@code downloadVersion} has to {@code downloadDocument}.
+     */
+    public DocumentContentDTO getVersionContent(UUID projectId, UUID documentId, UUID snapshotId) {
+        Document doc = repository.findById(documentId)
+                .filter(d -> d.getProjectId().equals(projectId))
+                .orElseThrow(() -> new DocumentNotFoundException(projectId, documentId));
+
+        DocumentVersionArchive archive = archiveRepository.findBySnapshotIdAndDocumentId(snapshotId, documentId)
+                .orElseThrow(() -> new DocumentVersionNotFoundException(documentId, snapshotId));
+        return toContent(doc, archive.getContentJson(), snapshotId);
+    }
+
+    /**
+     * The approved content for one document type — what a downstream generator reads.
+     *
+     * <p>No archive lookup is needed: {@code activateVersion} restores {@code contentJson} and
+     * {@code snapshotId} together, so an APPROVED document's live content is by construction its
+     * active snapshot's content.
+     */
+    public DocumentContentDTO getApprovedContent(UUID projectId, DocumentType type) {
+        Document doc = repository.findByProjectIdAndType(projectId, type)
+                .filter(d -> d.getStatus() == DocumentStatus.APPROVED)
+                .orElseThrow(() -> new DocumentNotFoundException(projectId, type));
+        return toContent(doc, doc.getContentJson(), doc.getSnapshotId());
+    }
+
+    private DocumentContentDTO toContent(Document doc, String json, UUID snapshotId) {
+        if (json == null || json.isBlank()) {
+            throw new DocumentContentNotAvailableException(doc.getDocumentId());
+        }
+        JsonNode parsed;
+        try {
+            parsed = objectMapper.readTree(json);
+        } catch (Exception ex) {
+            // Stored by this service from a node it had already parsed, so this should be
+            // unreachable; treating it as "unavailable" beats handing back a broken payload.
+            log.error("Stored content for documentId={} is not parseable: {}",
+                    doc.getDocumentId(), ex.getMessage());
+            throw new DocumentContentNotAvailableException(doc.getDocumentId());
+        }
+        return DocumentContentDTO.builder()
+                .documentId(doc.getDocumentId())
+                .type(doc.getType())
+                .status(doc.getStatus())
+                .version(doc.getVersion())
+                .snapshotId(snapshotId)
+                .content(parsed)
+                .build();
+    }
+
     private Document generateOne(UUID projectId, DocumentType type) {
         Document doc = repository.findByProjectIdAndType(projectId, type).orElseGet(Document::new);
         doc.setProjectId(projectId);
@@ -223,6 +287,10 @@ public class DocumentGenerationService {
             return markFailed(doc, "AI returned invalid JSON: " + ex.getMessage());
         }
 
+        if (doc.getType() == DocumentType.API_CONTRACT) {
+            applyDerivedApiContract(projectId, data);
+        }
+
         byte[] docxBytes;
         try (InputStream template = new ClassPathResource(schema.templateResource()).getInputStream()) {
             byte[] merged = mergeEngine.merge(template, schema, data);
@@ -233,6 +301,10 @@ public class DocumentGenerationService {
 
         doc.setStatus(DocumentStatus.PENDING_APPROVAL);
         doc.setLastError(null);
+        // Serialised from the same node that was just merged — after applyDerivedApiContract, so
+        // the stored JSON and the rendered .docx describe the same contract. Storing the model's
+        // pre-overlay JSON would reintroduce exactly the document/code drift the overlay removes.
+        doc.setContentJson(serialiseContent(data, doc));
         Document saved = repository.save(doc);
 
         String path;
@@ -245,6 +317,55 @@ public class DocumentGenerationService {
         saved.setPath(path);
         saved.setPageCount(estimatePageCount(docxBytes));
         return repository.save(saved);
+    }
+
+    /**
+     * Serialises the merged content for storage. A failure here must not fail the generation —
+     * the {@code .docx} is already built and is what the user asked for; losing the structured
+     * copy degrades a downstream consumer rather than this request.
+     */
+    private String serialiseContent(JsonNode data, Document doc) {
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (Exception ex) {
+            log.warn("Could not store structured content for documentId={} type={}: {}",
+                    doc.getDocumentId(), doc.getType(), ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Overwrites the API contract's endpoint tables with the operations the code generator will
+     * actually emit, derived from the same {@code pcsf.endpoints} the generator reads.
+     *
+     * <p>Best-effort on purpose: if the PCSF cannot be fetched or yields no endpoints, the
+     * document keeps the model's own tables. A contract written from prose is worth less than one
+     * derived from the declaration, but it is worth considerably more than a failed generation.
+     */
+    private void applyDerivedApiContract(UUID projectId, JsonNode data) {
+        try {
+            var response = requirementServiceClient.getPcsf(projectId);
+            var pcsf = response != null ? response.getData() : null;
+            if (pcsf == null) {
+                log.warn("API contract for project {} left as authored — PCSF unavailable", projectId);
+                return;
+            }
+            var derived = apiContractDeriver.derive(pcsf);
+            if (derived.isEmpty()) {
+                log.warn("API contract for project {} left as authored — PCSF declares no modules", projectId);
+                return;
+            }
+            var unmatched = apiContractOverlay.unmatchedAuthoredKeys(data, derived);
+            if (!unmatched.isEmpty()) {
+                log.info("API contract for project {}: model described {} operation(s) the generator "
+                         + "does not emit, replaced by the derived contract: {}",
+                        projectId, unmatched.size(), unmatched);
+            }
+            apiContractOverlay.apply(data, derived);
+        } catch (Exception ex) {
+            log.warn("API contract for project {} left as authored — could not derive from PCSF: {}",
+                    projectId, ex.getMessage());
+        }
     }
 
     public record ApproveOutcome(Document document, ValidationReportDTO report, UUID snapshotId, boolean allDocumentsApproved) {}
@@ -384,6 +505,7 @@ public class DocumentGenerationService {
                         .projectId(projectId)
                         .documentId(doc.getDocumentId())
                         .filePath(doc.getPath())
+                        .contentJson(doc.getContentJson())
                         .pageCount(doc.getPageCount())
                         .build());
                 return snapId;
@@ -410,6 +532,9 @@ public class DocumentGenerationService {
                 .orElseThrow(() -> new DocumentVersionNotFoundException(documentId, snapshotId));
 
         doc.setPath(archive.getFilePath());
+        // Restored together with the file, or the live JSON would go on describing the version
+        // this restore exists to undo.
+        doc.setContentJson(archive.getContentJson());
         doc.setPageCount(archive.getPageCount());
         doc.setStatus(DocumentStatus.APPROVED);
         doc.setLastError(null);

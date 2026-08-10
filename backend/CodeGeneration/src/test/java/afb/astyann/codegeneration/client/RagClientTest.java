@@ -66,6 +66,35 @@ class RagClientTest {
     }
 
     @Test
+    void narrowsRetrievalToTheGivenDocumentTypesAndSnapshots() {
+        // Unscoped, a module's five slots compete against every diagram, requirement and superseded
+        // document version in the project.
+        UUID snapshotA = UUID.randomUUID();
+        UUID snapshotB = UUID.randomUUID();
+
+        client().getContext(UUID.randomUUID(), "stock rules", 5,
+                java.util.List.of("SRS", "FUNCTIONAL_ANALYSIS"),
+                new java.util.LinkedHashSet<>(java.util.List.of(snapshotA, snapshotB)));
+
+        assertThat(receivedQuery.get())
+                .contains("documentType=SRS")
+                .contains("documentType=FUNCTIONAL_ANALYSIS")
+                .contains("snapshotId=" + snapshotA)
+                .contains("snapshotId=" + snapshotB);
+    }
+
+    @Test
+    void emptyScopesAreOmittedSoTheSearchWidensRatherThanMatchingNothing() {
+        client().getContext(UUID.randomUUID(), "stock rules", 5,
+                java.util.List.of(), java.util.Set.of());
+
+        assertThat(receivedQuery.get())
+                .doesNotContain("documentType")
+                .doesNotContain("snapshotId")
+                .contains("topK=5");
+    }
+
+    @Test
     void urlEncodesQueriesContainingSpacesAndPunctuation() {
         // Module prompts are used verbatim as the query, and they are full sentences.
         client().getContext(UUID.randomUUID(), "reserve & release stock?", 5);

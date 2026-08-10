@@ -91,7 +91,14 @@ public class RAGServiceImpl implements RAGService {
 
     @Override
     public RetrievalResponseDTO retrieveContext(UUID projectId, String query, int topK, String sourceTypeFilter) {
-        String filterExpr = buildFilter(projectId, sourceTypeFilter);
+        return retrieveContext(projectId, query, topK, sourceTypeFilter, null, null);
+    }
+
+    @Override
+    public RetrievalResponseDTO retrieveContext(UUID projectId, String query, int topK,
+                                                String sourceTypeFilter, List<String> documentTypes,
+                                                List<String> snapshotIds) {
+        String filterExpr = buildScopedFilter(projectId, sourceTypeFilter, documentTypes, snapshotIds);
         SearchRequest request = SearchRequest.builder()
                 .query(query)
                 .topK(topK)
@@ -192,6 +199,33 @@ public class RAGServiceImpl implements RAGService {
             filter += " && sourceType == '" + sourceTypeFilter + "'";
         }
         return filter;
+    }
+
+    /**
+     * Narrows retrieval to particular document types and approved versions.
+     *
+     * <p>Without this a caller asking for context about one module competes against every document,
+     * diagram and requirement in the project, including the text of versions that were superseded
+     * but whose chunks are still stored under a different snapshot. Both lists are optional and an
+     * empty one simply widens the filter back out.
+     */
+    private String buildScopedFilter(UUID projectId, String sourceTypeFilter,
+                                     List<String> documentTypes, List<String> snapshotIds) {
+        StringBuilder filter = new StringBuilder(buildFilter(projectId, sourceTypeFilter));
+        if (documentTypes != null && !documentTypes.isEmpty()) {
+            filter.append(" && documentType in ").append(quotedList(documentTypes));
+        }
+        if (snapshotIds != null && !snapshotIds.isEmpty()) {
+            filter.append(" && snapshotId in ").append(quotedList(snapshotIds));
+        }
+        return filter.toString();
+    }
+
+    private String quotedList(List<String> values) {
+        return values.stream()
+                .filter(v -> v != null && !v.isBlank())
+                .map(v -> "'" + v.trim() + "'")
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 
     private String buildSourceFilter(UUID projectId, String sourceType, UUID sourceId) {

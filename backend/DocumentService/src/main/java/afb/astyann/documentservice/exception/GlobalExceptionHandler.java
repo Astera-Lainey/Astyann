@@ -35,6 +35,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Void>builder().status(404).message(ex.getMessage()).build());
     }
 
+    // 409, not 404: the document is there, it just predates content persistence. A caller that
+    // saw 404 would go hunting for a wrong id instead of regenerating.
+    @ExceptionHandler(DocumentContentNotAvailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleContentUnavailable(DocumentContentNotAvailableException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.<Void>builder().status(409).message(ex.getMessage()).build());
+    }
+
     @ExceptionHandler(DocumentValidationFailedException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationFailed(DocumentValidationFailedException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)

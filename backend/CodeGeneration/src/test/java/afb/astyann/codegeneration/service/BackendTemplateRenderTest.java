@@ -116,7 +116,8 @@ class BackendTemplateRenderTest {
                                      boolean crud, List<String> roles) {
         return BackendEndpoint.builder()
                 .httpMethod(method).path(path).methodName(name).returnType(returnType)
-                .hasRequestBody(body).hasPathVariable(pathVar)
+                .hasRequestBody(body)
+                .pathVariables(pathVar ? List.of("id") : List.of())
                 .requestBodyType(bodyType).responseType(responseType)
                 .crud(crud).roles(roles).build();
     }

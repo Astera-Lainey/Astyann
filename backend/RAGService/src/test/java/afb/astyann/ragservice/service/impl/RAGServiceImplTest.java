@@ -152,6 +152,36 @@ class RAGServiceImplTest {
     }
 
     @Test
+    void scopedRetrievalFiltersOnDocumentTypeAndSnapshot() {
+        // Unscoped, a caller asking about one module competes against every document, diagram and
+        // requirement in the project — including chunks from versions that were superseded.
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+        UUID snapshot = UUID.randomUUID();
+
+        service.retrieveContext(PROJECT, "stock rules", 5, null,
+                List.of("SRS", "FUNCTIONAL_ANALYSIS"), List.of(snapshot.toString()));
+
+        ArgumentCaptor<SearchRequest> request = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(vectorStore).similaritySearch(request.capture());
+        assertThat(request.getValue().getFilterExpression()).isNotNull();
+        String filter = request.getValue().getFilterExpression().toString();
+        assertThat(filter).contains("SRS").contains("FUNCTIONAL_ANALYSIS").contains(snapshot.toString());
+    }
+
+    @Test
+    void anUnscopedRetrievalStillSearchesTheWholeProject() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+
+        service.retrieveContext(PROJECT, "stock rules", 5, null, List.of(), List.of());
+
+        ArgumentCaptor<SearchRequest> request = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(vectorStore).similaritySearch(request.capture());
+        String filter = request.getValue().getFilterExpression().toString();
+        assertThat(filter).contains(PROJECT.toString())
+                .doesNotContain("documentType").doesNotContain("snapshotId");
+    }
+
+    @Test
     void deleteBySourceReportsHowManyChunksItRemoved() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(stored("a", "b", "c"));
 

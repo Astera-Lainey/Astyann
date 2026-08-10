@@ -49,9 +49,9 @@ export class {{module.serviceName}} {
 {{/module.hasDelete}}
 {{#module.customActions}}
 
-  /** {{label}} — POST {{path}} */
-  {{methodName}}(id: string): Observable<{{module.entityClassName}}> {
-    return this.http.post<{{module.entityClassName}}>(`${this.baseUrl}/${id}/{{actionSegment}}`, {});
+  /** {{label}} — {{httpMethod}} {{path}} */
+  {{methodName}}({{#hasPathId}}id: string{{/hasPathId}}): Observable<{{module.entityClassName}}> {
+    return this.http.{{httpMethodLower}}<{{module.entityClassName}}>(`${this.baseUrl}{{#hasPathId}}/${id}{{/hasPathId}}/{{actionSegment}}`{{#sendsBody}}, {}{{/sendsBody}});
   }
 {{/module.customActions}}
 }

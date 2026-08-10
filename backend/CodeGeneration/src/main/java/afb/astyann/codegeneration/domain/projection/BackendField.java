@@ -20,6 +20,23 @@ public class BackendField {
     private boolean id;
 
     /**
+     * Set by the application rather than accepted from a create/update request — so it is left out
+     * of the Create DTO and out of {@code applyValues}.
+     *
+     * <p>Both templates must filter on the same predicate: {@code applyValues} calls
+     * {@code request.getX()} for every field the DTO declares, so any disagreement between them is
+     * a compile error in the generated project. Holding the decision here rather than repeating a
+     * condition in two {@code .ftl} files is what keeps them from diverging.
+     *
+     * <p>Previously this was a literal name check for {@code currentStock}, {@code stockStatus} and
+     * {@code status} — stock-management vocabulary hardcoded into a generator meant to build any
+     * project. The replacement keys on what the PCSF actually declares: an attribute explicitly
+     * marked as not shown in a form, or the state field of an entity that has a status machine
+     * (whose value belongs to the machine's transitions, not to a create request).
+     */
+    private boolean serverManaged;
+
+    /**
      * A compilable Java expression producing a valid value for this field, used by the generated
      * repository tests (e.g. {@code "abc"}, {@code 1}, {@code java.time.LocalDate.now()}). It
      * respects {@code @Size} bounds so Hibernate's bean validation accepts it on persist.

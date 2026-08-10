@@ -33,13 +33,22 @@ public class RAGController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Returns plain concatenated context string — matches AIOrchestrator RAGServiceClient */
+    /**
+     * Returns plain concatenated context string — matches AIOrchestrator RAGServiceClient.
+     *
+     * <p>{@code documentType} and {@code snapshotId} are optional, repeatable, and narrow retrieval
+     * to particular document types and approved versions. Omitting them searches the whole project,
+     * which is the previous behaviour.
+     */
     @GetMapping("/context")
     public ResponseEntity<String> getContext(
             @RequestParam String projectId,
             @RequestParam String query,
-            @RequestParam(defaultValue = "5") int topK) {
-        RetrievalResponseDTO response = ragService.retrieveContext(parseId(projectId), query, topK, null);
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(required = false) List<String> documentType,
+            @RequestParam(required = false) List<String> snapshotId) {
+        RetrievalResponseDTO response = ragService.retrieveContext(
+                parseId(projectId), query, topK, null, documentType, snapshotId);
         return ResponseEntity.ok(response.getContext());
     }
 

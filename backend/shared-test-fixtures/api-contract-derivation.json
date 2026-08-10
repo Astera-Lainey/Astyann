@@ -1,0 +1,55 @@
+{
+  "_comment": [
+    "Single source of truth for the API-surface derivation shared by two services.",
+    "",
+    "CodeGeneration's ProjectionBuilder builds controllers from it; DocumentService's",
+    "ApiContractDeriver builds the API contract document from it. Those are two renderings of one",
+    "derivation, and before this existed they were two independent implementations that quietly",
+    "disagreed - the document described a DELETE the generator never emitted and omitted the PATCH",
+    "it did.",
+    "",
+    "Both test suites read this file and assert their own output matches. Changing the derivation",
+    "on one side without the other now fails on both. Paths are absolute: the generator's test",
+    "joins its module requestMapping to each relative endpoint path before comparing."
+  ],
+
+  "declared": {
+    "_comment": "The declared endpoint list observed in an approved project's stored PCSF.",
+    "versionPrefix": "/api/v1",
+    "moduleId": "MOD-01",
+    "moduleName": "Product Management",
+    "entityName": "Product",
+    "endpoints": [
+      { "httpMethod": "POST",  "path": "/api/v1/products",                     "operationId": "createProduct" },
+      { "httpMethod": "GET",   "path": "/api/v1/products",                     "operationId": "listProducts", "paginated": true },
+      { "httpMethod": "GET",   "path": "/api/v1/products/{productId}",         "operationId": "getProductById" },
+      { "httpMethod": "PUT",   "path": "/api/v1/products/{productId}",         "operationId": "updateProduct" },
+      { "httpMethod": "PATCH", "path": "/api/v1/products/{productId}/archive", "operationId": "archiveProduct" },
+      { "httpMethod": "GET",   "path": "/api/v1/products/export",              "operationId": "exportProductsExcel" }
+    ],
+    "expectedOperations": [
+      "POST /api/v1/products",
+      "GET /api/v1/products",
+      "GET /api/v1/products/{productId}",
+      "PUT /api/v1/products/{productId}",
+      "PATCH /api/v1/products/{productId}/archive",
+      "GET /api/v1/products/export"
+    ]
+  },
+
+  "crudFallback": {
+    "_comment": "What both sides must produce for a module that declares no endpoints of its own.",
+    "versionPrefix": "/api/v1",
+    "moduleId": "MOD-01",
+    "moduleName": "Product Management",
+    "entityName": "Product",
+    "crudOperations": ["CREATE", "READ", "UPDATE", "DELETE"],
+    "expectedOperations": [
+      "POST /api/v1/product-management",
+      "GET /api/v1/product-management",
+      "GET /api/v1/product-management/{id}",
+      "PUT /api/v1/product-management/{id}",
+      "DELETE /api/v1/product-management/{id}"
+    ]
+  }
+}

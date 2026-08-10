@@ -49,6 +49,8 @@ public class AiInferencePcsfService {
     private final ClarificationQuestionRepository questionRepository;
     private final AIServiceClient                  aiServiceClient;
     private final ObjectMapper                     objectMapper;
+    private final PcsfCrossReferenceReconciler     crossReferenceReconciler;
+    private final TruncatedJsonRepair              truncatedJsonRepair;
 
     @Async("pcsfExecutor")
     public void runInferenceAsync(UUID requirementId) {
@@ -209,7 +211,8 @@ public class AiInferencePcsfService {
 
     private void applyInf1Result(Requirement requirement, String json) throws Exception {
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
-        var node = objectMapper.readTree(json);
+        var node = truncatedJsonRepair.parseTolerantly(objectMapper, json, "INF-1");
+        if (node == null) return;
 
         if (node.has("entities") && node.get("entities").isArray()) {
             var entities = objectMapper.convertValue(node.get("entities"),
@@ -304,7 +307,8 @@ public class AiInferencePcsfService {
 
     private void applyInf3Result(Requirement requirement, String json) throws Exception {
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
-        var node = objectMapper.readTree(json);
+        var node = truncatedJsonRepair.parseTolerantly(objectMapper, json, "INF-3");
+        if (node == null) return;
 
         if (pcsf.getUserInterface() == null)
             pcsf.setUserInterface(new afb.astyann.requirementservice.domain.pcsf.PcsfUserInterface());
@@ -405,7 +409,8 @@ public class AiInferencePcsfService {
 
     private void applyInf4Result(Requirement requirement, String json) throws Exception {
         Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
-        var node = objectMapper.readTree(json);
+        var node = truncatedJsonRepair.parseTolerantly(objectMapper, json, "INF-4");
+        if (node == null) return;
 
         if (node.has("endpoints") && node.get("endpoints").isArray()) {
             var eps = objectMapper.convertValue(node.get("endpoints"),
@@ -440,11 +445,27 @@ public class AiInferencePcsfService {
             pcsf.setInfrastructureConfig(infraConfig);
         }
 
+        // After apiConfig, so the version prefix used to strip endpoint paths is this pass's own.
+        // Runs before persisting, so a dangling reference never reaches the stored PCSF.
+        crossReferenceReconciler.reconcileEndpoints(pcsf);
+
         requirement.setPcsfJson(objectMapper.writeValueAsString(pcsf));
         requirementRepository.save(requirement);
         log.debug("INF-4 applied for requirement={}", requirement.getRequirementId());
     }
 
+    /**
+     * Renders what the PCSF already contains, for the later inference passes to build on.
+     *
+     * <p>Every id here is load-bearing. INF-3 and INF-4 are asked to emit foreign keys back into
+     * these sections — {@code endpoints[].moduleId}, {@code screens[].entityId},
+     * {@code tableColumns[].attributeId} — and a model that is shown only names has no way to
+     * produce one, so it invents plausible-looking ids ({@code module_1}, {@code entity_7}) that
+     * match nothing. The resulting PCSF parses cleanly and is entirely dangling, and every
+     * consumer downstream silently falls back to a convention instead of honouring what was
+     * declared. Listing the real ids is what makes those cross-references resolvable at all;
+     * {@link PcsfCrossReferenceReconciler} then repairs whatever still comes back wrong.
+     */
     private String buildPcsfSummary(Requirement requirement) {
         try {
             Pcsf pcsf = objectMapper.readValue(requirement.getPcsfJson(), Pcsf.class);
@@ -460,11 +481,27 @@ public class AiInferencePcsfService {
             if (pcsf.getModules() != null)
                 pcsf.getModules().forEach(m -> {
                     if (m.getName() != null && m.getName().getValue() != null)
-                        sb.append("Module: ").append(m.getName().getValue()).append("\n");
+                        sb.append("Module: ").append(m.getName().getValue())
+                          .append(" [id=").append(m.getId()).append("]\n");
                     if (m.getUseCases() != null)
                         m.getUseCases().forEach(uc -> {
                             if (uc.getName() != null && uc.getName().getValue() != null)
                                 sb.append("  UC: ").append(uc.getName().getValue()).append("\n");
+                        });
+                });
+            if (pcsf.getEntities() != null)
+                pcsf.getEntities().forEach(e -> {
+                    if (e.getName() == null || e.getName().getValue() == null) return;
+                    sb.append("Entity: ").append(e.getName().getValue())
+                      .append(" [id=").append(e.getId()).append("]");
+                    if (e.getPrimaryModuleId() != null)
+                        sb.append(" (module ").append(e.getPrimaryModuleId()).append(")");
+                    sb.append("\n");
+                    if (e.getAttributes() != null)
+                        e.getAttributes().forEach(attr -> {
+                            if (attr.getName() != null && attr.getName().getValue() != null)
+                                sb.append("  Attr: ").append(attr.getName().getValue())
+                                  .append(" [id=").append(attr.getId()).append("]\n");
                         });
                 });
             return sb.toString();

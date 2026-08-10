@@ -73,7 +73,9 @@ export class {{module.entityClassName}}ListComponent implements OnInit {
   /** Invokes the {{label}} use-case action, then refreshes the current page. */
   on{{methodNamePascal}}(id: string): void {
     this.actionInFlight.set(id);
-    this.service.{{methodName}}(id).subscribe({
+    {{! The service method only takes an id when the endpoint's path declares one. A collection-
+        level action such as GET /products/export takes none, and passing one anyway is a TS2554. }}
+    this.service.{{methodName}}({{#hasPathId}}id{{/hasPathId}}).subscribe({
       next: () => {
         this.actionInFlight.set(null);
         this.load(this.currentPage());

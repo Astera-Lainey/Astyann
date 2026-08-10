@@ -53,6 +53,7 @@ public class LogicInjectionService {
     private final AdditionalFilePathResolver additionalFilePathResolver;
     private final AiJsonExtractor aiJsonExtractor;
     private final ModuleDependencyResolver moduleDependencyResolver;
+    private final SpecificationLoader specificationLoader;
     private final Executor logicExecutor;
 
     // Tolerant reader for model output. LLMs frequently emit JSON with unescaped control
@@ -72,6 +73,7 @@ public class LogicInjectionService {
                                  AdditionalFilePathResolver additionalFilePathResolver,
                                  AiJsonExtractor aiJsonExtractor,
                                  ModuleDependencyResolver moduleDependencyResolver,
+                                 SpecificationLoader specificationLoader,
                                  @Qualifier("logicExecutor") Executor logicExecutor) {
         this.aiClient = aiClient;
         this.ragClient = ragClient;
@@ -80,6 +82,7 @@ public class LogicInjectionService {
         this.additionalFilePathResolver = additionalFilePathResolver;
         this.aiJsonExtractor = aiJsonExtractor;
         this.moduleDependencyResolver = moduleDependencyResolver;
+        this.specificationLoader = specificationLoader;
         this.logicExecutor = logicExecutor;
     }
 
@@ -135,11 +138,15 @@ public class LogicInjectionService {
             return toResult(total, 0, filePatcher.scanTree(javaRoot));
         }
 
+        // Loaded once, not per module: the documents are project-scoped, and fetching them inside
+        // the parallel section would make the same three HTTP calls once per module.
+        SpecificationLoader.ProjectSpecification specification = specificationLoader.load(projectId);
+
         List<CompletableFuture<Boolean>> futures = projection.getModules().stream()
                 .map(module -> CompletableFuture.supplyAsync(() -> {
                     try {
                         return injectOneModule(projectId, javaRoot, srcMainJava, testJavaRoot,
-                                packageHint, module, projection, pcsf);
+                                packageHint, module, projection, pcsf, specification);
                     } catch (Exception ex) {
                         log.warn("Logic injection failed for module {} (entity {}): {}",
                                 module.getServiceName(), module.getEntityClassName(), ex.getMessage(), ex);
@@ -221,7 +228,8 @@ public class LogicInjectionService {
                                     String packageHint,
                                     BackendModule module,
                                     BackendProjection projection,
-                                    Pcsf pcsf) throws IOException {
+                                    Pcsf pcsf,
+                                    SpecificationLoader.ProjectSpecification specification) throws IOException {
         Path serviceImplFile = javaRoot.resolve("service/impl").resolve(module.getServiceImplName() + ".java");
         Path repositoryFile  = javaRoot.resolve("repository").resolve(module.getEntityClassName() + "Repository.java");
         Path controllerFile  = javaRoot.resolve("controller").resolve(module.getControllerName() + ".java");
@@ -254,14 +262,20 @@ public class LogicInjectionService {
         PcsfEntity primaryEntity = findMatchingPcsfEntity(pcsf, module);
         List<PcsfBusinessRule> rules = filterBusinessRules(pcsf, module, pcsfModule);
 
+        SpecificationLoader.ModuleSpecification moduleSpec =
+                specificationLoader.forModule(specification, module);
+
         String ragQuery = "Business logic and implementation for module "
                 + safeName(pcsfModule) + " on entity " + module.getEntityClassName();
-        String ragContext = fetchRagContextSafely(projectId, ragQuery);
+        // Scoped to the document types that carry the specification and to the approved snapshots
+        // they came from, so this module's five slots are not spent on diagrams, requirements, or
+        // the text of a version that has since been superseded.
+        String ragContext = fetchRagContextSafely(projectId, ragQuery, specification.snapshotIds());
 
         String userPrompt = promptBuilder.userPrompt(module, pcsfModule, primaryEntity, rules,
                 serviceImplSource, repositorySource, controllerSource, entitySource,
                 repoSignatures, allEntitySources, allRepositorySources, allDtoClassNames, ragContext,
-                otherServiceApis, collaborators, sharedRules);
+                otherServiceApis, collaborators, sharedRules, moduleSpec);
 
         // Ask the AI to implement the module, retrying on an empty or unparseable reply — a single
         // blank response (seen from some models) otherwise leaves the whole module stubbed for good.
@@ -488,9 +502,14 @@ public class LogicInjectionService {
 
     // ── RAG ────────────────────────────────────────────────────────────────
 
-    private String fetchRagContextSafely(UUID projectId, String query) {
+    /** The document types whose prose can inform an implementation. See {@link SpecificationLoader}. */
+    private static final List<String> SPECIFICATION_DOCUMENT_TYPES =
+            List.of("SRS", "FUNCTIONAL_ANALYSIS", "DESIGN_DOCUMENT");
+
+    private String fetchRagContextSafely(UUID projectId, String query, java.util.Set<UUID> snapshotIds) {
         try {
-            return ragClient.getContext(projectId, query, ragTopK);
+            return ragClient.getContext(projectId, query, ragTopK,
+                    SPECIFICATION_DOCUMENT_TYPES, snapshotIds);
         } catch (Exception ex) {
             log.debug("RAG context lookup failed for project {}: {}. Continuing without it.",
                     projectId, ex.getMessage());

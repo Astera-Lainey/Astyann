@@ -149,6 +149,39 @@ public class PromptBuilder {
                              java.util.Map<String, List<String>> otherServiceApis,
                              List<ModuleDependencyResolver.Collaborator> collaborators,
                              List<ModuleDependencyResolver.SharedRule> sharedRules) {
+        return userPrompt(module, pcsfModule, primaryEntity, rules, serviceImplSource,
+                repositorySource, controllerSource, primaryEntitySource, repositoryMethodSignatures,
+                allEntitySources, allRepositorySources, allDtoClassNames, ragContext,
+                otherServiceApis, collaborators, sharedRules,
+                SpecificationLoader.ModuleSpecification.empty());
+    }
+
+    /**
+     * Full prompt including the approved documents' specification.
+     *
+     * @param specification what the approved SRS, functional analysis and design document say about
+     *                      this module — read as structured data rather than retrieved as prose.
+     *                      {@link SpecificationLoader.ModuleSpecification#empty()} when no document
+     *                      contributed, in which case every section it feeds is omitted and the
+     *                      prompt is what it was before.
+     */
+    public String userPrompt(BackendModule module,
+                             PcsfModule pcsfModule,
+                             PcsfEntity primaryEntity,
+                             List<PcsfBusinessRule> rules,
+                             String serviceImplSource,
+                             String repositorySource,
+                             String controllerSource,
+                             String primaryEntitySource,
+                             List<String> repositoryMethodSignatures,
+                             java.util.Map<String, String> allEntitySources,
+                             java.util.Map<String, String> allRepositorySources,
+                             java.util.List<String> allDtoClassNames,
+                             String ragContext,
+                             java.util.Map<String, List<String>> otherServiceApis,
+                             List<ModuleDependencyResolver.Collaborator> collaborators,
+                             List<ModuleDependencyResolver.SharedRule> sharedRules,
+                             SpecificationLoader.ModuleSpecification specification) {
 
         StringBuilder sb = new StringBuilder();
 
@@ -229,13 +262,62 @@ public class PromptBuilder {
         }
         sb.append('\n');
 
+        appendSpecification(sb, specification);
+
         if (ragContext != null && !ragContext.isBlank()) {
-            sb.append("## RELATED DOCUMENTATION (retrieved from project knowledge base)\n")
+            // Supplementary now rather than the only document channel: the structured sections
+            // above carry the specification, and this is whatever prose did not fit a schema field.
+            sb.append("## ADDITIONAL DOCUMENTATION EXCERPTS (retrieved, may be incomplete)\n")
               .append(truncate(ragContext, 8000)).append("\n\n");
         }
 
         sb.append("Return the JSON object now.");
         return sb.toString();
+    }
+
+    /**
+     * Emits what the approved documents specify, as four sections. Each is skipped when empty, so a
+     * project with no document content produces exactly the prompt it did before.
+     */
+    private void appendSpecification(StringBuilder sb, SpecificationLoader.ModuleSpecification spec) {
+        if (spec == null || spec.isEmpty()) return;
+
+        if (!spec.functionalRequirements().isEmpty()) {
+            // Says plainly whether these were attributed to this module or are the project's whole
+            // list. Presenting an unattributed list as "for this module" would invite the model to
+            // implement another module's requirements here.
+            sb.append(spec.requirementsAreProjectWide()
+                            ? "## FUNCTIONAL REQUIREMENTS (project-wide — none names this module "
+                              + "specifically; implement only those that belong here)\n"
+                            : "## FUNCTIONAL REQUIREMENTS FOR THIS MODULE\n");
+            for (SpecificationLoader.Requirement r : spec.functionalRequirements()) {
+                sb.append("- [").append(r.id()).append("] ").append(r.description()).append('\n');
+            }
+            sb.append("\nCite the requirement id in a comment on each method that implements one.\n\n");
+        }
+
+        if (!spec.responsibilities().isEmpty()) {
+            sb.append("## MODULE RESPONSIBILITIES (from the approved design document)\n");
+            for (String r : spec.responsibilities()) sb.append("- ").append(r).append('\n');
+            sb.append('\n');
+        }
+
+        if (!spec.entityBehaviour().isEmpty()) {
+            sb.append("## ENTITY BEHAVIOUR (from the approved functional analysis)\n");
+            for (SpecificationLoader.EntityBehaviour eb : spec.entityBehaviour()) {
+                sb.append("### ").append(eb.entityName()).append('\n')
+                  .append(eb.methods()).append('\n');
+            }
+            sb.append('\n');
+        }
+
+        if (!spec.nonFunctionalRequirements().isEmpty()) {
+            sb.append("## NON-FUNCTIONAL CONSTRAINTS (project-wide)\n");
+            for (SpecificationLoader.Requirement r : spec.nonFunctionalRequirements()) {
+                sb.append("- [").append(r.id()).append("] ").append(r.description()).append('\n');
+            }
+            sb.append('\n');
+        }
     }
 
     /**

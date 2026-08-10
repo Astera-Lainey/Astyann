@@ -8,6 +8,7 @@ import afb.astyann.documentservice.dto.ApproveDocumentRequest;
 import afb.astyann.documentservice.dto.ApproveDocumentResponse;
 import afb.astyann.documentservice.dto.ChangeRequestBody;
 import afb.astyann.documentservice.dto.ChangeRequestResponse;
+import afb.astyann.documentservice.dto.DocumentContentDTO;
 import afb.astyann.documentservice.dto.DocumentListData;
 import afb.astyann.documentservice.dto.DocumentListItemDTO;
 import afb.astyann.documentservice.dto.DocumentSummaryDTO;
@@ -119,6 +120,55 @@ public class DocumentController {
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
                 .header("Content-Disposition", "attachment; filename=\"document.docx\"")
                 .body(bytes);
+    }
+
+    /**
+     * The structured JSON a document's .docx was merged from — the machine-readable form of the
+     * same content, for consumers that need to read it as data rather than extract prose from Word.
+     *
+     * <p>409 when the document predates content persistence; regenerate it to populate it.
+     */
+    @GetMapping("/{projectId}/{documentId}/content")
+    public ResponseEntity<ApiResponse<DocumentContentDTO>> content(
+            @PathVariable String projectId,
+            @PathVariable String documentId) {
+        DocumentContentDTO dto = service.getContent(parseId(projectId), parseId(documentId));
+        return ResponseEntity.ok(ApiResponse.<DocumentContentDTO>builder()
+                .status(200)
+                .message("Document content retrieved.")
+                .data(dto)
+                .build());
+    }
+
+    /** One archived version's content, unaffected by which version is currently live. */
+    @GetMapping("/{projectId}/{documentId}/versions/{snapshotId}/content")
+    public ResponseEntity<ApiResponse<DocumentContentDTO>> versionContent(
+            @PathVariable String projectId,
+            @PathVariable String documentId,
+            @PathVariable String snapshotId) {
+        DocumentContentDTO dto = service.getVersionContent(
+                parseId(projectId), parseId(documentId), parseId(snapshotId));
+        return ResponseEntity.ok(ApiResponse.<DocumentContentDTO>builder()
+                .status(200)
+                .message("Document version content retrieved.")
+                .data(dto)
+                .build());
+    }
+
+    /**
+     * The approved content for one document type. This is the lookup a downstream generator uses —
+     * it knows the type it wants (FUNCTIONAL_ANALYSIS, SRS, DESIGN_DOCUMENT), not a document id.
+     */
+    @GetMapping("/{projectId}/content")
+    public ResponseEntity<ApiResponse<DocumentContentDTO>> approvedContent(
+            @PathVariable String projectId,
+            @RequestParam DocumentType type) {
+        DocumentContentDTO dto = service.getApprovedContent(parseId(projectId), type);
+        return ResponseEntity.ok(ApiResponse.<DocumentContentDTO>builder()
+                .status(200)
+                .message("Approved document content retrieved.")
+                .data(dto)
+                .build());
     }
 
     @PostMapping("/{projectId}/{documentId}/approve")

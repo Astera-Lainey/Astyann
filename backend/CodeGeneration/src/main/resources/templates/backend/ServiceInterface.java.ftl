@@ -10,6 +10,7 @@ import java.util.UUID;
 public interface ${module.serviceName} {
 
 <#list module.endpoints as ep>
-    ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else><#if ep.hasPathVariable>${entity.idType} id<#if ep.hasRequestBody>, </#if></#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>);
+<#assign pathParams><#list ep.pathVariables as pv>${entity.idType} ${pv}<#sep>, </#sep></#list></#assign>
+    ${ep.returnType} ${ep.methodName}(<#if ep.paged>Pageable pageable<#else>${pathParams}<#if ep.pathVariables?has_content && ep.hasRequestBody>, </#if><#if ep.hasRequestBody>${ep.requestBodyType} request</#if></#if>);
 </#list>
 }

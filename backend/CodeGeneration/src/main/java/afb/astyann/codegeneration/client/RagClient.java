@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,12 +44,37 @@ public class RagClient {
      *             an error.
      */
     public String getContext(UUID projectId, String query, int topK) {
+        return getContext(projectId, query, topK, List.of(), Set.of());
+    }
+
+    /**
+     * Retrieval narrowed to particular document types and approved snapshots.
+     *
+     * <p>Unscoped, a module's lookup competes for its five slots against every document, diagram
+     * and requirement in the project — including chunks belonging to superseded versions. Passing
+     * the document types that carry the specification, and the snapshots the approved copies came
+     * from, is what makes a five-chunk budget worth spending.
+     *
+     * <p>Empty collections are omitted from the query, which widens the search back to the whole
+     * project rather than matching nothing.
+     */
+    public String getContext(UUID projectId, String query, int topK,
+                             List<String> documentTypes, Set<UUID> snapshotIds) {
         return restClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/api/v1/rag/context")
-                        .queryParam("projectId", projectId)
-                        .queryParam("query", query)
-                        .queryParam("topK", topK)
-                        .build())
+                .uri(uriBuilder -> {
+                    uriBuilder.path("/api/v1/rag/context")
+                            .queryParam("projectId", projectId)
+                            .queryParam("query", query)
+                            .queryParam("topK", topK);
+                    if (documentTypes != null && !documentTypes.isEmpty()) {
+                        uriBuilder.queryParam("documentType", documentTypes.toArray());
+                    }
+                    if (snapshotIds != null && !snapshotIds.isEmpty()) {
+                        uriBuilder.queryParam("snapshotId",
+                                snapshotIds.stream().map(UUID::toString).toArray());
+                    }
+                    return uriBuilder.build();
+                })
                 .retrieve()
                 .body(String.class);
     }

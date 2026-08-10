@@ -35,6 +35,21 @@ public class Document {
     @Column(name = "file_path")
     private String path;
 
+    /**
+     * The structured JSON this document's {@code .docx} was merged from.
+     *
+     * <p>Documents are schema-driven: the model returns JSON, which is merged into a Word template.
+     * Only the merged {@code .docx} used to be kept, so the machine-readable form was destroyed and
+     * then partially reconstructed downstream by extracting prose back out of the Word file. Keeping
+     * it means a consumer can read the functional requirements, use cases and module responsibilities
+     * as data rather than as retrieved text.
+     *
+     * <p>Null for documents generated before this was stored — that is a distinguishable state, not
+     * an error, and the read API reports it as such rather than returning empty content.
+     */
+    @Column(name = "content_json", columnDefinition = "LONGTEXT")
+    private String contentJson;
+
     @Column(name = "page_count")
     private Integer pageCount;
 

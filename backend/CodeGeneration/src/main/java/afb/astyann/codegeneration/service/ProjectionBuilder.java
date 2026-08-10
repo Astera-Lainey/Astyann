@@ -39,7 +39,7 @@ public class ProjectionBuilder {
         for (PcsfEntity e : nullSafe(pcsf.getEntities())) {
             String className = fv(e.getName());
             if (isBlank(className)) continue;
-            BackendEntity be = buildEntity(e, className);
+            BackendEntity be = buildEntity(e, className, hasStatusMachine(pcsf, e, className));
             String key = e.getId() != null ? e.getId() : className;
             entitiesById.put(key, be);
             entityIdToClassName.put(key, className);
@@ -142,7 +142,12 @@ public class ProjectionBuilder {
 
     private FrontendModule buildFrontendModule(BackendModule bm, FrontendEntity entity,
                                                FrontendProjectInfo info, Pcsf pcsf) {
-        String moduleKebab = bm.getRequestMapping().substring(bm.getRequestMapping().lastIndexOf('/') + 1);
+        // From the module's own name, not from the last segment of its request mapping. A module
+        // whose declared endpoints share no resource root (say /api/v1/dashboard alongside
+        // /api/v1/reports/stock) has a request mapping of just the version prefix, and reading the
+        // last segment of that produced components called "v1" — v1-list.component.ts under
+        // features/v1. The controller name is derived from the module name and always present.
+        String moduleKebab = toKebabCase(bm.getControllerName().replaceAll("Controller$", ""));
         boolean hasCreate = bm.getEndpoints().stream().anyMatch(e -> "POST".equals(e.getHttpMethod()) && !e.isHasPathVariable());
         boolean hasRead   = bm.getEndpoints().stream().anyMatch(e -> "GET".equals(e.getHttpMethod()));
         boolean hasUpdate = bm.getEndpoints().stream().anyMatch(e -> "PUT".equals(e.getHttpMethod()));
@@ -163,6 +168,11 @@ public class ProjectionBuilder {
                     // valid camelCase identifier, so this cannot corrupt it.
                     .methodNamePascal(capitaliseFirst(be.getMethodName()))
                     .label(toSentenceCase(be.getMethodName()))
+                    .httpMethodLower(be.getHttpMethod() == null ? "post"
+                            : be.getHttpMethod().toLowerCase(Locale.ROOT))
+                    .sendsBody("POST".equals(be.getHttpMethod())
+                            || "PUT".equals(be.getHttpMethod())
+                            || "PATCH".equals(be.getHttpMethod()))
                     .build());
         }
 
@@ -231,7 +241,10 @@ public class ProjectionBuilder {
      */
     private String actionSegment(String path) {
         if (isBlank(path)) return null;
-        String trimmed = path.replace("/{id}", "").replaceAll("^/+", "").replaceAll("/+$", "");
+        // Strips any path variable, not just the literal "/{id}" the CRUD convention emits — a
+        // declared path names its own variable ("/{productId}/archive"), and leaving that in would
+        // make the frontend treat the whole thing as the action segment.
+        String trimmed = path.replaceAll("/\\{[^}/]*}", "").replaceAll("^/+", "").replaceAll("/+$", "");
         return trimmed.isEmpty() ? null : trimmed;
     }
 
@@ -312,10 +325,20 @@ public class ProjectionBuilder {
 
     /** States declared by the PCSF status machine for {@code entityClassName}, or empty. */
     private List<String> statusStatesFor(Pcsf pcsf, String entityClassName) {
+        String entityId = null;
+        for (PcsfEntity e : nullSafe(pcsf.getEntities())) {
+            if (e != null && !isBlank(entityClassName) && entityClassName.equalsIgnoreCase(fv(e.getName()))) {
+                entityId = e.getId();
+                break;
+            }
+        }
         for (PcsfStatusMachine machine : nullSafe(pcsf.getStatusMachines())) {
             String target = machine.getEntityId();
             if (isBlank(target) || isBlank(entityClassName)) continue;
-            if (!target.equalsIgnoreCase(entityClassName)) continue;
+            // A status machine names its entity by id ("entity_3"), not by class name — matching
+            // only on the name meant no entity ever resolved and the status column silently lost
+            // its badge colours. Both are accepted so either style of PCSF resolves.
+            if (!target.equalsIgnoreCase(entityClassName) && !target.equals(entityId)) continue;
             List<String> states = new ArrayList<>();
             for (String state : nullSafe(machine.getStates())) {
                 if (!isBlank(state)) states.add(state.trim());
@@ -575,7 +598,43 @@ public class ProjectionBuilder {
 
     // ── Entities ────────────────────────────────────────────────────────────
 
-    private BackendEntity buildEntity(PcsfEntity e, String className) {
+    /** Whether the PCSF declares a status machine for this entity, by id or by class name. */
+    private boolean hasStatusMachine(Pcsf pcsf, PcsfEntity entity, String className) {
+        for (PcsfStatusMachine machine : nullSafe(pcsf.getStatusMachines())) {
+            String target = machine == null ? null : machine.getEntityId();
+            if (isBlank(target)) continue;
+            if (target.equals(entity.getId()) || target.equalsIgnoreCase(className)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether a field is set by the application rather than supplied by the client.
+     *
+     * <p>Two signals, both declared rather than guessed from vocabulary:
+     * <ul>
+     *   <li>the PCSF explicitly marks the attribute as absent from forms, or</li>
+     *   <li>the entity has a status machine and this is its state field — the value then belongs to
+     *       the machine's transitions, and accepting it on create would let a client start a record
+     *       in any state it liked.</li>
+     * </ul>
+     *
+     * <p>The status check is deliberately scoped to entities that actually declare a machine, so a
+     * {@code maritalStatus} on an entity with no state model stays an ordinary editable field.
+     */
+    private boolean isServerManaged(PcsfAttribute a, String name, boolean hasStatusMachine) {
+        if (a.getShowInForm() != null && Boolean.FALSE.equals(a.getShowInForm().getValue())) return true;
+        return hasStatusMachine && isStateFieldName(name);
+    }
+
+    private boolean isStateFieldName(String name) {
+        if (isBlank(name)) return false;
+        String lower = name.toLowerCase(Locale.ROOT);
+        return lower.equals("status") || lower.equals("state")
+                || lower.endsWith("status") || lower.endsWith("state");
+    }
+
+    private BackendEntity buildEntity(PcsfEntity e, String className, boolean hasStatusMachine) {
         List<BackendField> fields = new ArrayList<>();
         for (PcsfAttribute a : nullSafe(e.getAttributes())) {
             String name = fv(a.getName());
@@ -594,6 +653,7 @@ public class ProjectionBuilder {
                     .minLength(minLength)
                     .maxLength(maxLength)
                     .id(false)
+                    .serverManaged(isServerManaged(a, name, hasStatusMachine))
                     .sampleValue(sampleValueFor(javaType, minLength, maxLength))
                     .build());
         }
@@ -731,6 +791,24 @@ public class ProjectionBuilder {
             String responseType = entityClass + "ResponseDto";
             String createType = "Create" + entityClass + "Dto";
 
+            // The PCSF's own declared API wins when it has one for this module. Only when it
+            // declares nothing do we fall back to inventing a CRUD surface from crudOperations.
+            ModuleApi declared = buildDeclaredModuleApi(pcsf, m, entityClass, allRoleEnums);
+            if (declared != null) {
+                modules.add(BackendModule.builder()
+                        .controllerName(toPascalCase(moduleName) + "Controller")
+                        .serviceName(toPascalCase(moduleName) + "Service")
+                        .serviceImplName(toPascalCase(moduleName) + "ServiceImpl")
+                        .repositoryName(entityClass + "Repository")
+                        .requestMapping(declared.requestMapping())
+                        .packageName(info.getPackageName())
+                        .entityClassName(entityClass)
+                        .entityInstanceName(entityInstance)
+                        .endpoints(declared.endpoints())
+                        .build());
+                continue;
+            }
+
             if (ops.contains("CREATE")) {
                 endpoints.add(endpoint("POST", "", "create" + entityClass, responseType, true, false,
                         createType, responseType, roleSet(pcsf, m, "CREATE", allRoleEnums)));
@@ -777,12 +855,187 @@ public class ProjectionBuilder {
         return modules;
     }
 
+    // ── Declared API surface ────────────────────────────────────────────────
+
+    /** A module's controller base path plus the operations mounted under it. */
+    private record ModuleApi(String requestMapping, List<BackendEndpoint> endpoints) {}
+
+    private static final Set<String> SUPPORTED_HTTP_METHODS =
+            Set.of("GET", "POST", "PUT", "PATCH", "DELETE");
+
+    /**
+     * Builds a module's API from {@code pcsf.endpoints} — the contract the PCSF actually declares.
+     *
+     * <p>Only the API <em>surface</em> is taken from the declaration: verb, path, operation name,
+     * pagination and roles. Types stay derived from the entity model, because the DTO and entity
+     * classes are generated from entities; a declared {@code responseEntityId} routinely points at
+     * something that is not an entity at all (a page wrapper, a file download, an ack), and naming
+     * a DTO after it would emit references to classes nothing generates.
+     *
+     * @return {@code null} when the PCSF declares no usable endpoint for this module, so the
+     *         caller falls back to the CRUD convention
+     */
+    private ModuleApi buildDeclaredModuleApi(Pcsf pcsf, PcsfModule m, String entityClass,
+                                             List<String> allRoleEnums) {
+        if (m.getId() == null) return null;
+
+        List<PcsfApiEndpoint> declared = new ArrayList<>();
+        for (PcsfApiEndpoint ep : nullSafe(pcsf.getEndpoints())) {
+            if (ep == null || !m.getId().equals(ep.getModuleId())) continue;
+            if (isBlank(ep.getPath()) || isBlank(ep.getHttpMethod())) continue;
+            if (!SUPPORTED_HTTP_METHODS.contains(ep.getHttpMethod().trim().toUpperCase(Locale.ROOT))) continue;
+            declared.add(ep);
+        }
+        if (declared.isEmpty()) return null;
+
+        String requestMapping = commonPathPrefix(declared.stream().map(PcsfApiEndpoint::getPath).toList());
+        if (isBlank(requestMapping)) return null;
+
+        String responseType = entityClass + "ResponseDto";
+        String createType = "Create" + entityClass + "Dto";
+
+        List<BackendEndpoint> endpoints = new ArrayList<>();
+        Set<String> usedMethodNames = new java.util.HashSet<>();
+
+        for (PcsfApiEndpoint ep : declared) {
+            String verb = ep.getHttpMethod().trim().toUpperCase(Locale.ROOT);
+            String relative = ep.getPath().trim().substring(requestMapping.length());
+            if (!relative.isEmpty() && !relative.startsWith("/")) relative = "/" + relative;
+
+            List<String> pathVariables = pathVariableNames(relative);
+            // Canonical only when the operation sits directly on the collection or on a single row
+            // — /{id}/archive and /export are real operations, but they are not the CRUD five, so
+            // they must reach the stub branch and be implemented by the logic-injection pass.
+            boolean bareCollection = relative.isEmpty();
+            boolean bareRow = pathVariables.size() == 1
+                    && relative.equals("/{" + pathVariables.get(0) + "}");
+
+            boolean paged = ep.isPaginated() && "GET".equals(verb) && bareCollection;
+            boolean hasBody = ep.getRequestBodyEntityId() != null
+                    && (verb.equals("POST") || verb.equals("PUT") || verb.equals("PATCH"));
+
+            boolean crud = switch (verb) {
+                case "POST"   -> bareCollection;
+                case "GET"    -> bareCollection || bareRow;
+                case "PUT"    -> bareRow;
+                case "DELETE" -> bareRow;
+                default       -> false;   // PATCH is never one of the generated CRUD bodies
+            };
+
+            String returnType = "DELETE".equals(verb) ? "void"
+                    : paged ? "Page<" + responseType + ">" : responseType;
+
+            String methodName = uniqueMethodName(usedMethodNames,
+                    declaredMethodName(ep, verb, relative, entityClass));
+
+            endpoints.add(BackendEndpoint.builder()
+                    .httpMethod(verb)
+                    .path(relative)
+                    .methodName(methodName)
+                    .returnType(returnType)
+                    .hasRequestBody(hasBody)
+                    .pathVariables(pathVariables)
+                    .idVariable(pathVariables.isEmpty() ? "id" : pathVariables.get(0))
+                    .requestBodyType(hasBody ? createType : null)
+                    .responseType("void".equals(returnType) ? null : responseType)
+                    .crud(crud)
+                    .paged(paged)
+                    .roles(declaredRoles(ep, allRoleEnums))
+                    .build());
+        }
+        return new ModuleApi(requestMapping, endpoints);
+    }
+
+    /**
+     * Longest path prefix shared by every declared path, on segment boundaries, stopping before
+     * the first path variable.
+     *
+     * <p>The stop matters: a module whose every path carries {@code /{productId}} would otherwise
+     * fold that variable into {@code @RequestMapping}, leaving the methods with a variable in the
+     * class-level mapping that none of them declares a {@code @PathVariable} for.
+     */
+    private String commonPathPrefix(List<String> paths) {
+        List<List<String>> split = paths.stream()
+                .map(p -> java.util.Arrays.stream(p.trim().split("/"))
+                        .filter(s -> !s.isEmpty()).toList())
+                .toList();
+        List<String> prefix = new ArrayList<>();
+        int shortest = split.stream().mapToInt(List::size).min().orElse(0);
+        for (int i = 0; i < shortest; i++) {
+            String segment = split.get(0).get(i);
+            if (segment.startsWith("{")) break;
+            final int idx = i;
+            if (!split.stream().allMatch(s -> s.get(idx).equals(segment))) break;
+            prefix.add(segment);
+        }
+        return prefix.isEmpty() ? "" : "/" + String.join("/", prefix);
+    }
+
+    /** Path variable names, in order, as written between braces. */
+    private List<String> pathVariableNames(String path) {
+        List<String> names = new ArrayList<>();
+        if (isBlank(path)) return names;
+        java.util.regex.Matcher matcher =
+                java.util.regex.Pattern.compile("\\{([^}/]+)}").matcher(path);
+        while (matcher.find()) {
+            String name = toLowerCamelCase(matcher.group(1));
+            if (!isBlank(name) && Character.isLetter(name.charAt(0)) && !names.contains(name)) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * The declared {@code operationId}, sanitised into a Java identifier. Falls back to a name
+     * built from the verb and path when the declaration has none or it survives sanitising empty.
+     */
+    private String declaredMethodName(PcsfApiEndpoint ep, String verb, String relative, String entityClass) {
+        String candidate = toLowerCamelCase(ep.getOperationId());
+        if (!isBlank(candidate) && Character.isLetter(candidate.charAt(0))) return candidate;
+
+        String tail = relative.replaceAll("\\{[^}/]*}", "").replaceAll("[^A-Za-z0-9]+", " ").trim();
+        String derived = toLowerCamelCase(verb.toLowerCase(Locale.ROOT) + " " + entityClass
+                + (tail.isEmpty() ? "" : " " + tail));
+        return isBlank(derived) || !Character.isLetter(derived.charAt(0)) ? "handle" + entityClass : derived;
+    }
+
+    /** Appends a numeric suffix rather than emitting two methods with the same signature. */
+    private String uniqueMethodName(Set<String> used, String candidate) {
+        String name = candidate;
+        int suffix = 2;
+        while (!used.add(name)) {
+            name = candidate + suffix++;
+        }
+        return name;
+    }
+
+    /**
+     * Declared roles, normalised onto the project's role enum. An endpoint marked as not requiring
+     * auth gets no roles at all, so no {@code @PreAuthorize} is rendered; anything that requires
+     * auth but names no resolvable role falls back to every role, matching {@code roleSet}.
+     */
+    private List<String> declaredRoles(PcsfApiEndpoint ep, List<String> allRoleEnums) {
+        if (!ep.isRequiresAuth()) return new ArrayList<>();
+        List<String> matched = new ArrayList<>();
+        for (String raw : nullSafe(ep.getRequiredRoles())) {
+            if (isBlank(raw)) continue;
+            String en = toScreamingSnakeCase(raw.startsWith("ROLE_") ? raw.substring(5) : raw);
+            if (!isBlank(en) && allRoleEnums.contains(en) && !matched.contains(en)) matched.add(en);
+        }
+        return matched.isEmpty() ? new ArrayList<>(allRoleEnums) : matched;
+    }
+
     private BackendEndpoint endpoint(String method, String path, String methodName, String returnType,
                                      boolean hasBody, boolean hasPathVar, String bodyType, String responseType,
                                      List<String> roles) {
         return BackendEndpoint.builder()
                 .httpMethod(method).path(path).methodName(methodName).returnType(returnType)
-                .hasRequestBody(hasBody).hasPathVariable(hasPathVar)
+                .hasRequestBody(hasBody)
+                // Convention-derived paths are always the generic /{id}, so the templates see the
+                // same shape here as they do for a declared endpoint that names its variable.
+                .pathVariables(hasPathVar ? new ArrayList<>(List.of("id")) : new ArrayList<>())
+                .idVariable("id")
                 .requestBodyType(bodyType).responseType(responseType)
                 .crud(true).roles(new ArrayList<>(roles)).build();
     }

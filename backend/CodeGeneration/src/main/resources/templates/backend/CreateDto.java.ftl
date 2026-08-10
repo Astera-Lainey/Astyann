@@ -14,7 +14,9 @@ import java.util.UUID;
 public class Create${entity.className}Dto {
 
 <#list entity.fields as field>
-<#if field.name != "currentStock" && field.name != "stockStatus" && field.name != "status">
+<#-- Must stay the same predicate ServiceImpl's applyValues uses, or it calls a getter this DTO
+     does not declare. See BackendField.serverManaged. -->
+<#if !field.serverManaged>
 <#if field.required>
     @NotNull
 </#if>
