@@ -72,6 +72,15 @@ class DocumentContentPersistenceTest {
                 apiContractDeriver, apiContractOverlay, documentExecutor);
     }
 
+    @SuppressWarnings("unchecked")
+    private static java.util.List<java.util.Map<String, Object>> requirements(DocumentContentDTO dto) {
+        return (java.util.List<java.util.Map<String, Object>>) dto.getContent().get("fr");
+    }
+
+    private static String firstRequirementId(DocumentContentDTO dto) {
+        return String.valueOf(requirements(dto).get(0).get("id"));
+    }
+
     private static Document doc(String contentJson, DocumentStatus status) {
         return Document.builder()
                 .documentId(DOC).projectId(PROJECT).type(DocumentType.FUNCTIONAL_ANALYSIS)
@@ -87,8 +96,8 @@ class DocumentContentPersistenceTest {
         DocumentContentDTO dto = service.getContent(PROJECT, DOC);
 
         // A String field would force every consumer to parse a second time.
-        assertThat(dto.getContent().isObject()).isTrue();
-        assertThat(dto.getContent().get("fr").get(0).get("id").asText()).isEqualTo("FR-01");
+        assertThat(dto.getContent()).containsKey("fr");
+        assertThat(firstRequirementId(dto)).isEqualTo("FR-01");
         assertThat(dto.getSnapshotId()).isEqualTo(SNAPSHOT);
         assertThat(dto.getType()).isEqualTo(DocumentType.FUNCTIONAL_ANALYSIS);
         assertThat(dto.getVersion()).isEqualTo(2);
@@ -133,7 +142,7 @@ class DocumentContentPersistenceTest {
 
         DocumentContentDTO dto = service.getVersionContent(PROJECT, DOC, SNAPSHOT);
 
-        assertThat(dto.getContent().get("fr").get(0).get("id").asText()).isEqualTo("FR-OLD");
+        assertThat(firstRequirementId(dto)).isEqualTo("FR-OLD");
     }
 
     @Test
@@ -163,7 +172,7 @@ class DocumentContentPersistenceTest {
 
         DocumentContentDTO dto = service.getApprovedContent(PROJECT, DocumentType.FUNCTIONAL_ANALYSIS);
 
-        assertThat(dto.getContent().get("fr")).hasSize(1);
+        assertThat(requirements(dto)).hasSize(1);
         assertThat(dto.getStatus()).isEqualTo(DocumentStatus.APPROVED);
     }
 

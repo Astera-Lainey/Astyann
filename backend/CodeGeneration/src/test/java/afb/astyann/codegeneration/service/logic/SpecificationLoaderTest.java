@@ -7,6 +7,7 @@ import afb.astyann.codegeneration.dto.DocumentContentDTO;
 import afb.astyann.codegeneration.service.logic.SpecificationLoader.ModuleSpecification;
 import afb.astyann.codegeneration.service.logic.SpecificationLoader.ProjectSpecification;
 import afb.astyann.codegeneration.service.logic.SpecificationLoader.Requirement;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,16 +41,23 @@ class SpecificationLoaderTest {
     private static final UUID SRS_SNAPSHOT = UUID.randomUUID();
 
     private SpecificationLoader loader() {
-        return new SpecificationLoader(documentServiceClient);
+        return new SpecificationLoader(documentServiceClient, mapper);
     }
 
+    /**
+     * Content arrives as a {@code Map} because that is what survives the Jackson 2 / Jackson 3
+     * boundary between these services — see {@code DocumentContentWireFormatTest}. Building the
+     * fixture the same way keeps this test honest about what the loader really receives.
+     */
     private void stub(String type, UUID snapshotId, String json) {
         try {
+            Map<String, Object> content =
+                    mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
             when(documentServiceClient.approvedContent(eq(PROJECT), eq(type))).thenReturn(
                     ApiResponse.<DocumentContentDTO>builder().status(200)
                             .data(DocumentContentDTO.builder()
                                     .documentId(UUID.randomUUID()).type(type).status("APPROVED")
-                                    .snapshotId(snapshotId).content(mapper.readTree(json)).build())
+                                    .snapshotId(snapshotId).content(content).build())
                             .build());
         } catch (Exception e) {
             throw new IllegalStateException(e);

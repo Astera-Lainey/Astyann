@@ -39,6 +39,7 @@ import java.util.UUID;
 public class SpecificationLoader {
 
     private final DocumentServiceClient documentServiceClient;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private static final String SRS = "SRS";
     private static final String FUNCTIONAL_ANALYSIS = "FUNCTIONAL_ANALYSIS";
@@ -146,11 +147,13 @@ public class SpecificationLoader {
         try {
             var response = documentServiceClient.approvedContent(projectId, type);
             DocumentContentDTO dto = response != null ? response.getData() : null;
-            if (dto == null || dto.getContent() == null) {
+            if (dto == null || dto.getContent() == null || dto.getContent().isEmpty()) {
                 log.debug("No approved {} content for project {}", type, projectId);
                 return Fetched.none();
             }
-            return new Fetched(dto.getContent(), dto.getSnapshotId());
+            // Arrives as a Map because that is the one shape Jackson 2 and Jackson 3 agree on over
+            // the wire; converted here so the extraction below can stay tree-shaped.
+            return new Fetched(objectMapper.valueToTree(dto.getContent()), dto.getSnapshotId());
         } catch (Exception ex) {
             // 404 (not approved / absent) and 409 (generated before content was stored) are both
             // ordinary here — the document simply does not contribute.

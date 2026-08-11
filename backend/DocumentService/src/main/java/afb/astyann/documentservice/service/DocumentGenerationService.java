@@ -22,6 +22,7 @@ import afb.astyann.documentservice.repository.DocumentRepository;
 import afb.astyann.documentservice.repository.DocumentVersionArchiveRepository;
 import afb.astyann.documentservice.service.schema.DocumentSchema;
 import afb.astyann.documentservice.service.schema.DocumentSchemas;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -195,13 +196,13 @@ public class DocumentGenerationService {
         if (json == null || json.isBlank()) {
             throw new DocumentContentNotAvailableException(doc.getDocumentId());
         }
-        JsonNode parsed;
+        Map<String, Object> parsed;
         try {
-            parsed = objectMapper.readTree(json);
+            parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         } catch (Exception ex) {
             // Stored by this service from a node it had already parsed, so this should be
             // unreachable; treating it as "unavailable" beats handing back a broken payload.
-            log.error("Stored content for documentId={} is not parseable: {}",
+            log.error("Stored content for documentId={} is not parseable as an object: {}",
                     doc.getDocumentId(), ex.getMessage());
             throw new DocumentContentNotAvailableException(doc.getDocumentId());
         }
