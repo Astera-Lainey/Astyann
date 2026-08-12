@@ -2,6 +2,7 @@ package afb.astyann.codegeneration.service;
 
 import afb.astyann.codegeneration.domain.pcsf.*;
 import afb.astyann.codegeneration.domain.projection.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.Set;
  * infrastructure builders are stubbed until their template passes land.
  */
 @Service
+@Slf4j
 public class ProjectionBuilder {
 
     /** Attributes managed by base classes / audit columns — never emitted as user fields. */
@@ -44,6 +46,10 @@ public class ProjectionBuilder {
             entitiesById.put(key, be);
             entityIdToClassName.put(key, className);
         }
+
+        // Second pass: a foreign key's type depends on the entity it points at, which may not have
+        // been built yet during the first.
+        alignForeignKeyTypes(entitiesById);
 
         applyRelationships(pcsf, entitiesById, entityIdToClassName);
 
@@ -598,6 +604,84 @@ public class ProjectionBuilder {
 
     // ── Entities ────────────────────────────────────────────────────────────
 
+    /**
+     * The primary-key strategy, preferring the entity's own declared {@code id} attribute over
+     * {@code primaryKeyStrategy}.
+     *
+     * <p>{@code primaryKeyStrategy} is not part of the schema the inference pass is asked to fill
+     * in — it is a field initialiser on the DTO, re-serialised into the stored PCSF on every pass.
+     * So it reads {@code "UUID"} whether or not anything chose UUID, while the declared
+     * {@code id} attribute is something the model actually wrote. Trusting the default over the
+     * declaration produced entities with a {@code UUID} primary key and {@code Long} foreign keys
+     * pointing at them — code that cannot compile the moment a repository lookup is written.
+     */
+    private String resolveIdStrategy(PcsfEntity e) {
+        for (PcsfAttribute a : nullSafe(e.getAttributes())) {
+            if (a == null || !"id".equalsIgnoreCase(fv(a.getName()))) continue;
+            String declared = mapJavaType(fv(a.getJavaType()));
+            if ("Long".equals(declared) || "Integer".equals(declared)) return "IDENTITY";
+            if ("UUID".equals(declared)) return "UUID";
+            break;
+        }
+        return !isBlank(e.getPrimaryKeyStrategy())
+                ? e.getPrimaryKeyStrategy().toUpperCase(Locale.ROOT) : "UUID";
+    }
+
+    /**
+     * Retypes every foreign-key field to match the primary key of the entity it references.
+     *
+     * <p>A PCSF can declare {@code Stock.productId} as {@code Long} while {@code Product}'s key is
+     * a {@code UUID} — the two come from different parts of the model and nothing reconciles them.
+     * Emitted verbatim, the generated project cannot compile as soon as anything writes
+     * {@code productRepository.findById(stock.getProductId())}, and the AI fix loop cannot repair
+     * it either: the mismatch spans two files, so no single-file edit resolves it.
+     *
+     * <p>Resolution is by name against the project's own entity list — {@code productId} to
+     * {@code Product}, {@code parentCategoryId} to {@code Category} — and a field naming no
+     * declared entity is left exactly as the PCSF declared it.
+     */
+    private void alignForeignKeyTypes(Map<String, BackendEntity> entitiesById) {
+        Map<String, BackendEntity> byLowerName = new LinkedHashMap<>();
+        for (BackendEntity be : entitiesById.values()) {
+            if (be.getClassName() != null) byLowerName.put(be.getClassName().toLowerCase(Locale.ROOT), be);
+        }
+        for (BackendEntity owner : entitiesById.values()) {
+            for (BackendField field : nullSafe(owner.getFields())) {
+                BackendEntity target = referencedEntity(field.getName(), byLowerName);
+                if (target == null || target.getIdType() == null) continue;
+                if (target.getIdType().equals(field.getJavaType())) continue;
+                log.debug("Retyping {}.{} from {} to {} to match {}'s primary key",
+                        owner.getClassName(), field.getName(), field.getJavaType(),
+                        target.getIdType(), target.getClassName());
+                field.setJavaType(target.getIdType());
+                // A sample value for the old type would no longer be assignable.
+                field.setSampleValue(sampleValueFor(target.getIdType(),
+                        field.getMinLength(), field.getMaxLength()));
+            }
+        }
+    }
+
+    /** The entity a field named {@code <something>Id} points at, or null if it names none. */
+    private BackendEntity referencedEntity(String fieldName, Map<String, BackendEntity> byLowerName) {
+        if (fieldName == null || fieldName.length() < 3) return null;
+        if (!fieldName.toLowerCase(Locale.ROOT).endsWith("id")) return null;
+        String stem = fieldName.substring(0, fieldName.length() - 2).toLowerCase(Locale.ROOT);
+        if (stem.isEmpty()) return null;
+
+        BackendEntity exact = byLowerName.get(stem);
+        if (exact != null) return exact;
+        // "parentCategoryId" and "assignedByUserId" still name a declared entity; take the longest
+        // match so "categoryId" cannot be claimed by a shorter entity name that it merely contains.
+        BackendEntity best = null;
+        for (Map.Entry<String, BackendEntity> candidate : byLowerName.entrySet()) {
+            if (stem.endsWith(candidate.getKey())
+                    && (best == null || candidate.getKey().length() > best.getClassName().length())) {
+                best = candidate.getValue();
+            }
+        }
+        return best;
+    }
+
     /** Whether the PCSF declares a status machine for this entity, by id or by class name. */
     private boolean hasStatusMachine(Pcsf pcsf, PcsfEntity entity, String className) {
         for (PcsfStatusMachine machine : nullSafe(pcsf.getStatusMachines())) {
@@ -662,7 +746,7 @@ public class ProjectionBuilder {
         boolean testable = fields.stream()
                 .noneMatch(f -> f.isRequired() && f.getSampleValue() == null);
 
-        String idStrategy = !isBlank(e.getPrimaryKeyStrategy()) ? e.getPrimaryKeyStrategy().toUpperCase(Locale.ROOT) : "UUID";
+        String idStrategy = resolveIdStrategy(e);
 
         return BackendEntity.builder()
                 .className(className)

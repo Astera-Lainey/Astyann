@@ -46,87 +46,97 @@ Table of Contents
 
 [__2\.1  Authentication__	5](#_Toc232406755)
 
-[__2\.2  Pagination__	5](#_Toc232406756)
+[__2\.2  Response Envelope__	5](#_Toc232406756)
 
-[__2\.3  Idempotency__	5](#_Toc232406757)
+[__2\.3  Asynchronous Operations__	6](#_Toc232406757)
 
-[__2\.4  Error Format__	5](#_Toc232406758)
+[__2\.4  Collections and Pagination__	6](#_Toc232406793)
 
-[__2\.5  Transport__	6](#_Toc232406759)
+[__2\.5  Idempotency__	6](#_Toc232406794)
 
-[__2\.6  Versioning__	6](#_Toc232406760)
+[__2\.6  Error Format__	6](#_Toc232406758)
 
-[__2\.7  Rate Limiting__	6](#_Toc232406761)
+[__2\.7  Transport__	7](#_Toc232406759)
 
-[__III\. Canonical HTTP Codes__	7](#_Toc232406762)
+[__2\.8  Versioning__	7](#_Toc232406760)
 
-[__IV\. Detailed Endpoints__	8](#_Toc232406763)
+[__2\.9  Rate Limiting__	7](#_Toc232406761)
 
-[__Authentication and Account Management__	8](#_Toc232406764)
+[__III\. Canonical HTTP Codes__	8](#_Toc232406762)
 
-[__Endpoint Detail — Authentication and Account Management__	8](#_Toc232406765)
+[__IV\. Detailed Endpoints__	9](#_Toc232406763)
 
-[__Project Management__	15](#_Toc232406766)
+[__Authentication and Account Management__	9](#_Toc232406764)
 
-[__Endpoint Detail — Project Management__	15](#_Toc232406767)
+[__Endpoint Detail — Authentication and Account Management__	9](#_Toc232406765)
 
-[__Functional Specifications \(Requirements\)__	22](#_Toc232406768)
+[__Project Management__	16](#_Toc232406766)
 
-[__Endpoint Detail — Functional Specifications \(Requirements\)__	22](#_Toc232406769)
+[__Endpoint Detail — Project Management__	16](#_Toc232406767)
 
-[__UML Diagrams__	28](#_Toc232406770)
+[__Functional Specifications \(PCSF\)__	22](#_Toc232406768)
 
-[__Endpoint Detail — UML Diagrams__	28](#_Toc232406771)
+[__Endpoint Detail — Functional Specifications \(PCSF\)__	22](#_Toc232406769)
 
-[__Document Generation__	35](#_Toc232406772)
+[__UML Diagrams__	35](#_Toc232406770)
 
-[__Endpoint Detail — Document Generation__	35](#_Toc232406773)
+[__Endpoint Detail — UML Diagrams__	35](#_Toc232406771)
 
-[__Source Code Generation__	42](#_Toc232406774)
+[__Document Generation__	45](#_Toc232406772)
 
-[__Endpoint Detail — Source Code Generation__	42](#_Toc232406775)
+[__Endpoint Detail — Document Generation__	45](#_Toc232406773)
 
-[__Version and Snapshot Management__	50](#_Toc232406776)
+[__Source Code Generation__	56](#_Toc232406774)
 
-[__Endpoint Detail — Version and Snapshot Management__	50](#_Toc232406777)
+[__Endpoint Detail — Source Code Generation__	56](#_Toc232406775)
 
-[__Deployment__	54](#_Toc232406778)
+[__Version and Snapshot Management__	64](#_Toc232406776)
 
-[__Endpoint Detail — Deployment__	54](#_Toc232406779)
+[__Endpoint Detail — Version and Snapshot Management__	64](#_Toc232406777)
 
-[__RAG Vector Store / Context__	57](#_Toc232406780)
+[__RAG Knowledge Base__	70](#_Toc232406900)
 
-[__Endpoint Detail — RAG Vector Store / Context__	57](#_Toc232406781)
+[__Endpoint Detail — RAG Knowledge Base__	70](#_Toc232406901)
 
-[__V\. Outgoing Webhook Events__	60](#_Toc232406782)
+[__AI Orchestrator__	78](#_Toc232406902)
 
-[__VI\. API Security__	60](#_Toc232406783)
+[__Endpoint Detail — AI Orchestrator__	78](#_Toc232406903)
 
-[__Authentication__	60](#_Toc232406784)
+[__V\. Outgoing Webhook Events__	81](#_Toc232406782)
 
-[__Authorization__	60](#_Toc232406785)
+[__VI\. API Security__	82](#_Toc232406783)
 
-[__Data Protection__	60](#_Toc232406786)
+[__Authentication__	82](#_Toc232406784)
 
-[__Rate Limiting__	60](#_Toc232406787)
+[__Authorization__	82](#_Toc232406785)
 
-[__Input Validation__	60](#_Toc232406788)
+[__Data Protection__	82](#_Toc232406786)
 
-[__Logging__	60](#_Toc232406789)
+[__Rate Limiting__	82](#_Toc232406787)
 
-[__Security Headers__	60](#_Toc232406790)
+[__Input Validation__	82](#_Toc232406788)
 
-[__VII\. API / FR / UC / US Traceability Matrix__	61](#_Toc232406791)
+[__Logging__	82](#_Toc232406789)
 
-[__7\.1  Coverage Statistics__	63](#_Toc232406792)
+[__Security Headers__	82](#_Toc232406790)
+
+[__VII\. API / FR / UC / US Traceability Matrix__	83](#_Toc232406791)
+
+[__7\.1  Coverage Statistics__	85](#_Toc232406792)
 
 # <a id="_Toc232406753"></a>__I\. Introduction__
 
-This document constitutes the API Contract for the Software Development Lifecycle \(SDLC\) Automation Platform\. It exhaustively and normatively defines all REST endpoints exposed by the Spring Boot 3\.x backend, the data schemas exchanged, the canonical HTTP return codes, the applicable security rules, and the traceability to functional and non\-functional requirements\.
+This document constitutes the API Contract for the Software Development Lifecycle \(SDLC\) Automation Platform\. It exhaustively and normatively defines all REST endpoints exposed by the platform, the data schemas exchanged, the canonical HTTP return codes, the applicable security rules, and the traceability to functional requirements\.
 
 This contract is the single reference for frontend development teams \(Angular\), third\-party API integrators, and quality assurance teams\. Any deviation from this document must be the subject of a formal change request\.
 
-The API follows REST principles: resources expressed as lowercase hyphenated nouns, semantic HTTP methods, a homogeneous JSON envelope \(status, message, data\), and JWT\-based authentication in the Authorization header\. All endpoints except /auth/register and /auth/login require a valid JWT\.
+The platform is a set of Spring Boot microservices behind a Spring Cloud Gateway\. Clients address the gateway only; it is the single publicly exposed component, and it routes by path prefix to the service that owns the resource\. The prefixes are /auth, /projects, /requirements, /uml, /documents, /code, /versions, /ai and /rag\.
+
+Endpoints marked as internal callers in the sections below are reached service\-to\-service rather than from the browser\. They are documented here because they are routable through the gateway and form part of the platform's observable surface, but a frontend integrator will not normally call them\.
+
+__Scope note__
+
+This contract describes the implemented surface\. Two modules that appear in the original design were not built and have no endpoints: a deployment service and a meta\-model service\. The gateway still declares a /api/v1/deployments route, but nothing is bound to it\. The deployment package is obtained instead as the INFRASTRUCTURE layer of source code generation \(see API\-CODE\-01 and API\-CODE\-03\)\.
 
 # <a id="_Toc232406754"></a>__II\. General Principles__
 
@@ -134,145 +144,153 @@ The principles below apply to all endpoints of the platform's API\. They constit
 
 ## <a id="_Toc232406755"></a>__2\.1  Authentication__
 
-OAuth 2\.0 / JWT \(JSON Web Token\)\. Every request must carry a valid token in the HTTP header:
+JWT bearer authentication\. Every request must carry a valid token in the HTTP header:
 
 Authorization: Bearer <token>
 
-The token is issued by POST /api/v1/auth/login\. Access token validity: 1 hour\. Refresh token validity: 7 days\. The endpoints /api/v1/auth/register and /api/v1/auth/login are public \(no JWT required\)\.
+The token is issued by POST /api/v1/auth/login, and also by POST /api/v1/auth/verify\-email so that a user is signed in immediately on verifying their account\. It is signed with an HMAC\-SHA key derived from a secret of at least 512 bits, shared between the Auth Service and the API Gateway\.
 
-## <a id="_Toc232406756"></a>__2\.2  Pagination__
+A single access token is issued\. There is no refresh token, no server\-side session and no token deny\-list; logout is a client\-side token discard\. Token lifetime is configurable\.
 
-Any collection resource supports the query parameters page \(page number, zero\-indexed\) and size \(number of items per page, default 20, max 100\)\. The response includes, within the data object, the fields: content \(array\), totalElements, totalPages, currentPage, pageSize\.
+Validation happens once, at the gateway\. On success the gateway strips the Authorization header and forwards the caller's identity as X\-User\-Id, X\-User\-Email and X\-User\-Role, so no downstream service parses a token\. The public routes are: /api/v1/auth/register, /api/v1/auth/login, /api/v1/auth/verify, /api/v1/auth/verify/resend, /api/v1/auth/reset\-password, /actuator/health and /actuator/info\.
 
-## <a id="_Toc232406757"></a>__2\.3  Idempotency__
+## <a id="_Toc232406756"></a>__2\.2  Response Envelope__
 
-The GET, PUT, and DELETE methods are idempotent\. For critical POST operations that might be replayed \(document generation, code generation, sending notifications\), the client may supply an Idempotency\-Key: <uuid\-v4> header\. The server guarantees uniqueness of processing for 24 hours for the same key\.
-
-## <a id="_Toc232406758"></a>__2\.4  Error Format__
-
-Errors are returned in RFC 7807 \(Problem Details\) format\. Structure:
+Most endpoints return a homogeneous JSON envelope:
 
 \{
-
-  "status": <http\_code>,
-
-  "message": "<short\_label>",
-
-  "data": null,
-
-  "errors": \[
-
-    \{ "field": "<field>", "code": "<error\_code>", "detail": "<description>" \}
-
-  \]
-
+  "status": <http_code>,
+  "message": "<short_label>",
+  "data": <payload or null>
 \}
 
-## <a id="_Toc232406759"></a>__2\.5  Transport__
+Three categories of endpoint deliberately return a bare payload instead:
 
-All communications are encrypted via TLS 1\.2 minimum \(TLS 1\.3 recommended\)\. Returned content is systematically application/json;charset=UTF\-8\. Downloadable files are served as application/octet\-stream, application/zip, application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document, or image/svg\+xml depending on type\.
+- binary responses \(document downloads, code archives, rendered diagram images\), which return raw bytes with the appropriate content type;
 
-## <a id="_Toc232406760"></a>__2\.6  Versioning__
+- the RAG Knowledge Base endpoints, whose shapes are matched to what the calling clients expect;
+
+- the AI Orchestrator endpoints, which return their DTO directly\.
+
+
+## <a id="_Toc232406757"></a>__2\.3  Asynchronous Operations__
+
+Generation is not request\-shaped: a single model call may run for minutes, and a full code generation runs considerably longer\. Every generation endpoint therefore returns 202 Accepted as soon as the artifact rows have been created in a GENERATING state, and performs the work on a dedicated executor\.
+
+Clients discover completion by polling the corresponding list endpoint \(API\-DIAG\-02, API\-DOC\-02, API\-CODE\-02\) or the specification status endpoint \(API\-REQ\-06\)\. A terminal state is APPROVED, PENDING\_APPROVAL, GENERATED or FAILED; a FAILED row carries a lastError field\.
+
+For the same reason the gateway declares no global response timeout\. A connect timeout still bounds unreachable services\.
+
+## <a id="_Toc232406793"></a>__2\.4  Collections and Pagination__
+
+Collection endpoints return a plain array or a wrapper object listing every item\. Pagination is not implemented in the current version: no endpoint accepts page or size parameters, and no response carries totalElements, totalPages, currentPage or pageSize\. Collections are bounded in practice by the number of artifacts a single project produces\.
+
+Filtering is available where it is useful: the diagram and document list endpoints accept optional type and status query parameters, and project search accepts an optional title substring\.
+
+## <a id="_Toc232406794"></a>__2\.5  Idempotency__
+
+The GET, PUT and DELETE methods are idempotent\. Deletion endpoints are deliberately tolerant: deleting something that does not exist succeeds rather than failing, because they are used as cascade hooks\.
+
+An Idempotency\-Key header is not supported in the current version\. Replay protection for generation is instead behavioural: the code generation service refuses to dispatch a layer that is already mid\-generation, and RAG indexing removes a source's existing chunks before writing new ones, so re\-indexing does not duplicate content\.
+
+## <a id="_Toc232406758"></a>__2\.6  Error Format__
+
+Errors are returned in the same envelope as successful responses, with data set to null\. Validation failures additionally list the offending fields:
+
+\{
+  "status": <http_code>,
+  "message": "<short_label>",
+  "data": null,
+  "errors": [
+    \{ "field": "<field>", "code": "<error_code>", "detail": "<description>" \}
+  ]
+\}
+
+Two error responses carry additional context by design\. A 403 on login includes the userId, so the client can route to the verification screen instead of a dead end\. A 422 from document approval includes the validation report identifying the unresolved placeholder\.
+
+## <a id="_Toc232406759"></a>__2\.7  Transport__
+
+All communications are encrypted via TLS 1\.2 minimum \(TLS 1\.3 recommended\)\. Returned content is application/json;charset=UTF\-8 unless stated otherwise\. Binary responses are served as application/zip, application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document, image/svg\+xml or image/png depending on the artifact\.
+
+Uploads are multipart/form\-data and are capped at 20 MB per file and 25 MB per request\.
+
+## <a id="_Toc232406760"></a>__2\.8  Versioning__
 
 The API version is included in the base path: /api/v1/\. Major changes \(breaking compatibility\) increment the major version\. Minor changes \(new optional fields\) remain backward compatible\.
 
-## <a id="_Toc232406761"></a>__2\.7  Rate Limiting__
+## <a id="_Toc232406761"></a>__2\.9  Rate Limiting__
 
-Limit of 1,000 requests per minute per authenticated user\. If exceeded, the server returns HTTP 429 with a Retry\-After header indicating the wait time in seconds\.
+Rate limiting is not implemented in the current version\. No quota is enforced per user or per IP address, and no 429 response is produced by any endpoint\. This is a known gap: the authentication endpoints in particular warrant a per\-IP limit before any public deployment, and the generation endpoints warrant a per\-user limit because each one consumes model capacity\.
 
 # <a id="_Toc232406762"></a>__III\. Canonical HTTP Codes__
 
-The table below lists all HTTP return codes used by the API, their meaning, and the recommended corrective actions\.
+The codes below are the ones actually produced by the platform's exception handlers\. Their meaning is uniform across every module\.
 
 __Code__
 
-__Name__
+__Meaning__
 
-__Description and Corrective Action__
+200 OK
 
-200
+The request succeeded and the response carries a payload\.
 
-OK
+201 Created
 
-Request processed successfully\. The response contains the requested resource or operation result\.
+A resource was created\. Used by registration, project creation and snapshot creation\.
 
-201
+202 Accepted
 
-Created
+An asynchronous operation was accepted and dispatched\. The work is not finished; poll the corresponding list endpoint\.
 
-Resource created successfully\. The Location header contains the URI of the new resource\.
+204 No Content
 
-400
+The request succeeded and there is no body\. Used by deletions and by RAG indexing\.
 
-Bad Request
+400 Bad Request
 
-The request is malformed or its parameters are invalid\. Check the request body and validation constraints\.
+The request is malformed: a validation constraint failed, an identifier is not a UUID, a render format is not SVG or PNG, or a reset token is invalid or expired\.
 
-401
+401 Unauthorized
 
-Unauthorized
+The token is missing, malformed or expired, or the credentials supplied are wrong\.
 
-JWT token missing, invalid, or expired\. The user must re\-authenticate\.
+403 Forbidden
 
-403
+The account exists but is not verified, or the verification code is invalid or expired\.
 
-Forbidden
+404 Not Found
 
-The user is authenticated but does not have sufficient rights to access the resource or perform the operation\.
+The addressed resource does not exist: an unknown project, diagram, document, code layer, snapshot or user\.
 
-404
+409 Conflict
 
-Not Found
+The request is well formed but conflicts with the current state: an email already in use, an upstream stage not approved, a retry on a non\-failed resource, or an approval attempted while stub methods remain\.
 
-The requested resource does not exist or has been deleted\.
+422 Unprocessable Entity
 
-409
+A precondition on content was not met: the specification is not approved, or a document failed validation because an unresolved template placeholder remains\.
 
-Conflict
+500 Internal Server Error
 
-The request cannot be processed due to a resource state conflict \(e\.g\. email already in use, incompatible status\)\.
+An unhandled server\-side failure\. The response carries a generic message; details are logged\.
 
-410
+503 Service Unavailable
 
-Gone
+A downstream dependency could not be reached — another platform service, the model provider or the diagram renderer\.
 
-The requested resource existed previously but is no longer available \(e\.g\. an archived version that has been purged from storage\)\.
-
-413
-
-Payload Too Large
-
-The uploaded file exceeds the maximum allowed size\.
-
-422
-
-Unprocessable Entity
-
-The request is syntactically correct but fails business validation rules \(e\.g\. forbidden status transition, AI generation failure after retries\)\.
-
-429
-
-Too Many Requests
-
-The requests\-per\-minute threshold has been exceeded\. Wait for the rate\-limiting window to expire\.
-
-500
-
-Internal Server Error
-
-Internal server error\. A correlation identifier is included in the response for support purposes\.
-
-503
-
-Service Unavailable
-
-A downstream dependency \(AI engine, rendering service, database\) is temporarily unavailable\. The request may be retried\.
+Note on 409 versus 422\. Both indicate a precondition failure, and the split follows the exception handlers as implemented: an unapproved specification yields 422, whereas unapproved diagrams or documents yield 409\. Clients should treat both as "an upstream stage is not ready" and surface the message\.
 
 # <a id="_Toc232406763"></a>__IV\. Detailed Endpoints__
 
-Endpoints are grouped by functional module\. For each endpoint, the following information is specified: HTTP method, path, parameters, request and response schemas, return codes, covered functional/non\-functional requirements, and security requirements\.
+Endpoints are grouped by owning service\. For each endpoint the following is specified: HTTP method, path, parameters, request and response schemas, return codes, covered functional requirements, and security requirements\.
+
+Paths are given in full\. Note that only the account and project modules are mounted under a path that matches their resource name; the generation modules are mounted under their own prefixes \(/uml, /documents, /code, /versions\) with the project identifier as the first path segment, not under /projects/{projectId}/\.
 
 ## <a id="_Toc232406764"></a>__Authentication and Account Management__
+
+Auth Service \(:8081\) — afb\.astyann\.authservice
+
+Account creation, email verification, authentication and password reset\. This is the only module whose endpoints are reachable without a token\. Every response is wrapped in the platform envelope { status, message, data }\.
 
 __API Code__
 
@@ -288,7 +306,7 @@ POST
 
 /api/v1/auth/register
 
-Registers a new user\. Creates the account with unverified status and sends a verificati\.\.\.
+Registers a new user\. Creates the account with unverified status and emails a 6\-digit verific\.\.\.
 
 API\-AUTH\-02
 
@@ -296,7 +314,7 @@ POST
 
 /api/v1/auth/verify\-email
 
-Verifies the email address via the 6\-digit code received by email\. Activates the user a\.\.\.
+Verifies the account with the 6\-digit code emailed at registration\. Returns an access token\.
 
 API\-AUTH\-03
 
@@ -304,7 +322,7 @@ POST
 
 /api/v1/auth/verify/resend
 
-Generates and sends a new verification code to the user's email address, invalidating a\.\.\.
+Generates and emails a new verification code, invalidating the previous one\.
 
 API\-AUTH\-04
 
@@ -312,7 +330,7 @@ POST
 
 /api/v1/auth/login
 
-Authenticates the user\. Returns a JWT access token and a refresh token\.
+Authenticates the user and returns a JWT access token\.
 
 API\-AUTH\-05
 
@@ -320,23 +338,23 @@ POST
 
 /api/v1/auth/logout
 
-Invalidates the current JWT access token\. Adds the token to the blacklist\.
+Ends the current session\. The client discards the token\.
 
-API\-AUTH\-07
+API\-AUTH\-06
 
 POST
 
 /api/v1/auth/reset\-password
 
-Requests a password reset\. Sends an email with a reset link\.
+Requests a password reset\. Emails a reset link carrying a single\-use token\.
 
-API\-AUTH\-08
+API\-AUTH\-07
 
 POST
 
 /api/v1/auth/reset\-password/confirm
 
-Confirms the password reset using the token received by email\.
+Completes the password reset using the token received by email\.
 
 ### <a id="_Toc232406765"></a>__Endpoint Detail — Authentication and Account Management__
 
@@ -346,11 +364,15 @@ __/api/v1/auth/register__
 
 __API\-AUTH\-01__
 
-__Body Parameters__
+__Description__
 
-email \(string, required\)
+Creates the account in an unverified state and sends a 6\-digit verification code to the supplied address\. The code is valid for 15 minutes\. The account cannot authenticate until it is verified\.
 
-password \(string, required, min\. 8 chars\)
+__Parameters__
+
+Body — email \(string, required, valid email\)
+
+Body — password \(string, required, min\. 8 chars\)
 
 __Required Headers__
 
@@ -359,38 +381,27 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
   "email": "jane\.doe@example\.com",
-
   "password": "Str0ngP@ssw0rd\!"
-
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 201,
-
   "message": "Account created\. Verification email sent\.",
-
   "data": \{
-
     "userId": "uuid",
-
     "email": "jane\.doe@example\.com",
-
     "isVerified": false
-
   \}
-
 \}
 
 __Status Codes__
 
 201 Created
 
-400 Bad Request \(missing fields\)
+400 Bad Request \(validation failure\)
 
 409 Conflict \(email already in use\)
 
@@ -406,17 +417,22 @@ __Idempotent__
 
 No
 
+
 __POST__
 
 __/api/v1/auth/verify\-email__
 
 __API\-AUTH\-02__
 
-__Body Parameters__
+__Description__
 
-userId \(string, required\)
+Activates the account\. On success an access token is returned immediately, so the user is signed in rather than being returned to the login screen\. Verifying an already\-verified account is accepted and returns a token\.
 
-code \(string, required, 6 digits\)
+__Parameters__
+
+Body — userId \(string, required, UUID\)
+
+Body — code \(string, required, 6 digits\)
 
 __Required Headers__
 
@@ -425,36 +441,29 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
-  "userId": "ox\*\*\*\*\*\*\*\*\*\*\*",
-
-  "coode": "847291"
-
+  "userId": "uuid",
+  "code": "482913"
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "Account verified and activated\.",
-
+  "message": "Account verified successfully\.",
   "data": \{
-
-    "isVerified": true
-
+    "accessToken": "eyJhbGciOiJIUzUxMiJ9\.\.\.",
+    "userId": "uuid",
+    "email": "jane\.doe@example\.com"
   \}
-
 \}
 
 __Status Codes__
 
 200 OK
 
-400 Bad Request \(invalid code\)
+403 Forbidden \(invalid or expired code\)
 
-409 Conflict \(code expired\)
+404 Not Found \(unknown user\)
 
 __FR Covered__
 
@@ -468,15 +477,20 @@ __Idempotent__
 
 No
 
+
 __POST__
 
 __/api/v1/auth/verify/resend__
 
 __API\-AUTH\-03__
 
-__Body Parameters__
+__Description__
 
-email \(string, required\)
+Issues a fresh 6\-digit code and a new expiry, replacing any code previously sent\.
+
+__Parameters__
+
+Body — email \(string, required, valid email\)
 
 __Required Headers__
 
@@ -485,32 +499,25 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
   "email": "jane\.doe@example\.com"
-
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "A new verification code has been sent\.",
-
+  "message": "Verification code resent\.",
   "data": \{
-
-    "verificationExpiryDate": "2026\-06\-12T09:45:00Z"
-
+    "userId": "uuid",
+    "verificationExpiryDate": "2026\-08\-11T14:35:00"
   \}
-
 \}
 
 __Status Codes__
 
 200 OK
 
-404 Not Found \(no account for this email\)
+404 Not Found \(unknown email\)
 
 409 Conflict \(account already verified\)
 
@@ -526,17 +533,22 @@ __Idempotent__
 
 No
 
+
 __POST__
 
 __/api/v1/auth/login__
 
 __API\-AUTH\-04__
 
-__Body Parameters__
+__Description__
 
-email \(string, required\)
+Authenticates against the stored BCrypt hash\. An unverified account is rejected with 403 and the response carries the userId, so the client can route directly to the verification screen\.
 
-password \(string, required\)
+__Parameters__
+
+Body — email \(string, required\)
+
+Body — password \(string, required\)
 
 __Required Headers__
 
@@ -545,40 +557,25 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
   "email": "jane\.doe@example\.com",
-
   "password": "Str0ngP@ssw0rd\!"
-
 \}
 
 __Response Schema \(example\)__
 
-\{                                                                                                                                                                              
-
-       "accessToken": "eyJhbGciOiJIUzM4NCJ9\.                                                                                                                              
-
-eyJzdWIiOiI5NGMyM2VjNC00ZjExLTQzMmQtOTc5OC04NmIzY2ZlMjZhMmQiLCJlbWFpbCI6InVz                                                                                                   
-
-ZXJAZXhhbXBsZS5jb20iLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzE4ODk2MDAwLCJleHAiOjE3  reeMTg4OTY5MDB9\.example”, 
-
-       "refreshToken": "eyJhbGciOiJIUzM4NCJ9\.                          
-
-eyJzdWIiOiI5NGMyM2VjNC00ZjExLTQzMmQtOTc5OC04NmIzY2ZlMjZhMmQiLCJlbWFpbCI6InVz                                                                                                       ZXJAZXhhbXBsZS5jb20iLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTcxODg5NjAwMCwiZXhwIjox                                                                                                   
-
-     NzE5NTAwODAwfQ\.example",                                                                                                                                                       
-
-       "userId": "94c23ec4\-4f11\-432d\-9798\-86b3cfe26a2d",                             
-
-       "email": "user@example\.com"                                                                                                                                          
-
-     \}  
+\{
+  "status": 200,
+  "message": "Login successful\.",
+  "data": \{
+    "accessToken": "eyJhbGciOiJIUzUxMiJ9\.\.\.",
+    "userId": "uuid",
+    "email": "jane\.doe@example\.com"
+  \}
+\}
 
 __Status Codes__
 
 200 OK
-
-400 Bad Request
 
 401 Unauthorized \(invalid credentials\)
 
@@ -596,39 +593,46 @@ __Idempotent__
 
 No
 
+__Note__
+
+*No refresh token is issued\. The platform is stateless and holds a single access token per session\.*
+
+
 __POST__
 
 __/api/v1/auth/logout__
 
 __API\-AUTH\-05__
 
+__Description__
+
+Provided for symmetry and auditing\. The server keeps no session and maintains no token deny\-list, so the effective action is the client discarding its stored token\.
+
+__Parameters__
+
+Header — Authorization: Bearer <token> \(required\)
+
 __Required Headers__
 
 Authorization: Bearer <token>
 
-Content\-Type: application/json
-
 __Request Schema \(example\)__
 
-\{\}
+No request body
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
   "message": "Logged out successfully\.",
-
   "data": null
-
 \}
 
 __Status Codes__
 
 200 OK
 
-401 Unauthorized
+401 Unauthorized \(missing or invalid token\)
 
 __FR Covered__
 
@@ -640,75 +644,22 @@ JWT required
 
 __Idempotent__
 
-No
+Yes
 
-__POST__
-
-__/api/v1/auth/refresh\-token__
-
-__API\-AUTH\-06__
-
-__Body Parameters__
-
-refreshToken \(string, required\)
-
-__Required Headers__
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "refreshToken": "eyJ\.\.\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Token renewed\.",
-
-  "data": \{
-
-    "accessToken": "eyJ\.\.\.",
-
-    "expiresIn": 3600
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized \(invalid or expired refresh token\)
-
-__FR Covered__
-
-FR\-02
-
-__Security__
-
-Public \(no JWT required\)
-
-__Idempotent__
-
-No
 
 __POST__
 
 __/api/v1/auth/reset\-password__
 
-__API\-AUTH\-07__
+__API\-AUTH\-06__
 
-__Body Parameters__
+__Description__
 
-email \(string, required\)
+Generates a reset token valid for 30 minutes and emails a link containing it\.
+
+__Parameters__
+
+Body — email \(string, required, valid email\)
 
 __Required Headers__
 
@@ -717,84 +668,22 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
   "email": "jane\.doe@example\.com"
-
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
   "message": "Password reset email sent\.",
-
   "data": null
-
-\}
-
-__Status Codes__
-
-200 OK \(always returned, even for unknown email, to prevent enumeration\)
-
-__FR Covered__
-
-FR\-03
-
-__Security__
-
-Public \(no JWT required\)
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/auth/password\-reset/confirm__
-
-__API\-AUTH\-08__
-
-__Body Parameters__
-
-token \(string, required\)
-
-newPassword \(string, required, min\. 8 chars\)
-
-__Required Headers__
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "token": "abc123\.\.\.",
-
-  "newPassword": "N3wStr0ngP@ss\!"
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Password reset successfully\.",
-
-  "data": null
-
 \}
 
 __Status Codes__
 
 200 OK
 
-400 Bad Request \(invalid/expired token\)
-
-422 Unprocessable Entity \(password too weak\)
+404 Not Found \(unknown email\)
 
 __FR Covered__
 
@@ -808,7 +697,66 @@ __Idempotent__
 
 No
 
+
+__POST__
+
+__/api/v1/auth/reset\-password/confirm__
+
+__API\-AUTH\-07__
+
+__Description__
+
+Validates the reset token and its expiry, then stores the new password as a BCrypt hash and clears the token\.
+
+__Parameters__
+
+Body — token \(string, required\)
+
+Body — newPassword \(string, required, min\. 8 chars\)
+
+__Required Headers__
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "token": "b7c1e0f2\-\.\.\.",
+  "newPassword": "N3wStr0ngP@ss\!"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Password updated successfully\.",
+  "data": null
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request \(invalid or expired token\)
+
+__FR Covered__
+
+FR\-03
+
+__Security__
+
+Public \(no JWT required\)
+
+__Idempotent__
+
+No
+
+
 ## <a id="_Toc232406766"></a>__Project Management__
+
+Project Service \(:8082\) — afb\.astyann\.projectservice
+
+Creation and lifecycle of a project, and the entry point of the generation pipeline\. The caller's identity is taken from the X\-User\-Id header injected by the API Gateway after it validates the JWT; this module never parses a token itself\.
 
 __API Code__
 
@@ -824,55 +772,47 @@ POST
 
 /api/v1/projects
 
-Creates a new project\. Initialises the project with status ANALYZING, parses the upload\.\.\.
+Creates a project from a title, an optional description and an uploaded specification document\.
 
 API\-PROJ\-02
 
 GET
 
-/api/v1/projects
+/api/v1/projects/{projectId}
 
-Paginated list of all projects belonging to the authenticated user, ordered by last mod\.\.\.
+Retrieves a single project by identifier\.
 
 API\-PROJ\-03
 
 GET
 
-/api/v1/projects/\{projectId\}
+/api/v1/projects/search
 
-Retrieves the full details of a single project by its identifier\.
+Lists the caller's projects, optionally filtered by a title substring\.
 
 API\-PROJ\-04
 
 PUT
 
-/api/v1/projects/\{projectId\}
+/api/v1/projects/{projectId}
 
-Updates a project's metadata \(title, description\)\.
+Updates a project's mutable fields\.
 
 API\-PROJ\-05
 
 DELETE
 
-/api/v1/projects/\{projectId\}
+/api/v1/projects/{projectId}
 
-Permanently deletes a project and all its associated artefacts \(requirements, diagrams,\.\.\.
+Deletes a project and cascades the deletion to every derived artifact\.
 
 API\-PROJ\-06
 
-GET
+POST
 
-/api/v1/projects/search
+/api/v1/projects/{projectId}/retry\-analysis
 
-Full\-text search across the authenticated user's projects \(title, description, metadata\)\.
-
-API\-PROJ\-07
-
-PUT
-
-/api/v1/projects/\{projectId\}/guided\-questions
-
-Submits the user's answers to the guided questions generated during project creation, a\.\.\.
+Resets a FAILED project back to ANALYZING\.
 
 ### <a id="_Toc232406767"></a>__Endpoint Detail — Project Management__
 
@@ -882,13 +822,19 @@ __/api/v1/projects__
 
 __API\-PROJ\-01__
 
-__Body Parameters__
+__Description__
 
-title \(string, required\)
+Accepts multipart/form\-data\. The document must be a PDF or DOCX; it is stored on disk and the project is created with status ANALYZING\. The response returns as soon as the row is committed — the document is analysed asynchronously by the AI Orchestrator, and the requirements pipeline is started only once the specification is judged sufficient\.
 
-description \(string, required\)
+__Parameters__
 
-specificationFile \(file PDF or DOCX, required, max 20 MB\)
+Part — title \(string, required\)
+
+Part — description \(string, optional\)
+
+Part — document \(file, required, PDF or DOCX\)
+
+Header — X\-User\-Id \(UUID, injected by the gateway\)
 
 __Required Headers__
 
@@ -898,45 +844,33 @@ Content\-Type: multipart/form\-data
 
 __Request Schema \(example\)__
 
-Multipart form with title, description, and specificationFile
+title: Library Management System
+description: Track books, members and loans
+document: <binary PDF or DOCX>
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 201,
-
-  "message": "Project created\.",
-
+  "message": "Project created successfully\.",
   "data": \{
-
     "projectId": "uuid",
-
-    "title": "Inventory Management System",
-
+    "userId": "uuid",
+    "title": "Library Management System",
+    "description": "Track books, members and loans",
     "status": "ANALYZING",
-
-    "createdAt": "2026\-06\-12T08:00:00Z",
-
-    "guidedQuestions": \[
-
-      \{ "gqId": "gq\-001", "question": "Which database engine should be used for persistence?" \}
-
-    \]
-
+    "creationDate": "2026\-08\-11T09:12:00",
+    "updatedDate": "2026\-08\-11T09:12:00"
   \}
-
 \}
 
 __Status Codes__
 
 201 Created
 
-400 Bad Request \(missing fields or unsupported file type\)
+400 Bad Request \(unsupported file format\)
 
 401 Unauthorized
-
-422 Unprocessable Entity \(document could not be parsed\)
 
 __FR Covered__
 
@@ -950,110 +884,43 @@ __Idempotent__
 
 No
 
+
 __GET__
 
-__/api/v1/projects__
+__/api/v1/projects/{projectId}__
 
 __API\-PROJ\-02__
 
-__Query Parameters__
+__Description__
 
-page \(int, default 0\)
+Returns the project record, including its current pipeline status\.
 
-size \(int, default 20\)
+__Parameters__
 
-status \(enum, optional\)
-
-sort \(string, optional\)
+Path — projectId \(UUID, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
-__Response Schema \(example\)__
+__Request Schema \(example\)__
 
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "content": \[\.\.\.\],
-
-    "totalElements": 42,
-
-    "totalPages": 3,
-
-    "currentPage": 0,
-
-    "pageSize": 20
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-__FR Covered__
-
-FR\-07
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/projects/\{projectId\}__
-
-__API\-PROJ\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
+No request body
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "OK",
-
+  "message": "Project retrieved successfully\.",
   "data": \{
-
     "projectId": "uuid",
-
-    "title": "\.\.\.",
-
-    "description": "\.\.\.",
-
-    "status": "ANALYZING",
-
-    "createdAt": "\.\.\.",
-
-    "updatedAt": "\.\.\.",
-
-    "docPath": "\.\.\.",
-
-    "docUrl": "\.\.\."
-
+    "userId": "uuid",
+    "title": "Library Management System",
+    "description": "Track books, members and loans",
+    "status": "GENERATING",
+    "creationDate": "2026\-08\-11T09:12:00",
+    "updatedDate": "2026\-08\-11T10:04:00"
   \}
-
 \}
 
 __Status Codes__
@@ -1061,13 +928,69 @@ __Status Codes__
 200 OK
 
 401 Unauthorized
-
-403 Forbidden
 
 404 Not Found
 
 __FR Covered__
 
+FR\-06
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/projects/search__
+
+__API\-PROJ\-03__
+
+__Description__
+
+Returns every project owned by the caller when the query is blank, otherwise those whose title contains the query\. The result is a plain array: this endpoint is not paginated\.
+
+__Parameters__
+
+Query — query \(string, optional\)
+
+Header — X\-User\-Id \(UUID, injected by the gateway\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Projects retrieved successfully\.",
+  "data": [
+    \{
+      "projectId": "uuid",
+      "title": "Library Management System",
+      "status": "GENERATING",
+      "creationDate": "2026\-08\-11T09:12:00"
+    \}
+  ]
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+__FR Covered__
+
 FR\-07
 
 __Security__
@@ -1078,21 +1001,26 @@ __Idempotent__
 
 Yes
 
+
 __PUT__
 
-__/api/v1/projects/\{projectId\}__
+__/api/v1/projects/{projectId}__
 
 __API\-PROJ\-04__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Updates title, description and/or status\. Also used service\-to\-service by the Requirement Service to move the project to GENERATING once the specification is approved\.
 
-__Body Parameters__
+__Parameters__
 
-title \(string, optional\)
+Path — projectId \(UUID, required\)
 
-description \(string, optional\)
+Body — title \(string, optional\)
+
+Body — description \(string, optional\)
+
+Body — status \(enum, optional\)
 
 __Required Headers__
 
@@ -1103,81 +1031,21 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
-  "title": "Inventory Management System v2",
-
-  "description": "A web application to manage multi\-warehouse inventory\."
-
+  "title": "Library Management System v2",
+  "status": "GENERATING"
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "Project updated\.",
-
+  "message": "Project updated successfully\.",
   "data": \{
-
     "projectId": "uuid",
-
-    "title": "Inventory Management System v2",
-
-    "updatedAt": "\.\.\."
-
+    "title": "Library Management System v2",
+    "status": "GENERATING",
+    "updatedDate": "2026\-08\-11T10:20:00"
   \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-__FR Covered__
-
-FR\-05
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__DELETE__
-
-__/api/v1/projects/\{projectId\}__
-
-__API\-PROJ\-05__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Project deleted\.",
-
-  "data": null
-
 \}
 
 __Status Codes__
@@ -1185,8 +1053,6 @@ __Status Codes__
 200 OK
 
 401 Unauthorized
-
-403 Forbidden
 
 404 Not Found
 
@@ -1202,53 +1068,44 @@ __Idempotent__
 
 Yes
 
-__GET__
 
-__/api/v1/projects/search__
+__DELETE__
 
-__API\-PROJ\-06__
+__/api/v1/projects/{projectId}__
 
-__Query Parameters__
+__API\-PROJ\-05__
 
-q \(string, required, min\. 2 chars\)
+__Description__
 
-page \(int, default 0\)
+Removes the project, its questions and its stored document, then calls the Requirement, Diagram, Version and RAG services to remove their own data\. A downstream service being unavailable is logged and does not block the deletion\.
 
-size \(int, default 20\)
+__Parameters__
+
+Path — projectId \(UUID, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "content": \[\.\.\.\],
-
-    "totalElements": 5
-
-  \}
-
-\}
+204 No Content \(empty body\)
 
 __Status Codes__
 
-200 OK
-
-400 Bad Request \(q too short\)
+204 No Content
 
 401 Unauthorized
 
+404 Not Found
+
 __FR Covered__
 
-FR\-06
+FR\-09
 
 __Security__
 
@@ -1258,63 +1115,45 @@ __Idempotent__
 
 Yes
 
-__PUT__
 
-__/api/v1/projects/\{projectId\}/guided\-questions__
+__POST__
 
-__API\-PROJ\-07__
+__/api/v1/projects/{projectId}/retry\-analysis__
 
-__Path Parameters__
+__API\-PROJ\-06__
 
-projectId \(uuid, required\)
+__Description__
 
-__Body Parameters__
+Only changes the status field\. It calls no other service and does not itself re\-run the analysis\.
 
-answers \(array of objects, required — \{ gqId, answer \} pairs\)
+__Parameters__
+
+Path — projectId \(UUID, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
-Content\-Type: application/json
-
 __Request Schema \(example\)__
 
-\{
-
-  "answers": \[
-
-    \{ "gqId": "gq\-001", "answer": "PostgreSQL" \},
-
-    \{ "gqId": "gq\-002", "answer": "Yes, multi\-tenant\." \}
-
-  \]
-
-\}
+No request body
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "Answers saved\.",
-
+  "message": "Project analysis reset\. Retry in progress\.",
   "data": \{
-
     "projectId": "uuid",
-
     "status": "ANALYZING"
-
   \}
-
 \}
 
 __Status Codes__
 
 200 OK
 
-400 Bad Request \(invalid gqId\)
+400 Bad Request \(project is not in FAILED state\)
 
 401 Unauthorized
 
@@ -1332,9 +1171,12 @@ __Idempotent__
 
 Yes
 
-## <a id="_Toc232406768"></a>__Functional Specifications \(Requirements\)__
 
-__Note:__ this module was implemented as the Requirement Service around an internal document called the __PCSF \(Project Context Specification Format\)__ rather than a flat functional/non\-functional requirements list\. All endpoints below are exposed by the Requirement Service and reached through the API Gateway at base path /api/v1/requirements \(note the base path is /requirements/\{projectId\}/\.\.\., not /projects/\{projectId\}/requirements/\.\.\. as originally specified\)\.
+## <a id="_Toc232406768"></a>__Functional Specifications \(PCSF\)__
+
+Requirement Service \(:8083\) — afb\.astyann\.requirementservice
+
+Construction, review and approval of the PCSF \(Project Context Specification Format\) — the single structured specification every later stage reads\. This module does not produce a list of individual requirement records: a project has exactly one PCSF, held as a JSON document\.
 
 __API Code__
 
@@ -1348,252 +1190,210 @@ API\-REQ\-01
 
 POST
 
-/api/v1/requirements/\{projectId\}/initialize
+/api/v1/requirements/{projectId}/initialize
 
-Starts the PCSF pipeline for a project\. Called server\-to\-server by the Project Service imm\.\.\.
+Starts the specification pipeline for a project\.
 
 API\-REQ\-02
 
 GET
 
-/api/v1/requirements/\{projectId\}/pcsf/status
+/api/v1/requirements/{projectId}/questions
 
-Lightweight polling endpoint returning pcsfStatus, completenessScore and pendingQuestions\.\.\.
+Lists the outstanding clarification questions, ordered by priority\.
 
 API\-REQ\-03
 
-GET
+POST
 
-/api/v1/requirements/\{projectId\}/questions
+/api/v1/requirements/{projectId}/questions/answers
 
-Returns pending PCSF clarification questions, sorted by priority\.
+Submits answers to clarification questions and re\-runs the completeness analysis\.
 
 API\-REQ\-04
 
-POST
+GET
 
-/api/v1/requirements/\{projectId\}/questions/answers
+/api/v1/requirements/{projectId}/pcsf
 
-Submits answers to clarification questions\. Once every pending question is answered, AI Inference starts
+Returns the full PCSF document\.
 
 API\-REQ\-05
 
-GET
+PATCH
 
-/api/v1/requirements/\{projectId\}/pcsf
+/api/v1/requirements/{projectId}/pcsf/fields
 
-Retrieves the full PCSF document for the review screen\.
+Updates a single PCSF field, addressed by dot path\.
 
 API\-REQ\-06
 
-PATCH
+GET
 
-/api/v1/requirements/\{projectId\}/pcsf/fields
+/api/v1/requirements/{projectId}/pcsf/status
 
-Edits a single PCSF field in place \(inline edit on the review screen\)\.
+Returns the PCSF status, completeness score and outstanding question count\.
 
 API\-REQ\-07
 
 POST
 
-/api/v1/requirements/\{projectId\}/pcsf/validate
+/api/v1/requirements/{projectId}/pcsf/validate
 
-Runs all PCSF validation rules\. Locks the PCSF \(VALIDATED\) if they pass\.
+Runs the specification validation rules and locks the PCSF on success\.
 
 API\-REQ\-08
 
 POST
 
-/api/v1/requirements/\{projectId\}/approve
+/api/v1/requirements/{projectId}/approve
 
-Approves the PCSF\. Locks it \(APPROVED\) and queues asynchronous RAG indexing\.
+Approves the PCSF, opening the downstream pipeline\.
 
 API\-REQ\-09
 
 POST
 
-/api/v1/requirements/\{projectId\}/change\-request
+/api/v1/requirements/{projectId}/change\-request
 
-Submits free\-text change instructions for the PCSF\. Sets status to CHANGE\_REQUESTED\.
+Submits plain\-language change instructions against the specification\.
 
 API\-REQ\-10
 
 POST
 
-/api/v1/requirements/\{projectId\}/regenerate
+/api/v1/requirements/{projectId}/regenerate
 
-Re\-runs the AI inference pipeline using the recorded change instructions\.
+Re\-runs the inference passes on the current specification\.
 
 API\-REQ\-11
 
 POST
 
-/api/v1/requirements/\{projectId\}/retry
+/api/v1/requirements/{projectId}/retry
 
-Retries the AI\-inference stage after a FAILED status, without requiring a new project\.
+Retries a failed inference pass\.
 
-### <a id="_Toc232406769"></a>__Endpoint Detail — Functional Specifications \(Requirements\)__
+API\-REQ\-12
+
+DELETE
+
+/api/v1/requirements/{projectId}
+
+Deletes the specification and its clarification questions\.
+
+API\-REQ\-13
+
+GET
+
+/api/v1/requirements/template
+
+Downloads the blank project specification template\.
+
+### <a id="_Toc232406769"></a>__Endpoint Detail — Functional Specifications \(PCSF\)__
 
 __POST__
 
-__/api/v1/requirements/\{projectId\}/initialize__
+__/api/v1/requirements/{projectId}/initialize__
 
 __API\-REQ\-01__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Called service\-to\-service by the Project Service once the uploaded document has been judged sufficient\. Creates the Requirement row, initialises the PCSF skeleton and runs document extraction asynchronously\. Returns immediately\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — projectId, projectTitle, projectDescription, projectContext, documentText
 
 __Required Headers__
+
+Authorization: Bearer <token>
 
 Content\-Type: application/json
 
 __Request Schema \(example\)__
 
 \{
-
-  "projectTitle": "Loan Management System",
-
-  "projectDescription": "\.\.\.",
-
-  "projectContext": "\.\.\. \(AI\-extracted summary of the uploaded document\)",
-
-  "documentText": "\.\.\. \(raw extracted document text\)"
-
+  "projectId": "uuid",
+  "projectTitle": "Library Management System",
+  "projectDescription": "Track books, members and loans",
+  "projectContext": "The library needs to track\.\.\.",
+  "documentText": "<full extracted text of the uploaded specification>"
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 202,
-
-  "message": "Requirement pipeline started\."
-
+  "message": "Requirements pipeline started\.",
+  "data": null
 \}
 
 __Status Codes__
 
 202 Accepted
 
-409 Conflict \(pipeline already initialized for this project\)
+409 Conflict \(pipeline already initialised\)
+
+500 Internal Server Error
 
 __FR Covered__
 
-FR\-09
+FR\-10
 
 __Security__
 
-Internal call only \(Project Service → Requirement Service\); not exposed to the frontend
+JWT required \(internal caller\)
 
 __Idempotent__
 
-No \(second call for the same project returns 409\)
+No
+
 
 __GET__
 
-__/api/v1/requirements/\{projectId\}/pcsf/status__
+__/api/v1/requirements/{projectId}/questions__
 
 __API\-REQ\-02__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Returns the questions the completeness analysis raised for information the document did not confirm\.
 
-__Required Headers__
+__Parameters__
 
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Status retrieved\.",
-
-  "data": \{
-
-    "pcsfStatus": "INFERRING",
-
-    "completenessScore": 0\.0,
-
-    "pendingQuestionsCount": 0
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found \(requirement pipeline not yet initialized — frontend should keep polling\)
-
-__FR Covered__
-
-FR\-10
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/requirements/\{projectId\}/questions__
-
-__API\-REQ\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
+Path — projectId \(UUID, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
   "message": "Questions retrieved\.",
-
-  "data": \[
-
+  "data": [
     \{
-
-      "id": "uuid",
-
+      "id": "CQ\-03",
       "inventoryRef": "2\.1",
-
       "targetPath": "actors",
-
-      "priority": 2,
-
-      "question": "Who are the different types of users\.\.\.",
-
+      "priority": 1,
+      "question": "Who are the actors of the system?",
       "type": "TEXTAREA",
-
-      "options": null,
-
-      "placeholder": "Administrator \| Internal \| Manages users\.\.\.",
-
+      "options": [],
+      "placeholder": "Name | Type | Description",
       "answered": false,
-
       "answer": null
-
     \}
-
-  \]
-
+  ]
 \}
 
 __Status Codes__
@@ -1606,7 +1406,7 @@ __Status Codes__
 
 __FR Covered__
 
-FR\-10
+FR\-11
 
 __Security__
 
@@ -1616,19 +1416,22 @@ __Idempotent__
 
 Yes
 
+
 __POST__
 
-__/api/v1/requirements/\{projectId\}/questions/answers__
+__/api/v1/requirements/{projectId}/questions/answers__
 
-__API\-REQ\-04__
+__API\-REQ\-03__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Writes each answer into the PCSF field named by the question's targetPath, then re\-runs the analysis\. When nothing is left outstanding, the three AI inference passes are dispatched\.
 
-__Body Parameters__
+__Parameters__
 
-answers \(array of \{questionId, answer\}, required\)
+Path — projectId \(UUID, required\)
+
+Body — answers \(array of { questionId, answer }\)
 
 __Required Headers__
 
@@ -1639,46 +1442,544 @@ Content\-Type: application/json
 __Request Schema \(example\)__
 
 \{
-
-  "answers": \[
-
-    \{ "questionId": "uuid\-1", "answer": "No — all branches share data" \},
-
-    \{ "questionId": "uuid\-2", "answer": "Administrator \| Internal \| Manages users" \}
-
-  \]
-
+  "answers": [
+    \{ "questionId": "CQ\-03", "answer": "Librarian | Internal | Manages the catalogue" \},
+    \{ "questionId": "CQ\-07", "answer": "yes" \}
+  ]
 \}
 
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "Answers submitted\.",
-
+  "message": "Answers recorded\.",
   "data": \{
-
     "pcsfStatus": "INFERRING",
-
     "pendingQuestionsCount": 0,
-
-    "missingItems": \[\]
-
+    "missingItems": []
   \}
-
 \}
 
 __Status Codes__
 
 200 OK
 
-400 Bad Request
+400 Bad Request \(unknown question id\)
 
 401 Unauthorized
 
 404 Not Found
+
+__FR Covered__
+
+FR\-11
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__GET__
+
+__/api/v1/requirements/{projectId}/pcsf__
+
+__API\-REQ\-04__
+
+__Description__
+
+The complete specification: project, actors, modules, entities, relationships, business rules, status machines, access control, error codes, endpoints, user interface, API, database, infrastructure and non\-functional requirements\. Consumed by the frontend review screen and, service\-to\-service, by the Document and Code Generation services\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "PCSF retrieved\.",
+  "data": \{
+    "project": \{ "name": \{ "value": "Library Management System" \} \},
+    "actors": [ \{ "id": "ACT\-01", "name": \{ "value": "Librarian" \} \} ],
+    "modules": [ \{ "id": "MOD\-01", "name": \{ "value": "Books" \} \} ],
+    "entities": [ \{ "id": "ENT\-01", "name": \{ "value": "Book" \} \} ],
+    "endpoints": [],
+    "apiConfig": \{ "versionPrefix": "/api/v1" \}
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-12
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+__Note__
+
+*Every leaf value is wrapped with its provenance: the source it came from, how settled it is, a confidence and a risk level\.*
+
+
+__PATCH__
+
+__/api/v1/requirements/{projectId}/pcsf/fields__
+
+__API\-REQ\-05__
+
+__Description__
+
+Used by the review screen for inline correction\. The path names the field, for example "actors" or "conditionalFeatures\.multiTenancy\.required\.value"\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — path \(string, required\)
+
+Body — value \(string, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "path": "project\.description",
+  "value": "A library system for a university campus"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Field updated\.",
+  "data": null
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request \(unknown path\)
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(PCSF is locked\)
+
+__FR Covered__
+
+FR\-13
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/requirements/{projectId}/pcsf/status__
+
+__API\-REQ\-06__
+
+__Description__
+
+The polling endpoint for the specification stage, and the gate every downstream generator calls before doing any work\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Status retrieved\.",
+  "data": \{
+    "pcsfStatus": "UNDER_REVIEW",
+    "completenessScore": 0\.92,
+    "pendingQuestionsCount": 0
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-12
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+__Note__
+
+*pcsfStatus is one of DRAFT, INFERRING, UNDER\_REVIEW, VALIDATED, APPROVED, CHANGE\_REQUESTED, FAILED\.*
+
+
+__POST__
+
+__/api/v1/requirements/{projectId}/pcsf/validate__
+
+__API\-REQ\-07__
+
+__Description__
+
+Applies rules VR\-01 to VR\-07c: project name and description present, at least one actor and one module, actor type present, use\-case actor references resolve, and use\-case preconditions, postconditions and main scenario present\. Passing sets the status to VALIDATED, which locks the PCSF for editing\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Validation complete\.",
+  "data": \{
+    "valid": true,
+    "pcsfStatus": "VALIDATED",
+    "errors": [],
+    "warnings": [ "No status machine declared for entity Loan" ]
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-14
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/requirements/{projectId}/approve__
+
+__API\-REQ\-08__
+
+__Description__
+
+Sets the status to APPROVED\. After commit it indexes the PCSF section by section into the knowledge base and calls the Project Service to move the project to GENERATING\. An indexing failure is logged and never blocks the approval; the index can be rebuilt afterwards\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Specification approved\.",
+  "data": \{
+    "status": "APPROVED",
+    "message": "PCSF approved and indexed\."
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(PCSF not validated\)
+
+__FR Covered__
+
+FR\-15
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/requirements/{projectId}/change\-request__
+
+__API\-REQ\-09__
+
+__Description__
+
+Records the instructions and re\-runs inference with them folded in, returning the PCSF to UNDER\_REVIEW\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — instructions \(string, required, non\-blank\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "instructions": "Add a reservation module and let members reserve a book that is on loan"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Change request accepted\.",
+  "data": \{
+    "changeRequestId": "uuid",
+    "status": "CHANGE_REQUESTED",
+    "message": "Re\-inference dispatched\."
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(blank instructions\)
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-16
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/requirements/{projectId}/regenerate__
+
+__API\-REQ\-10__
+
+__Description__
+
+Discards the inferred sections and rebuilds them, keeping the extracted and user\-answered fields\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Regeneration dispatched\.",
+  "data": null
+\}
+
+__Status Codes__
+
+202 Accepted
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(PCSF already approved\)
+
+__FR Covered__
+
+FR\-16
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/requirements/{projectId}/retry__
+
+__API\-REQ\-11__
+
+__Description__
+
+Recovers an inference\-stage failure without starting a new project\. Requires the PCSF to exist and the status to be FAILED; re\-dispatches the change\-request pass when instructions are still set, otherwise the ordinary pass\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Inference retry dispatched\.",
+  "data": null
+\}
+
+__Status Codes__
+
+202 Accepted
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(not in FAILED state, or PCSF never created\)
+
+__FR Covered__
+
+FR\-16
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__DELETE__
+
+__/api/v1/requirements/{projectId}__
+
+__API\-REQ\-12__
+
+__Description__
+
+The cascade hook called by the Project Service when a project is deleted\. Idempotent: a no\-op when nothing exists for the project\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+204 No Content \(empty body\)
+
+__Status Codes__
+
+204 No Content
+
+401 Unauthorized
 
 __FR Covered__
 
@@ -1686,85 +1987,48 @@ FR\-09
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
-No \(re\-answering re\-applies and may re\-trigger inference\)
+Yes
+
 
 __GET__
 
-__/api/v1/requirements/\{projectId\}/pcsf__
+__/api/v1/requirements/template__
 
-__API\-REQ\-05__
+__API\-REQ\-13__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Streams the \.docx specification template so a user can prepare the document offline before creating a project\.
+
+__Parameters__
+
+None
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
-\{
-
-  "status": 200,
-
-  "message": "PCSF retrieved\.",
-
-  "data": \{
-
-    "project": \{ "name": \{ "value": "Loan Management System", "status": "CONFIRMED" \} \},
-
-    "actors": \[\.\.\.\],
-
-    "modules": \[\.\.\.\],
-
-    "entities": \[\.\.\.\],
-
-    "relationships": \[\.\.\.\],
-
-    "businessRules": \[\.\.\.\],
-
-    "statusMachines": \[\.\.\.\],
-
-    "accessControlRules": \[\.\.\.\],
-
-    "errorCodes": \[\.\.\.\],
-
-    "endpoints": \[\.\.\.\],
-
-    "nonFunctionalRequirements": \{\.\.\.\},
-
-    "userInterface": \{ "screens": \[\.\.\.\], "navigation": \[\.\.\.\] \},
-
-    "apiConfig": \{\.\.\.\},
-
-    "databaseConfig": \{\.\.\.\},
-
-    "infrastructureConfig": \{\.\.\.\},
-
-    "validation": \{\.\.\.\}
-
-  \}
-
-\}
+Binary \.docx \(application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
 
 __Status Codes__
 
 200 OK
 
-401 Unauthorized
-
-404 Not Found \(PCSF not yet initialised\)
-
-500 Internal Server Error \(PCSF JSON failed to parse\)
+404 Not Found \(template missing from the deployment\)
 
 __FR Covered__
 
-FR\-10
+FR\-05
 
 __Security__
 
@@ -1774,21 +2038,120 @@ __Idempotent__
 
 Yes
 
-__PATCH__
 
-__/api/v1/requirements/\{projectId\}/pcsf/fields__
+## <a id="_Toc232406770"></a>__UML Diagrams__
 
-__API\-REQ\-06__
+Diagram Generator Service \(:8084\) — afb\.astyann\.diagramgeneratorservice
 
-__Path Parameters__
+Generation, rendering, approval and versioning of UML diagrams\. Base path is /api/v1/uml\. Every operation is refused with 422 unless the PCSF is approved\.
 
-projectId \(uuid, required\)
+__API Code__
 
-__Body Parameters__
+__Method__
 
-path \(string, required — dot path into the PCSF, e\.g\. "project\.displayName\.value" or "actors"\)
+__Path__
 
-value \(string, required\)
+__Description__
+
+API\-DIAG\-01
+
+POST
+
+/api/v1/uml/{projectId}/generate
+
+Generates the requested diagram types from the approved specification\.
+
+API\-DIAG\-02
+
+GET
+
+/api/v1/uml/{projectId}
+
+Lists the project's diagrams, optionally filtered by type or status\.
+
+API\-DIAG\-03
+
+POST
+
+/api/v1/uml/{projectId}/{diagramId}/regenerate
+
+Regenerates one diagram, optionally changing the render format\.
+
+API\-DIAG\-04
+
+POST
+
+/api/v1/uml/{projectId}/approve
+
+Approves several diagrams at once, or all of them\.
+
+API\-DIAG\-05
+
+POST
+
+/api/v1/uml/{projectId}/{diagramId}/approve
+
+Approves a single diagram\.
+
+API\-DIAG\-06
+
+POST
+
+/api/v1/uml/{projectId}/{diagramId}/change\-request
+
+Submits plain\-language change instructions for one diagram\.
+
+API\-DIAG\-07
+
+POST
+
+/api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/activate
+
+Restores a previous version of one diagram\.
+
+API\-DIAG\-08
+
+GET
+
+/api/v1/uml/{projectId}/{diagramId}/render
+
+Returns the rendered image of the active version\.
+
+API\-DIAG\-09
+
+GET
+
+/api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/render
+
+Returns the rendered image of an archived version\.
+
+API\-DIAG\-10
+
+DELETE
+
+/api/v1/uml/{projectId}
+
+Deletes every diagram of a project\.
+
+### <a id="_Toc232406771"></a>__Endpoint Detail — UML Diagrams__
+
+__POST__
+
+__/api/v1/uml/{projectId}/generate__
+
+__API\-DIAG\-01__
+
+__Description__
+
+Creates one row per requested type with status GENERATING and returns immediately; generation runs on a dedicated executor\. Each diagram is inferred as PlantUML, cleaned, and rendered through Kroki\. A source the renderer rejects is retried with the renderer's own error fed back to the model for a syntax\-only fix\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — diagramTypes \(array, optional — defaults to all types\)
+
+Body — renderFormat \(string, optional, SVG | PNG, default SVG\)
 
 __Required Headers__
 
@@ -1798,11 +2161,102 @@ Content\-Type: application/json
 
 __Request Schema \(example\)__
 
-\{ "path": "project\.displayName\.value", "value": "Loan Tracker" \}
+\{
+  "diagramTypes": [ "USE_CASE", "DESIGN_CLASS", "COMPONENT" ],
+  "renderFormat": "SVG"
+\}
 
 __Response Schema \(example\)__
 
-\{ "status": 200, "message": "Field updated\." \}
+\{
+  "status": 202,
+  "message": "Diagram generation started\.",
+  "data": \{
+    "diagrams": [
+      \{
+        "diagramId": "uuid",
+        "type": "USE_CASE",
+        "status": "GENERATING",
+        "renderUrl": "/api/v1/uml/\{projectId\}/\{diagramId\}/render",
+        "lastError": null,
+        "previousVersionId": null
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(invalid render format\)
+
+401 Unauthorized
+
+422 Unprocessable Entity \(PCSF not approved\)
+
+503 Service Unavailable \(Requirement Service unreachable\)
+
+__FR Covered__
+
+FR\-17
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+__Note__
+
+*Types: USE\_CASE, BUSINESS\_CLASS, DESIGN\_CLASS, ACTIVITY, BUSINESS\_SEQUENCE, DESIGN\_SEQUENCE, COMPONENT, DEPLOYMENT, PACKAGE, ENTITY\_RELATIONSHIP\.*
+
+
+__GET__
+
+__/api/v1/uml/{projectId}__
+
+__API\-DIAG\-02__
+
+__Description__
+
+The polling endpoint for the diagram stage\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — type \(enum, optional\)
+
+Query — status \(enum, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Diagrams retrieved\.",
+  "data": \{
+    "diagrams": [
+      \{
+        "diagramId": "uuid",
+        "type": "USE_CASE",
+        "status": "PENDING_APPROVAL",
+        "updatedAt": "2026\-08\-11T10:41:00",
+        "lastError": null
+      \}
+    ]
+  \}
+\}
 
 __Status Codes__
 
@@ -1810,13 +2264,9 @@ __Status Codes__
 
 401 Unauthorized
 
-404 Not Found \(PCSF not found\)
-
-500 Internal Server Error \(patch failed\)
-
 __FR Covered__
 
-FR\-12
+FR\-18
 
 __Security__
 
@@ -1826,50 +2276,116 @@ __Idempotent__
 
 Yes
 
+
 __POST__
 
-__/api/v1/requirements/\{projectId\}/pcsf/validate__
+__/api/v1/uml/{projectId}/{diagramId}/regenerate__
 
-__API\-REQ\-07__
+__API\-DIAG\-03__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Produces a fresh version of the diagram from the current specification\. The identifier of the superseded version is returned so the client can offer a rollback\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Body — renderFormat \(string, optional, SVG | PNG\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
-__Response Schema \(example — success\)__
+Content\-Type: application/json
+
+__Request Schema \(example\)__
 
 \{
-
-  "status": 200,
-
-  "message": "PCSF validated and locked\.",
-
-  "data": \{ "valid": true, "pcsfStatus": "VALIDATED", "errors": \[\], "warnings": \[\] \}
-
+  "renderFormat": "PNG"
 \}
 
-__Response Schema \(example — failure\)__
+__Response Schema \(example\)__
 
 \{
-
-  "status": 422,
-
-  "message": "Validation failed\.",
-
+  "status": 202,
+  "message": "Regeneration started\.",
   "data": \{
-
-    "valid": false,
-
-    "pcsfStatus": "UNDER\_REVIEW",
-
-    "errors": \[ "VR\-07a: Use\-case UC\-01 missing preconditions\.", "VR\-03: At least one actor is required\." \]
-
+    "diagramId": "uuid",
+    "type": "USE_CASE",
+    "status": "GENERATING",
+    "previousVersionId": "uuid"
   \}
+\}
 
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(invalid render format\)
+
+401 Unauthorized
+
+404 Not Found
+
+422 Unprocessable Entity \(PCSF not approved\)
+
+__FR Covered__
+
+FR\-20
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/uml/{projectId}/approve__
+
+__API\-DIAG\-04__
+
+__Description__
+
+Approves the listed diagrams, or every pending diagram when the list is omitted\. Each approval creates a version snapshot and indexes the diagram into the knowledge base\. The response reports whether the whole set is now approved, which is the gate the document stage checks\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — diagramIds \(array, optional\)
+
+Body — approvalComment \(string, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "diagramIds": [ "uuid", "uuid" ],
+  "approvalComment": "Reviewed with the product owner"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Diagrams approved\.",
+  "data": \{
+    "snapshotIds": [ "uuid", "uuid" ],
+    "updatedCount": 2,
+    "allDiagramsApproved": true
+  \}
 \}
 
 __Status Codes__
@@ -1880,11 +2396,11 @@ __Status Codes__
 
 404 Not Found
 
-422 Unprocessable Entity \(one or more validation rules VR\-01\.\.VR\-07c failed\)
+409 Conflict \(diagram not in an approvable state\)
 
 __FR Covered__
 
-FR\-11
+FR\-19
 
 __Security__
 
@@ -1894,30 +2410,51 @@ __Idempotent__
 
 Yes
 
+__Note__
+
+*If the Version Service is unreachable the approval still succeeds with a null snapshot identifier, and a scheduler re\-posts the snapshot within a minute\.*
+
+
 __POST__
 
-__/api/v1/requirements/\{projectId\}/approve__
+__/api/v1/uml/{projectId}/{diagramId}/approve__
 
-__API\-REQ\-08__
+__API\-DIAG\-05__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+As above, for one diagram\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Body — approvalComment \(string, optional\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "approvalComment": "Looks right"
+\}
+
 __Response Schema \(example\)__
 
 \{
-
   "status": 200,
-
-  "message": "Requirements approved\. PCSF is being indexed into the RAG knowledge base\.",
-
-  "data": \{ "status": "APPROVED", "message": "Requirements approved\. PCSF is being indexed\.\.\." \}
-
+  "message": "Diagram approved\.",
+  "data": \{
+    "diagramId": "uuid",
+    "type": "USE_CASE",
+    "status": "APPROVED"
+  \}
 \}
 
 __Status Codes__
@@ -1928,11 +2465,11 @@ __Status Codes__
 
 404 Not Found
 
-409 Conflict \(pcsfStatus is not VALIDATED\)
+409 Conflict
 
 __FR Covered__
 
-FR\-11
+FR\-19
 
 __Security__
 
@@ -1940,21 +2477,26 @@ JWT required
 
 __Idempotent__
 
-No \(second call on an already\-APPROVED requirement returns 409\)
+Yes
+
 
 __POST__
 
-__/api/v1/requirements/\{projectId\}/change\-request__
+__/api/v1/uml/{projectId}/{diagramId}/change\-request__
 
-__API\-REQ\-09__
+__API\-DIAG\-06__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Regenerates the diagram with the instructions applied to its current source\.
 
-__Body Parameters__
+__Parameters__
 
-instructions \(string, required — description of the desired changes\)
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Body — instructions \(string, required, non\-blank\)
 
 __Required Headers__
 
@@ -1964,19 +2506,189 @@ Content\-Type: application/json
 
 __Request Schema \(example\)__
 
-\{ "instructions": "Add a notification module for SMS alerts when loan status changes\." \}
+\{
+  "instructions": "Add the Reservation use case and link it to the Member actor"
+\}
 
 __Response Schema \(example\)__
 
 \{
-
-  "status": 200,
-
-  "message": "Change request recorded\. Call /regenerate to re\-run AI inference with your instructions\.",
-
-  "data": \{ "changeRequestId": "uuid", "status": "CHANGE\_REQUESTED", "message": "\.\.\." \}
-
+  "status": 202,
+  "message": "Change request accepted\.",
+  "data": \{
+    "changeRequestId": "uuid",
+    "status": "GENERATING"
+  \}
 \}
+
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(blank instructions\)
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-20
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/activate__
+
+__API\-DIAG\-07__
+
+__Description__
+
+Makes the named snapshot the active version of that diagram\. No other artifact is affected\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Version activated\.",
+  "data": \{
+    "diagramId": "uuid",
+    "type": "USE_CASE",
+    "status": "APPROVED"
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(unknown diagram or version\)
+
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/uml/{projectId}/{diagramId}/render__
+
+__API\-DIAG\-08__
+
+__Description__
+
+Serves the stored image, re\-rendering only when the file is missing\. Returns raw bytes, not the JSON envelope\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Query — format \(string, optional, SVG | PNG, default SVG\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+Binary image \(image/svg\+xml or image/png\)
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request \(invalid render format\)
+
+401 Unauthorized
+
+404 Not Found
+
+503 Service Unavailable \(renderer unreachable\)
+
+__FR Covered__
+
+FR\-18
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/render__
+
+__API\-DIAG\-09__
+
+__Description__
+
+Renders from the frozen source held in the diagram's version archive, without touching the live diagram\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — diagramId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
+
+Query — format \(string, optional, SVG | PNG, default SVG\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+Binary image \(image/svg\+xml or image/png\)
 
 __Status Codes__
 
@@ -1988,11 +2700,230 @@ __Status Codes__
 
 404 Not Found
 
-409 Conflict \(pcsfStatus is APPROVED — create a new project revision instead\)
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__DELETE__
+
+__/api/v1/uml/{projectId}__
+
+__API\-DIAG\-10__
+
+__Description__
+
+The cascade hook called by the Project Service on project deletion\. Also removes the stored images\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+204 No Content \(empty body\)
+
+__Status Codes__
+
+204 No Content
+
+401 Unauthorized
 
 __FR Covered__
 
-FR\-12
+FR\-09
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+## <a id="_Toc232406772"></a>__Document Generation__
+
+Document Service \(:8085\) — afb\.astyann\.documentservice
+
+Generation, review, approval and versioning of the eight software engineering documents\. Base path is /api/v1/documents\. This is the third pipeline stage: it refuses to run unless the PCSF is approved and every diagram is approved\.
+
+__API Code__
+
+__Method__
+
+__Path__
+
+__Description__
+
+API\-DOC\-01
+
+POST
+
+/api/v1/documents/{projectId}/generate
+
+Generates the requested document types\.
+
+API\-DOC\-02
+
+GET
+
+/api/v1/documents/{projectId}
+
+Lists the project's documents, optionally filtered by type or status\.
+
+API\-DOC\-03
+
+GET
+
+/api/v1/documents/{projectId}/{documentId}/download
+
+Downloads the generated \.docx file\.
+
+API\-DOC\-04
+
+GET
+
+/api/v1/documents/{projectId}/{documentId}/content
+
+Returns the document's structured content for in\-browser reading\.
+
+API\-DOC\-05
+
+GET
+
+/api/v1/documents/{projectId}/content
+
+Returns the approved content of one document type\.
+
+API\-DOC\-06
+
+POST
+
+/api/v1/documents/{projectId}/{documentId}/approve
+
+Approves a document after running the automated checks\.
+
+API\-DOC\-07
+
+POST
+
+/api/v1/documents/{projectId}/{documentId}/change\-request
+
+Submits plain\-language change instructions for one document\.
+
+API\-DOC\-08
+
+POST
+
+/api/v1/documents/{projectId}/{documentId}/regenerate
+
+Regenerates one document, applying any recorded change instructions\.
+
+API\-DOC\-09
+
+POST
+
+/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/activate
+
+Restores a previous version of one document\.
+
+API\-DOC\-10
+
+GET
+
+/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/download
+
+Downloads the \.docx file of an archived version\.
+
+API\-DOC\-11
+
+GET
+
+/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/content
+
+Returns the structured content of an archived version\.
+
+### <a id="_Toc232406773"></a>__Endpoint Detail — Document Generation__
+
+__POST__
+
+__/api/v1/documents/{projectId}/generate__
+
+__API\-DOC\-01__
+
+__Description__
+
+Creates one row per requested type with status GENERATING and returns immediately\. Each document is inferred as JSON matching that type's schema, merged into the type's \.docx template, and has the approved diagrams embedded where the type calls for them\. For the API contract the endpoint table is derived from the specification rather than taken from the model\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — documentTypes \(array, optional — defaults to all types\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "documentTypes": [ "SRS", "FUNCTIONAL_ANALYSIS", "API_CONTRACT" ]
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Document generation started\.",
+  "data": \{
+    "documents": [
+      \{
+        "documentId": "uuid",
+        "type": "SRS",
+        "status": "GENERATING",
+        "pageCount": null,
+        "lastError": null,
+        "previousVersionId": null
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+401 Unauthorized
+
+409 Conflict \(diagrams not all approved\)
+
+422 Unprocessable Entity \(PCSF not approved\)
+
+503 Service Unavailable \(upstream service unreachable\)
+
+__FR Covered__
+
+FR\-21
 
 __Security__
 
@@ -2002,23 +2933,426 @@ __Idempotent__
 
 No
 
-__POST__
+__Note__
 
-__/api/v1/requirements/\{projectId\}/regenerate__
+*Types: SRS, FUNCTIONAL\_ANALYSIS, DESIGN\_DOCUMENT, ARCHITECTURE\_DOCUMENT, API\_CONTRACT, DEPLOYMENT\_GUIDE, USER\_MANUAL, DATA\_DICTIONARY\.*
 
-__API\-REQ\-10__
 
-__Path Parameters__
+__GET__
 
-projectId \(uuid, required\)
+__/api/v1/documents/{projectId}__
+
+__API\-DOC\-02__
+
+__Description__
+
+The polling endpoint for the document stage\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — type \(enum, optional\)
+
+Query — status \(enum, optional\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
-\{ "status": 202, "message": "Regeneration started\. Poll /pcsf/status for updates\." \}
+\{
+  "status": 200,
+  "message": "Documents retrieved\.",
+  "data": \{
+    "documents": [
+      \{
+        "documentId": "uuid",
+        "type": "SRS",
+        "status": "PENDING_APPROVAL",
+        "version": 1,
+        "generatedAt": "2026\-08\-11T11:02:00",
+        "lastError": null
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+__FR Covered__
+
+FR\-22
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/documents/{projectId}/{documentId}/download__
+
+__API\-DOC\-03__
+
+__Description__
+
+Returns raw bytes, not the JSON envelope\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+Binary \.docx \(application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(file not yet available\)
+
+__FR Covered__
+
+FR\-22
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/documents/{projectId}/{documentId}/content__
+
+__API\-DOC\-04__
+
+__Description__
+
+Serves the stored JSON the model produced, so the workspace can display a document without downloading it\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Content retrieved\.",
+  "data": \{
+    "documentId": "uuid",
+    "type": "SRS",
+    "status": "APPROVED",
+    "version": 1,
+    "snapshotId": "uuid",
+    "content": \{ "introduction": \{ "purpose": "\.\.\." \} \}
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(content not available\)
+
+__FR Covered__
+
+FR\-22
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/documents/{projectId}/content__
+
+__API\-DOC\-05__
+
+__Description__
+
+The read used service\-to\-service by the Code Generation service to obtain the approved API contract, SRS, functional analysis and design document\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — type \(enum, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Content retrieved\.",
+  "data": \{
+    "documentId": "uuid",
+    "type": "API_CONTRACT",
+    "status": "APPROVED",
+    "version": 2,
+    "snapshotId": "uuid",
+    "content": \{ "endpointGroups": [] \}
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(no approved document of that type\)
+
+__FR Covered__
+
+FR\-22
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/documents/{projectId}/{documentId}/approve__
+
+__API\-DOC\-06__
+
+__Description__
+
+Runs the automated checks and, on success, sets the status to APPROVED, creates a version snapshot and indexes the document\. A document still showing an unresolved template placeholder belonging to its own schema is refused with 422 — that document is broken and must not be approved\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Body — validationNote \(string, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "validationNote": "Reviewed against the specification"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Document approved\.",
+  "data": \{
+    "status": "APPROVED",
+    "validationReport": \{
+      "checks": [ \{ "name": "no\-unresolved\-placeholders", "passed": true, "detail": null \} ],
+      "score": 100
+    \},
+    "allDocumentsApproved": false
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict
+
+422 Unprocessable Entity \(validation failed — unresolved placeholder\)
+
+__FR Covered__
+
+FR\-23
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/documents/{projectId}/{documentId}/change\-request__
+
+__API\-DOC\-07__
+
+__Description__
+
+Records the instructions so the next regeneration applies them\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Body — instructions \(string, required, non\-blank\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "instructions": "Expand the non\-functional requirements section with concrete latency targets"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Change request accepted\.",
+  "data": \{
+    "changeRequestId": "uuid",
+    "status": "PENDING_APPROVAL"
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(blank instructions\)
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-24
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/documents/{projectId}/{documentId}/regenerate__
+
+__API\-DOC\-08__
+
+__Description__
+
+Produces a fresh version\. The identifier of the superseded version is returned so the client can offer a rollback\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Body — changeRequestId \(UUID, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "changeRequestId": "uuid"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Regeneration started\.",
+  "data": \{
+    "documentId": "uuid",
+    "type": "SRS",
+    "status": "GENERATING",
+    "previousVersionId": "uuid"
+  \}
+\}
 
 __Status Codes__
 
@@ -2028,11 +3362,11 @@ __Status Codes__
 
 404 Not Found
 
-409 Conflict \(no change instructions recorded — submit a change\-request first\)
+422 Unprocessable Entity \(PCSF not approved\)
 
 __FR Covered__
 
-FR\-13
+FR\-24
 
 __Security__
 
@@ -2042,23 +3376,687 @@ __Idempotent__
 
 No
 
+
 __POST__
 
-__/api/v1/requirements/\{projectId\}/retry__
+__/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/activate__
 
-__API\-REQ\-11__
+__API\-DOC\-09__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Makes the named snapshot the active version of that document, leaving every other artifact untouched\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
-\{ "status": 202, "message": "Retry started\. Poll /pcsf/status for updates\." \}
+\{
+  "status": 200,
+  "message": "Version activated\.",
+  "data": \{
+    "documentId": "uuid",
+    "type": "SRS",
+    "status": "APPROVED"
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(unknown document or version\)
+
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/download__
+
+__API\-DOC\-10__
+
+__Description__
+
+Served from the document's own version archive; the Version Service holds no bytes\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+Binary \.docx \(application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document\)
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/content__
+
+__API\-DOC\-11__
+
+__Description__
+
+The in\-browser equivalent of the archived download\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — documentId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Content retrieved\.",
+  "data": \{
+    "documentId": "uuid",
+    "type": "SRS",
+    "version": 1,
+    "snapshotId": "uuid",
+    "content": \{ \}
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+## <a id="_Toc232406774"></a>__Source Code Generation__
+
+Code Generation Service \(:8086\) — afb\.astyann\.codegeneration
+
+Generation, validation, approval and versioning of the application source code\. Base path is /api/v1/code\. This is the final pipeline stage: it refuses to run unless the PCSF is approved and every document is approved\. Layers may be given as ?layer=, ?layers= or in the body, and default to all three when omitted\.
+
+__API Code__
+
+__Method__
+
+__Path__
+
+__Description__
+
+API\-CODE\-01
+
+POST
+
+/api/v1/code/{projectId}/generate
+
+Generates the requested code layers\.
+
+API\-CODE\-02
+
+GET
+
+/api/v1/code/{projectId}
+
+Lists the generated layers and their progress counters\.
+
+API\-CODE\-03
+
+GET
+
+/api/v1/code/{projectId}/download
+
+Downloads one layer as a ZIP archive\.
+
+API\-CODE\-04
+
+POST
+
+/api/v1/code/{projectId}/validate
+
+Compiles and validates the generated code, repairing what it can\.
+
+API\-CODE\-05
+
+POST
+
+/api/v1/code/{projectId}/approve
+
+Approves the generated layers and records a version snapshot for each\.
+
+API\-CODE\-06
+
+POST
+
+/api/v1/code/{projectId}/change\-request
+
+Submits plain\-language change instructions for one layer\.
+
+API\-CODE\-07
+
+POST
+
+/api/v1/code/{projectId}/regenerate
+
+Regenerates the requested layers\.
+
+API\-CODE\-08
+
+POST
+
+/api/v1/code/{projectId}/versions/{snapshotId}/activate
+
+Restores a previous version of one code layer\.
+
+### <a id="_Toc232406775"></a>__Endpoint Detail — Source Code Generation__
+
+__POST__
+
+__/api/v1/code/{projectId}/generate__
+
+__API\-CODE\-01__
+
+__Description__
+
+Creates one row per layer with status GENERATING and returns immediately\. Templates first render a complete, compiling skeleton in which every business method throws UnsupportedOperationException; the stubs are then filled one module at a time against the approved documents\. Files returned by the model are re\-parsed before being written\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer / layers \(enum list, optional\)
+
+Body — layers \(array, optional — BACKEND | FRONTEND | INFRASTRUCTURE\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "layers": [ "BACKEND", "FRONTEND", "INFRASTRUCTURE" ]
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Code generation started\.",
+  "data": \{
+    "artifacts": [
+      \{
+        "codeId": "uuid",
+        "layer": "BACKEND",
+        "status": "GENERATING",
+        "downloadUrl": null,
+        "lastError": null,
+        "genDate": "2026\-08\-11T11:40:00",
+        "modulesTotal": null,
+        "modulesPatched": null,
+        "stubMethodsRemaining": null
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+401 Unauthorized
+
+409 Conflict \(documents not all approved, or layer already generating\)
+
+422 Unprocessable Entity \(PCSF not approved\)
+
+503 Service Unavailable \(upstream service unreachable\)
+
+__FR Covered__
+
+FR\-25
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__GET__
+
+__/api/v1/code/{projectId}__
+
+__API\-CODE\-02__
+
+__Description__
+
+The polling endpoint for the code stage\. The three counters report how far logic injection got and are what the approval gate reads\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Artifacts retrieved\.",
+  "data": \{
+    "artifacts": [
+      \{
+        "codeId": "uuid",
+        "layer": "BACKEND",
+        "status": "GENERATED",
+        "downloadUrl": "/api/v1/code/\{projectId\}/download?layer=BACKEND",
+        "modulesTotal": 4,
+        "modulesPatched": 4,
+        "stubMethodsRemaining": 0
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+__FR Covered__
+
+FR\-26
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/code/{projectId}/download__
+
+__API\-CODE\-03__
+
+__Description__
+
+Returns raw bytes, not the JSON envelope\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer \(enum, optional, default BACKEND\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+Binary ZIP \(application/zip\)
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(layer not generated\)
+
+__FR Covered__
+
+FR\-26
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/code/{projectId}/validate__
+
+__API\-CODE\-04__
+
+__Description__
+
+Compiles the backend\. Compile errors are sent back to the model file by file and re\-compiled, up to a configured attempt limit; an attempt whose error signature got worse is rolled back\. The generated test suite runs by default and is report\-only\. The Angular type\-check is disabled by default because it requires a real dependency install\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer / layers \(enum list, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Validation complete\.",
+  "data": \{
+    "projectId": "uuid",
+    "validationStatus": "PASSED",
+    "attemptsUsed": 2,
+    "layersValidated": [ "BACKEND" ],
+    "checks": [
+      \{ "name": "backend\-compile", "status": "PASSED", "message": "Compiled after 2 attempts" \},
+      \{ "name": "logic\-completeness", "status": "PASSED", "message": "0 stub methods remaining" \},
+      \{ "name": "backend\-tests", "status": "WARNING", "message": "12 run, 1 failed" \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+503 Service Unavailable \(model provider unreachable\)
+
+__FR Covered__
+
+FR\-27
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+__Note__
+
+*This endpoint is long\-running: it compiles a Maven project and may perform several model round trips\. The gateway declares no global response timeout for this reason\.*
+
+
+__POST__
+
+__/api/v1/code/{projectId}/approve__
+
+__API\-CODE\-05__
+
+__Description__
+
+Refused with 409 while any stub method or unparseable file remains: a scaffold that still throws UnsupportedOperationException must not be approvable\. This check can be relaxed by configuration\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer / layers \(enum list, optional\)
+
+Body — layers \(array, optional\)
+
+Body — approvalComment \(string, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "layers": [ "BACKEND", "FRONTEND", "INFRASTRUCTURE" ],
+  "approvalComment": "Validated and reviewed"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Code approved\.",
+  "data": \{
+    "snapshotIds": [ "uuid", "uuid", "uuid" ],
+    "updatedCount": 3,
+    "allLayersApproved": true
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+409 Conflict \(stub methods or unparseable files remain\)
+
+__FR Covered__
+
+FR\-28
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/code/{projectId}/change\-request__
+
+__API\-CODE\-06__
+
+__Description__
+
+Records the instructions so the next regeneration applies them\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer \(enum, optional, default BACKEND\)
+
+Body — instructions \(string, required, non\-blank\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "instructions": "Enforce that a member cannot borrow more than five books at a time"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Change request accepted\.",
+  "data": \{
+    "changeRequestId": "uuid",
+    "status": "GENERATED"
+  \}
+\}
+
+__Status Codes__
+
+202 Accepted
+
+400 Bad Request \(blank instructions\)
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-29
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+No
+
+
+__POST__
+
+__/api/v1/code/{projectId}/regenerate__
+
+__API\-CODE\-07__
+
+__Description__
+
+Re\-checks both upstream gates, then regenerates\. The superseded version of each layer is reported so the client can offer a rollback\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Query — layer / layers \(enum list, optional\)
+
+Body — layers \(array, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "layers": [ "BACKEND" ]
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 202,
+  "message": "Regeneration started\.",
+  "data": \{
+    "artifacts": [
+      \{ "codeId": "uuid", "layer": "BACKEND", "status": "GENERATING" \}
+    ]
+  \}
+\}
 
 __Status Codes__
 
@@ -2068,11 +4066,13 @@ __Status Codes__
 
 404 Not Found
 
-409 Conflict \(pcsfStatus is not FAILED, or the PCSF was never created — document\-extraction\-\.\.\.
+409 Conflict \(documents not all approved\)
+
+422 Unprocessable Entity \(PCSF not approved\)
 
 __FR Covered__
 
-FR\-13
+FR\-29
 
 __Security__
 
@@ -2082,9 +4082,495 @@ __Idempotent__
 
 No
 
-## <a id="_Toc232406900"></a>__RAG Service__
 
-__Note:__ the RAG Service is an internal, non\-user\-facing microservice — it is not routed through the API Gateway's JWT filter and is called service\-to\-service only \(currently by the Requirement Service, via a Feign client\)\. It supports FR\-09/FR\-13 by supplying semantically relevant context to AI generation calls, and has no functional/use\-case/user\-story traceability of its own\.
+__POST__
+
+__/api/v1/code/{projectId}/versions/{snapshotId}/activate__
+
+__API\-CODE\-08__
+
+__Description__
+
+Makes the named snapshot the active version of that layer\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — snapshotId \(UUID, required\)
+
+Query — layer \(enum, optional, default BACKEND\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Version activated\.",
+  "data": \{
+    "codeId": "uuid",
+    "layer": "BACKEND",
+    "status": "APPROVED",
+    "downloadUrl": "/api/v1/code/\{projectId\}/download?layer=BACKEND"
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(unknown layer or version\)
+
+__FR Covered__
+
+FR\-30
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+## <a id="_Toc232406776"></a>__Version and Snapshot Management__
+
+Version Service \(:8087\) — afb\.astyann\.versionservice
+
+The project timeline and the snapshots recorded against it\. This module stores metadata and a file path only — never artifact content\. Historical files are served by the module that owns the artifact, which is why there is no download endpoint here\.
+
+__API Code__
+
+__Method__
+
+__Path__
+
+__Description__
+
+API\-VER\-01
+
+POST
+
+/api/v1/versions/{projectId}/snapshots
+
+Records a new snapshot for an artifact\.
+
+API\-VER\-02
+
+GET
+
+/api/v1/versions/{projectId}
+
+Returns the project timeline with all its snapshots\.
+
+API\-VER\-03
+
+GET
+
+/api/v1/versions/{projectId}/snapshots
+
+Lists the project's snapshots in chronological order\.
+
+API\-VER\-04
+
+GET
+
+/api/v1/versions/snapshots/{snapId}
+
+Returns one snapshot by identifier\.
+
+API\-VER\-05
+
+POST
+
+/api/v1/versions/snapshots/{snapId}/activate
+
+Marks a snapshot as the active version of its artifact\.
+
+API\-VER\-06
+
+DELETE
+
+/api/v1/versions/{projectId}
+
+Deletes a project's timeline and every snapshot on it\.
+
+### <a id="_Toc232406777"></a>__Endpoint Detail — Version and Snapshot Management__
+
+__POST__
+
+__/api/v1/versions/{projectId}/snapshots__
+
+__API\-VER\-01__
+
+__Description__
+
+Called service\-to\-service by the Diagram, Document and Code Generation services on approval\. Creates the project timeline on first use and derives the next version number for that artifact\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Body — artifactType \(enum, required\)
+
+Body — versionName, entrySource, triggerReason, artifactPath \(optional\)
+
+Body — one identifier group matching artifactType
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "artifactType": "DOCUMENT",
+  "versionName": "SRS v1",
+  "triggerReason": "APPROVAL",
+  "artifactPath": "uploads/documents/uuid/DOC\-01\.docx",
+  "documentId": "uuid",
+  "documentType": "SRS"
+\}
+
+__Response Schema \(example\)__
+
+\{
+  "status": 201,
+  "message": "Snapshot created\.",
+  "data": \{
+    "snapId": "uuid",
+    "timelineId": "uuid",
+    "versionNumber": 1,
+    "artifactType": "DOCUMENT",
+    "artifactId": "uuid",
+    "active": true,
+    "snapDate": "2026\-08\-11T11:20:00"
+  \}
+\}
+
+__Status Codes__
+
+201 Created
+
+400 Bad Request \(missing or inconsistent artifact identifier\)
+
+401 Unauthorized
+
+__FR Covered__
+
+FR\-31
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+No
+
+
+__GET__
+
+__/api/v1/versions/{projectId}__
+
+__API\-VER\-02__
+
+__Description__
+
+The history view for the workspace\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Timeline retrieved\.",
+  "data": \{
+    "timelineId": "uuid",
+    "projectId": "uuid",
+    "creationDate": "2026\-08\-11T09:20:00",
+    "snapshots": [
+      \{
+        "snapId": "uuid",
+        "versionNumber": 1,
+        "artifactType": "DIAGRAM",
+        "artifactId": "uuid",
+        "active": true,
+        "snapDate": "2026\-08\-11T10:45:00"
+      \}
+    ]
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found \(no timeline for the project\)
+
+__FR Covered__
+
+FR\-32
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/versions/{projectId}/snapshots__
+
+__API\-VER\-03__
+
+__Description__
+
+The timeline's snapshots without the timeline wrapper\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Snapshots retrieved\.",
+  "data": [
+    \{
+      "snapId": "uuid",
+      "versionNumber": 1,
+      "artifactType": "DOCUMENT",
+      "artifactId": "uuid",
+      "documentType": "SRS",
+      "active": true
+    \}
+  ]
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-32
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/versions/snapshots/{snapId}__
+
+__API\-VER\-04__
+
+__Description__
+
+Note the path: this endpoint is addressed by snapshot, not by project\.
+
+__Parameters__
+
+Path — snapId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Snapshot retrieved\.",
+  "data": \{
+    "snapId": "uuid",
+    "timelineId": "uuid",
+    "versionName": "SRS v1",
+    "versionNumber": 1,
+    "artifactType": "DOCUMENT",
+    "artifactPath": "uploads/documents/uuid/DOC\-01\.docx",
+    "active": true
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-32
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/versions/snapshots/{snapId}/activate__
+
+__API\-VER\-05__
+
+__Description__
+
+The restoration primitive\. Clears the active flag on the currently active snapshot of the same artifact and sets it on the target\. Callers normally use the owning service's activate endpoint, which also updates that service's own record\.
+
+__Parameters__
+
+Path — snapId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": 200,
+  "message": "Snapshot activated\.",
+  "data": \{
+    "snapId": "uuid",
+    "versionNumber": 1,
+    "artifactType": "DOCUMENT",
+    "active": true
+  \}
+\}
+
+__Status Codes__
+
+200 OK
+
+401 Unauthorized
+
+404 Not Found
+
+__FR Covered__
+
+FR\-33
+
+__Security__
+
+JWT required
+
+__Idempotent__
+
+Yes
+
+
+__DELETE__
+
+__/api/v1/versions/{projectId}__
+
+__API\-VER\-06__
+
+__Description__
+
+The cascade hook called by the Project Service on project deletion\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+204 No Content \(empty body\)
+
+__Status Codes__
+
+204 No Content
+
+401 Unauthorized
+
+__FR Covered__
+
+FR\-09
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+## <a id="_Toc232406900"></a>__RAG Knowledge Base__
+
+RAG Service \(:8090\) — afb\.astyann\.ragservice
+
+Indexing and semantic retrieval over the platform's knowledge base\. Chunks live in a ChromaDB vector store; this module owns no relational schema\. Responses are returned bare, without the platform envelope, because the shapes are matched to what the calling clients expect\.
 
 __API Code__
 
@@ -2100,7 +4586,7 @@ POST
 
 /api/v1/rag/index
 
-Indexes a single content chunk into the vector store\.
+Indexes a single source, replacing anything already stored under the same source identifier\.
 
 API\-RAG\-02
 
@@ -2108,7 +4594,7 @@ POST
 
 /api/v1/rag/index/batch
 
-Indexes a batch of content chunks for one project in a single call\.
+Indexes many sources in one call\.
 
 API\-RAG\-03
 
@@ -2116,7 +4602,7 @@ GET
 
 /api/v1/rag/context
 
-Returns the concatenated top\-K matching chunks as a plain string \(shape expected by the AI Orchestrator's client\)\.
+Returns the concatenated context string for a query\.
 
 API\-RAG\-04
 
@@ -2124,7 +4610,7 @@ GET
 
 /api/v1/rag/sources
 
-Returns the source\-section names of the top\-K matching chunks \(shape expected by the AI Orchestrator's client\)\.
+Returns the list of source names matching a query\.
 
 API\-RAG\-05
 
@@ -2132,25 +4618,33 @@ GET
 
 /api/v1/rag/retrieve
 
-Returns the full scored retrieval result \(context, chunks, sources, scores\), with an optional source\-type filter\.
+Returns the full scored retrieval result\.
 
 API\-RAG\-06
 
 DELETE
 
-/api/v1/rag/\{projectId\}
+/api/v1/rag/{projectId}/source/{sourceId}
 
-Deletes all indexed chunks for a project\.
+Removes every chunk belonging to one source\.
 
 API\-RAG\-07
 
+DELETE
+
+/api/v1/rag/{projectId}
+
+Clears the whole index for a project\.
+
+API\-RAG\-08
+
 POST
 
-/api/v1/rag/\{projectId\}/rebuild
+/api/v1/rag/{projectId}/rebuild
 
-Clears the index for a project\. Re\-indexing must be re\-triggered by the owning service \(e\.g\. re\-approving requirements\)\.
+Clears the index so it can be repopulated\.
 
-### <a id="_Toc232406901"></a>__Endpoint Detail — RAG Service__
+### <a id="_Toc232406901"></a>__Endpoint Detail — RAG Knowledge Base__
 
 __POST__
 
@@ -2158,1977 +4652,46 @@ __/api/v1/rag/index__
 
 __API\-RAG\-01__
 
-__Body Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Indexing is idempotent: existing chunks for the source are removed before the new ones are written, so re\-approving an artifact does not double\-index it\.
 
-sourceType \(string, required — free\-form, e\.g\. "REQUIREMENT"; not constrained by an enum\)
+__Parameters__
 
-sourceId \(uuid, optional\)
+Body — projectId, sourceType, sourceId \(required\)
 
-content \(string, required\)
+Body — snapshotId \(UUID, optional\)
 
-metadata \(map<string,string>, optional\)
+Body — content \(string, required\)
+
+Body — metadata \(map, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+Content\-Type: application/json
 
 __Request Schema \(example\)__
 
 \{
-
   "projectId": "uuid",
-
-  "sourceType": "REQUIREMENT",
-
+  "sourceType": "DOCUMENT",
   "sourceId": "uuid",
-
-  "content": "\.\.\.",
-
-  "metadata": \{ "section": "actors" \}
-
+  "snapshotId": "uuid",
+  "content": "The system shall allow a member to borrow up to five books\.\.\.",
+  "metadata": \{ "documentType": "SRS" \}
 \}
+
+__Response Schema \(example\)__
+
+204 No Content \(empty body\)
 
 __Status Codes__
 
 204 No Content
 
-400 Bad Request
-
-500 Internal Server Error
-
-__Idempotent__
-
-No \(each call inserts a new vector\-store entry with a fresh id\)
-
-__POST__
-
-__/api/v1/rag/index/batch__
-
-__API\-RAG\-02__
-
-__Body Parameters__
-
-projectId \(uuid, required\)
-
-sourceType \(string, required\)
-
-items \(array of IndexRequestDTO, required\)
-
-__Status Codes__
-
-204 No Content
-
-400 Bad Request
-
-500 Internal Server Error
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/rag/context__
-
-__API\-RAG\-03__
-
-__Query Parameters__
-
-projectId \(uuid, required\)
-
-query \(string, required\)
-
-topK \(int, optional, default 5\)
-
-__Response__
-
-Plain string body \(the concatenated context, not wrapped in a JSON envelope\)
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/rag/sources__
-
-__API\-RAG\-04__
-
-__Query Parameters__
-
-projectId \(uuid, required\)
-
-query \(string, required\)
-
-__Response Schema \(example\)__
-
-\["actors", "module\-MOD\-01"\]
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/rag/retrieve__
-
-__API\-RAG\-05__
-
-__Query Parameters__
-
-projectId \(uuid, required\)
-
-query \(string, required\)
-
-topK \(int, optional, default 5\)
-
-sourceTypeFilter \(string, optional\)
-
-__Response Schema \(example\)__
-
-\{
-
-  "context": "\.\.\.",
-
-  "chunks": \["\.\.\."\],
-
-  "sources": \["actors"\],
-
-  "scores": \[0\.12\]
-
-\}
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-__Idempotent__
-
-Yes
-
-__DELETE__
-
-__/api/v1/rag/\{projectId\}__
-
-__API\-RAG\-06__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Status Codes__
-
-204 No Content
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/rag/\{projectId\}/rebuild__
-
-__API\-RAG\-07__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": "INDEX\_CLEARED",
-
-  "message": "Index cleared for project \{projectId\}\. Re\-trigger via POST /api/v1/requirements/\{projectId\}/approve"
-
-\}
-
-__Status Codes__
-
-200 OK
-
-__Idempotent__
-
-Yes
-
-## <a id="_Toc232406770"></a>__UML Diagrams__
-
-__Note:__ this module is implemented as the DiagramGeneratorService and is reached through the API Gateway at base path /api/v1/uml \(note the base path is /uml/\{projectId\}/\.\.\., not /projects/\{projectId\}/diagrams/\.\.\. as originally specified\)\. Additionally, GET \.\.\./\{diagramId\}/render takes format as a query parameter, not a path segment, as documented below\. All of API\-DIAG\-01 through 06 \(generate, list, approve, change\-request, regenerate, render\) are now implemented\. Diagrams also carry a FAILED status \(not in the original schema\) for a type whose AI generation or Kroki rendering could not be completed \(after one automatic self\-correction retry\); such diagrams still receive a diagramId and can be retried via regenerate\. Because API\-DIAG\-03 \(approve\) can approve multiple diagrams in one call, its response returns snapshotIds \(an array of UUIDs, one per approved diagram's version snapshot\) instead of the single snapshotId originally specified — each approved diagram produces its own snapshot via VersionService\. API\-DIAG\-05 \(regenerate\) now also applies any change instructions recorded via API\-DIAG\-04, clearing them on a successful feedback\-driven regeneration \(it ignores the request body's changeRequestId — like RequirementService's equivalent flow, it simply reads whatever instructions are currently stored for the diagram\), and its response includes previousVersionId \(the snapId of the diagram's prior active version snapshot, or null if it was never approved\)\.
-
-__API Code__
-
-__Method__
-
-__Path__
-
-__Description__
-
-API\-DIAG\-01
-
-POST
-
-/api/v1/projects/\{projectId\}/diagrams/generate
-
-Automatically generates PlantUML source code and renders all UML diagrams \(use case, bu\.\.\.
-
-API\-DIAG\-02
-
-GET
-
-/api/v1/projects/\{projectId\}/diagrams
-
-Lists all diagrams generated for a project\.
-
-API\-DIAG\-03
-
-POST
-
-/api/v1/projects/\{projectId\}/diagrams/approve
-
-Approves diagrams\. Creates a snapshot and sets the diagrams' status to APPROVED\. Once a\.\.\.
-
-API\-DIAG\-04
-
-POST
-
-/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/change\-request
-
-Submits change instructions for a specific diagram\. Returns the diagram to PENDING\_APPR\.\.\.
-
-API\-DIAG\-05
-
-POST
-
-/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/regenerate
-
-Regenerates a diagram using the current version, the recorded change instructions, and \.\.\.
-
-API\-DIAG\-06
-
-GET
-
-/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/render
-
-Returns the binary rendering of the diagram \(SVG or PNG\) via Kroki, based on its curren\.\.\.
-
-### <a id="_Toc232406771"></a>__Endpoint Detail — UML Diagrams__
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/diagrams/generate__
-
-__API\-DIAG\-01__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-diagramTypes \(array, optional — e\.g\. \["DESIGN\_CLASS", "DESIGN\_SEQUENCE", "COMPONENT"\]\)
-
-renderFormat \(enum: PNG|SVG, default SVG\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "diagramTypes": \["USE\_CASE", "DESIGN\_CLASS", "COMPONENT", "DEPLOYMENT"\],
-
-  "renderFormat": "SVG"
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 201,
-
-  "message": "Diagrams generated\.",
-
-  "data": \{
-
-    "diagrams": \[
-
-      \{ "diagramId": "uuid", "type": "DESIGN\_CLASS", "status": "PENDING\_APPROVAL", "renderUrl": "/api/v1/projects/\{id\}/diagrams/uuid/render" \}
-
-    \]
-
-  \}
-
-\}
-
-__Status Codes__
-
-201 Created
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity \(requirements not approved\)
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-14
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/diagrams__
-
-__API\-DIAG\-02__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Query Parameters__
-
-type \(enum, optional\)
-
-status \(enum, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "diagrams": \[
-
-      \{ "diagramId": "uuid", "type": "DESIGN\_CLASS", "status": "APPROVED", "updatedAt": "\.\.\." \}
-
-    \]
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-__FR Covered__
-
-FR\-15
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/diagrams/approve__
-
-__API\-DIAG\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-diagramIds \(array of uuid, optional — if empty, all diagrams\)
-
-approvalComment \(string, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "approvalComment": "Approved during technical review\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Diagrams approved\.",
-
-  "data": \{
-
-    "snapshotId": "uuid",
-
-    "updatedCount": 10,
-
-    "allDiagramsApproved": true
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-16
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/change\-request__
-
-__API\-DIAG\-04__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-diagramId \(uuid, required\)
-
-__Body Parameters__
-
-instructions \(string, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "instructions": "Add a Supplier class linked to Product with a one\-to\-many relationship\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Change request recorded\.",
-
-  "data": \{
-
-    "changeRequestId": "uuid",
-
-    "status": "PENDING\_APPROVAL"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-17
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/regenerate__
-
-__API\-DIAG\-05__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-diagramId \(uuid, required\)
-
-__Body Parameters__
-
-changeRequestId \(uuid, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "changeRequestId": "uuid"
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Diagram regenerated\.",
-
-  "data": \{
-
-    "diagramId": "uuid",
-
-    "type": "DESIGN\_CLASS",
-
-    "status": "PENDING\_APPROVAL",
-
-    "generatedImageUrl": "https://platform\.example\.com/files/diagrams/dg\-002\-v2\.svg",
-
-    "previousVersionId": "dg\-002\-v1"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-18
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/render__
-
-__API\-DIAG\-06__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-diagramId \(uuid, required\)
-
-__Query Parameters__
-
-format \(enum: PNG|SVG, default SVG\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-Binary image/svg\+xml or image/png
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-500 Internal Server Error
-
-503 Service Unavailable \(rendering service down\)
-
-__FR Covered__
-
-FR\-14
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-## <a id="_Toc232406772"></a>__Document Generation__
-
-__Note:__ this module is implemented as DocumentService and is reached through the API Gateway at base path /api/v1/documents \(note the base path is /documents/\{projectId\}/\.\.\., not /projects/\{projectId\}/documents/\.\.\. as originally specified — this matches the gateway's pre\-existing route directly, no divergence needed\)\. API\-DOC\-01 \(generate\) is __asynchronous__: it returns 202 Accepted with each requested document type immediately set to a new GENERATING status \(not in the original schema\), not the documented synchronous 201 — poll GET \.\.\./\{projectId\} until no document is left in GENERATING to see final PENDING\_APPROVAL/FAILED outcomes \(this mirrors the identical divergence already noted for UML diagram generation, which hit the same gateway response\-timeout problem when built synchronously\)\. An 8th document type, DATA\_DICTIONARY \(data\-dictionary\-template\.docx\), has been added beyond the original class diagram's DocumentType enum\.
-
-API\-DOC\-03 \(approve\), API\-DOC\-04 \(change\-request\), and API\-DOC\-06 \(regenerate\) are now implemented\. Documents only ever support the single\-document approve form shown here — unlike diagrams, there is no bulk/batch approve variant for documents anywhere in this contract, and none is built\. Per the same reasoning as DiagramGeneratorService's approve endpoint, approving a document does not call ProjectService to update project status\. Approving an already\-APPROVED document returns 409; regenerating an APPROVED document also returns 409 — a change\-request must be submitted first, which resets the document to PENDING\_APPROVAL \(the same asymmetry already established for diagrams: change\-request works on any status, regenerate does not\)\. Version snapshotting deliberately deviates from the "Validate Generated Documents" sequence diagram \(which shows the VersionService snapshot and RAG re\-index happening on regenerate\) — instead, for consistency with DiagramGeneratorService, the snapshot is created on __approve__, and regenerate only looks up the existing active snapshot for previousVersionId \(read\-only\)\. Regenerate re\-indexes the freshly regenerated content into RAG on success; since RAGService has no delete\-by\-sourceId capability, repeated regenerations of the same document may leave superseded chunks alongside fresh ones in RAG's vector store \(a known, accepted soft data\-quality limitation, not a correctness bug\)\. API\-DOC\-03's validationReport reflects real automated checks \(currently: no unresolved \$\{\.\.\.\} placeholders remain — blocking, fails approval with 422 if violated; minimum content length — informational, contributes to score only\)\.
-
-__API Code__
-
-__Method__
-
-__Path__
-
-__Description__
-
-API\-DOC\-01
-
-POST
-
-/api/v1/projects/\{projectId\}/documents/generate
-
-Generates the full documentation suite \(SRS, functional analysis, design document, depl\.\.\.
-
-API\-DOC\-02
-
-GET
-
-/api/v1/projects/\{projectId\}/documents
-
-Lists all documents generated for a project\.
-
-API\-DOC\-03
-
-POST
-
-/api/v1/projects/\{projectId\}/documents/\{documentId\}/approve
-
-Validates the generated document \(automatic consistency checks\) and permanently stores \.\.\.
-
-API\-DOC\-04
-
-POST
-
-/api/v1/projects/\{projectId\}/documents/\{documentId\}/change\-request
-
-Submits change instructions for a specific document\. Returns the document to PENDING\_AP\.\.\.
-
-API\-DOC\-05
-
-GET
-
-/api/v1/projects/\{projectId\}/documents/\{documentId\}/download
-
-Downloads the approved Word \(\.docx\) document, reflecting its latest validated or regene\.\.\.
-
-API\-DOC\-06
-
-POST
-
-/api/v1/projects/\{projectId\}/documents/\{documentId\}/regenerate
-
-Regenerates the document using the current version, the recorded change instructions, a\.\.\.
-
-### <a id="_Toc232406773"></a>__Endpoint Detail — Document Generation__
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/documents/generate__
-
-__API\-DOC\-01__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-documentTypes \(array, optional, default ALL — e\.g\. \["SRS", "USER\_MANUAL"\]\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "documentTypes": \["ALL"\]
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 201,
-
-  "message": "Documents generated\.",
-
-  "data": \{
-
-    "documents": \[
-
-      \{ "documentId": "uuid", "type": "SRS", "status": "PENDING\_APPROVAL", "pageCount": 47 \}
-
-    \]
-
-  \}
-
-\}
-
-__Status Codes__
-
-201 Created
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-409 Conflict \(diagrams not all approved\)
-
-422 Unprocessable Entity \(upstream artefacts not approved\)
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-19
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/documents__
-
-__API\-DOC\-02__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Query Parameters__
-
-type \(enum, optional\)
-
-status \(enum, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \[
-
-    \{ "documentId": "uuid", "type": "SRS", "status": "APPROVED", "version": "1\.0", "generatedAt": "\.\.\." \}
-
-  \]
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-__FR Covered__
-
-FR\-19
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/documents/\{documentId\}/approve__
-
-__API\-DOC\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-documentId \(uuid, required\)
-
-__Body Parameters__
-
-validationNote \(string, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "validationNote": "Reviewed and approved\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Document validated\.",
-
-  "data": \{
-
-    "status": "APPROVED",
-
-    "validationReport": \{ "checks": \[\.\.\.\], "score": 98 \},
-
-    "allDocumentsApproved": false
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-409 Conflict \(already approved\)
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-20
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/documents/\{documentId\}/change\-request__
-
-__API\-DOC\-04__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-documentId \(uuid, required\)
-
-__Body Parameters__
-
-instructions \(string, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "instructions": "Add a section describing the password reset workflow\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Change request recorded\.",
-
-  "data": \{
-
-    "changeRequestId": "uuid",
-
-    "status": "PENDING\_APPROVAL"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-21
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/documents/\{documentId\}/download__
-
-__API\-DOC\-05__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-documentId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-Binary application/vnd\.openxmlformats\-officedocument\.wordprocessingml\.document
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-500 Internal Server Error \(DOCX export failed\)
-
-__FR Covered__
-
-FR\-22
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/documents/\{documentId\}/regenerate__
-
-__API\-DOC\-06__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-documentId \(uuid, required\)
-
-__Body Parameters__
-
-changeRequestId \(uuid, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "changeRequestId": "uuid"
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Document regenerated\.",
-
-  "data": \{
-
-    "documentId": "uuid",
-
-    "status": "PENDING\_APPROVAL",
-
-    "version": 2,
-
-    "previousVersionId": "doc\-001\-v1"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-23
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-## <a id="_Toc232406774"></a>__Source Code Generation__
-
-__API Code__
-
-__Method__
-
-__Path__
-
-__Description__
-
-API\-CODE\-01
-
-POST
-
-/api/v1/projects/\{projectId\}/code/generate
-
-Automatically generates the application source code \(Spring Boot backend, Angular front\.\.\.
-
-API\-CODE\-02
-
-GET
-
-/api/v1/projects/\{projectId\}/code
-
-Retrieves the metadata and generation/validation status of the current generated codebase\.
-
-API\-CODE\-03
-
-POST
-
-/api/v1/projects/\{projectId\}/code/validate
-
-Runs automatic validation on the generated codebase \(compilation, syntax, configuration\.\.\.
-
-API\-CODE\-04
-
-POST
-
-/api/v1/projects/\{projectId\}/code/approve
-
-Approves the validated codebase\. Creates a snapshot and enables the deployment workspace\.
-
-API\-CODE\-05
-
-POST
-
-/api/v1/projects/\{projectId\}/code/change\-request
-
-Submits change instructions for the codebase\. Returns to PENDING\_APPROVAL status with t\.\.\.
-
-API\-CODE\-06
-
-POST
-
-/api/v1/projects/\{projectId\}/code/regenerate
-
-Regenerates the affected code modules using the codebase, the recorded change instructi\.\.\.
-
-API\-CODE\-07
-
-GET
-
-/api/v1/projects/\{projectId\}/code/download
-
-Packages the complete generated project source code into a ZIP archive and streams it t\.\.\.
-
-### <a id="_Toc232406775"></a>__Endpoint Detail — Source Code Generation__
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/code/generate__
-
-__API\-CODE\-01__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-mysqlHost \(string, required\)
-
-mysqlPort \(integer, default 3306\)
-
-mysqlDatabase \(string, required\)
-
-mysqlUsername \(string, required\)
-
-mysqlPassword \(string, required — stored encrypted, never returned\)
-
-targets \(array enum: BACKEND|FRONTEND|DATABASE|ALL, default \[ALL\]\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "mysqlHost": "localhost",
-
-  "mysqlPort": 3306,
-
-  "mysqlDatabase": "inventory\_db",
-
-  "mysqlUsername": "app\_user",
-
-  "mysqlPassword": "S3cureDbP@ss",
-
-  "targets": \["ALL"\]
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 201,
-
-  "message": "Code generated\.",
-
-  "data": \{
-
-    "codeId": "uuid",
-
-    "status": "GENERATED",
-
-    "artifacts": \[
-
-      \{ "layer": "BACKEND", "filesCount": 124, "linesCount": 8750 \},
-
-      \{ "layer": "FRONTEND", "filesCount": 86, "linesCount": 5400 \},
-
-      \{ "layer": "DATABASE", "filesCount": 6, "linesCount": 320 \}
-
-    \]
-
-  \}
-
-\}
-
-__Status Codes__
-
-201 Created
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-409 Conflict \(documents not all approved\)
-
-422 Unprocessable Entity
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-24
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/code__
-
-__API\-CODE\-02__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Query Parameters__
-
-layer \(enum, optional — FRONTEND|BACKEND|DATABASE\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "codeId": "uuid",
-
-    "status": "GENERATED",
-
-    "artifacts": \[\.\.\.\],
-
-    "generatedAt": "\.\.\.",
-
-    "downloadUrl": "https://platform\.example\.com/files/code/uuid\.zip"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-__FR Covered__
-
-FR\-24
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/code/validate__
-
-__API\-CODE\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Validation completed\.",
-
-  "data": \{
-
-    "validationStatus": "PASSED",
-
-    "attemptsUsed": 2,
-
-    "remainingIssues": \[\]
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity \(unresolved issues after max attempts\)
-
-__FR Covered__
-
-FR\-25
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/code/approve__
-
-__API\-CODE\-04__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-approvalComment \(string, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "approvalComment": "Code reviewed and approved\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Code approved\.",
-
-  "data": \{
-
-    "status": "APPROVED",
-
-    "snapshotId": "uuid",
-
-    "snapshotVersion": "1\.0",
-
-    "nextStep": "DEPLOYMENT"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-409 Conflict \(validation has not passed\)
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-26
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/code/change\-request__
-
-__API\-CODE\-05__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-instructions \(string, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "instructions": "Add input validation on the Product creation endpoint to require a positive stock quantity\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Change request recorded\.",
-
-  "data": \{
-
-    "changeRequestId": "uuid",
-
-    "status": "PENDING\_APPROVAL"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-400 Bad Request
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity
-
-__FR Covered__
-
-FR\-27
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/code/regenerate__
-
-__API\-CODE\-06__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Body Parameters__
-
-changeRequestId \(uuid, optional\)
-
-targets \(array enum, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-Idempotency\-Key: <uuid>
-
-__Request Schema \(example\)__
-
-\{
-
-  "changeRequestId": "uuid",
-
-  "targets": \["BACKEND"\]
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "Code regenerated\.",
-
-  "data": \{
-
-    "codeId": "uuid",
-
-    "status": "GENERATED",
-
-    "newVersionId": "snap\-code\-v2"
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-422 Unprocessable Entity \(previous version preserved\)
-
-500 Internal Server Error
-
-__FR Covered__
-
-FR\-28
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/code/download__
-
-__API\-CODE\-07__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Query Parameters__
-
-layer \(enum: BACKEND|FRONTEND|DATABASE|ALL, default ALL\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-Binary application/zip
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-403 Forbidden \(status not APPROVED\)
-
-404 Not Found
-
-500 Internal Server Error \(ZIP packaging failed\)
-
-__FR Covered__
-
-FR\-29
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-## <a id="_Toc232406776"></a>__Version and Snapshot Management__
-
-__Note:__ this module is implemented as VersionService and is reached through the API Gateway at base path /api/v1/versions \(note the base path is /versions/\{projectId\}/\.\.\., not /projects/\{projectId\}/versions/\.\.\. as originally specified — the literal contract path would collide with ProjectService's already\-active /api/v1/projects/\*\* gateway route\)\. Only snapshot creation and read/listing \(createSnapshot, getTimeline, listSnapshots, getSnapshot\) are implemented in this pass; API\-VER\-02/03/04 \(ZIP download of the current or a historical version, and restore\) are NOT yet implemented, since they require multiple artifact\-producing services \(document generation, code generation, deployment packaging\) that do not yet exist\. Additionally, the Snapshot entity's entrySource field \(originally a single free\-text string, e\.g\. "User\-requested regeneration"\) has been split into two fields: entrySource \(UUID, nullable\) is now a self\-referential reference to the upstream artifact\-snapshot this one was derived from \(e\.g\. a future DocumentSnapshot's entrySource would point to the DiagramSnapshot it was generated from\), forming a provenance chain across the pipeline; triggerReason \(String, nullable\) carries the original free\-text "why" \(e\.g\. "Diagram approved", or the approval comment supplied to the diagram approve endpoint\)\. Since this pass only produces DiagramSnapshots \(the first stage in the chain\), entrySource is currently always null in practice\.
-
-__API Code__
-
-__Method__
-
-__Path__
-
-__Description__
-
-API\-VER\-01
-
-GET
-
-/api/v1/projects/\{projectId\}/versions
-
-Retrieves the project's chronological version \(snapshot\) timeline across code, diagrams\.\.\.
-
-API\-VER\-02
-
-GET
-
-/api/v1/projects/\{projectId\}/versions/current/download
-
-Downloads the ZIP archive of the project's current active version \(code \+ documents \+ d\.\.\.
-
-API\-VER\-03
-
-GET
-
-/api/v1/projects/\{projectId\}/versions/\{versionId\}/download
-
-Downloads the ZIP archive of a specific historical version of the project\.
-
-API\-VER\-04
-
-POST
-
-/api/v1/projects/\{projectId\}/versions/\{versionId\}/restore
-
-Restores a previous version of the project as the current active version\. The currently\.\.\.
-
-### <a id="_Toc232406777"></a>__Endpoint Detail — Version and Snapshot Management__
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/versions__
-
-__API\-VER\-01__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Query Parameters__
-
-page \(int, default 0\)
-
-size \(int, default 20\)
-
-artifactType \(enum, optional — CODE|DOCUMENT|DIAGRAM|DEPLOYMENT\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "content": \[
-
-      \{ "snapId": "uuid", "versionName": "Code v2", "versionNumber": 2, "snapDate": "\.\.\.", "entrySource": "User\-requested regeneration", "artifactType": "CODE", "isActive": true \}
-
-    \],
-
-    "totalElements": 8
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-__FR Covered__
-
-FR\-31
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/versions/current/download__
-
-__API\-VER\-02__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-Binary application/zip
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found \(no active version\)
-
-__FR Covered__
-
-FR\-32
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/versions/\{versionId\}/download__
-
-__API\-VER\-03__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-versionId \(uuid, required — snapId\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-Binary application/zip
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-410 Gone \(archive no longer available\)
-
-__FR Covered__
-
-FR\-33
-
-__Security__
-
-JWT required
-
-__Idempotent__
-
-Yes
-
-__POST__
-
-__/api/v1/projects/\{projectId\}/versions/\{versionId\}/restore__
-
-__API\-VER\-04__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-versionId \(uuid, required — snapId\)
-
-__Body Parameters__
-
-restoreNote \(string, optional\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-Content\-Type: application/json
-
-__Request Schema \(example\)__
-
-\{
-
-  "restoreNote": "Reverting to v1 due to regression\."
-
-\}
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 201,
-
-  "message": "Version restored\.",
-
-  "data": \{
-
-    "newActiveSnapId": "uuid",
-
-    "restoredFrom": "uuid",
-
-    "versionName": "Restored from v1",
-
-    "preservedPriorSnapId": "uuid"
-
-  \}
-
-\}
-
-__Status Codes__
-
-201 Created
-
-401 Unauthorized
-
-403 Forbidden
-
-404 Not Found
-
-422 Unprocessable Entity
+400 Bad Request \(malformed identifier\)
 
 __FR Covered__
 
@@ -4136,63 +4699,32 @@ FR\-34
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
-No
+Yes
 
-## <a id="_Toc232406778"></a>__Deployment__
+__Note__
 
-__API Code__
+*sourceType is a free string, not an enum: this module does not constrain or interpret it\. snapshotId is optional and is stamped into chunk metadata so a retrieved passage can be traced to the approved version that produced it\.*
 
-__Method__
-
-__Path__
-
-__Description__
-
-API\-DEPLOY\-01
-
-POST
-
-/api/v1/projects/\{projectId\}/deployment/generate
-
-Generates the Docker deployment package \(docker\-compose\.yml with all services declared,\.\.\.
-
-API\-DEPLOY\-02
-
-GET
-
-/api/v1/projects/\{projectId\}/deployment
-
-Retrieves the current deployment package's status and metadata, including its component\.\.\.
-
-API\-DEPLOY\-03
-
-GET
-
-/api/v1/projects/\{projectId\}/deployment/download
-
-Downloads the ZIP archive containing all deployment artefacts \(docker\-compose\.yml, \.env\.\.\.
-
-### <a id="_Toc232406779"></a>__Endpoint Detail — Deployment__
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/deployment/generate__
+__/api/v1/rag/index/batch__
 
-__API\-DEPLOY\-01__
+__API\-RAG\-02__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Used after an approval that produces several chunks at once, for example the section\-by\-section indexing of an approved specification\.
 
-__Body Parameters__
+__Parameters__
 
-dockerUsername \(string, required\)
+Body — projectId, sourceType \(required\)
 
-dockerAccessToken \(string, required — stored encrypted, never returned\)
+Body — items \(array of index requests, required\)
 
 __Required Headers__
 
@@ -4200,149 +4732,239 @@ Authorization: Bearer <token>
 
 Content\-Type: application/json
 
-Idempotency\-Key: <uuid>
-
 __Request Schema \(example\)__
 
 \{
-
-  "dockerUsername": "janedoe",
-
-  "dockerAccessToken": "dckr\_pat\_AbCdEf123456"
-
+  "projectId": "uuid",
+  "sourceType": "REQUIREMENT",
+  "items": [
+    \{ "sourceId": "uuid", "content": "Actors: Librarian, Member", "metadata": \{ "section": "actors" \} \},
+    \{ "sourceId": "uuid", "content": "Entities: Book, Member, Loan", "metadata": \{ "section": "entities" \} \}
+  ]
 \}
 
 __Response Schema \(example\)__
 
-\{
-
-  "status": 201,
-
-  "message": "Deployment package generated\.",
-
-  "data": \{
-
-    "packageId": "uuid",
-
-    "status": "READY",
-
-    "artifacts": \["docker\-compose\.yml", "\.env", "README\.md"\]
-
-  \}
-
-\}
+204 No Content \(empty body\)
 
 __Status Codes__
 
-201 Created
+204 No Content
 
 400 Bad Request
 
-401 Unauthorized
-
-404 Not Found \(code not approved\)
-
-422 Unprocessable Entity
-
-500 Internal Server Error
-
 __FR Covered__
 
-FR\-35
+FR\-34
 
 __Security__
 
-JWT required
-
-__Idempotent__
-
-No
-
-__GET__
-
-__/api/v1/projects/\{projectId\}/deployment__
-
-__API\-DEPLOY\-02__
-
-__Path Parameters__
-
-projectId \(uuid, required\)
-
-__Required Headers__
-
-Authorization: Bearer <token>
-
-__Response Schema \(example\)__
-
-\{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "packageId": "uuid",
-
-    "status": "READY",
-
-    "artifacts": \[\.\.\.\],
-
-    "generatedAt": "\.\.\."
-
-  \}
-
-\}
-
-__Status Codes__
-
-200 OK
-
-401 Unauthorized
-
-404 Not Found
-
-__FR Covered__
-
-FR\-35
-
-__Security__
-
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
 Yes
 
+
 __GET__
 
-__/api/v1/projects/\{projectId\}/deployment/download__
+__/api/v1/rag/context__
 
-__API\-DEPLOY\-03__
+__API\-RAG\-03__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+The retrieval used when building a prompt\. The optional documentType and snapshotId parameters are repeatable and narrow retrieval to particular document types and approved versions; omitting them searches the whole project\.
+
+__Parameters__
+
+Query — projectId \(UUID, required\)
+
+Query — query \(string, required\)
+
+Query — topK \(int, optional, default 5\)
+
+Query — documentType \(string, optional, repeatable\)
+
+Query — snapshotId \(UUID, optional, repeatable\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+__Request Schema \(example\)__
+
+No request body
+
 __Response Schema \(example\)__
 
-Binary application/zip
+Plain text \(the concatenated context\)
 
 __Status Codes__
 
 200 OK
 
-401 Unauthorized
+400 Bad Request \(malformed identifier\)
 
-403 Forbidden
+__FR Covered__
 
-404 Not Found
+FR\-35
 
-500 Internal Server Error \(ZIP packaging failed\)
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+__Note__
+
+*Scoping matters: without it a retrieval competes against every version ever indexed, which makes stale content indistinguishable from current\.*
+
+
+__GET__
+
+__/api/v1/rag/sources__
+
+__API\-RAG\-04__
+
+__Description__
+
+A convenience shape for callers that need provenance rather than text\.
+
+__Parameters__
+
+Query — projectId \(UUID, required\)
+
+Query — query \(string, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+[ "REQUIREMENT/entities", "DOCUMENT/SRS" ]
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__FR Covered__
+
+FR\-35
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+__GET__
+
+__/api/v1/rag/retrieve__
+
+__API\-RAG\-05__
+
+__Description__
+
+Chunks, sources, similarity scores and per\-chunk metadata\. The metadata array is positionally aligned with the chunks and carries the source type, source identifier and snapshot identifier of each passage\.
+
+__Parameters__
+
+Query — projectId \(UUID, required\)
+
+Query — query \(string, required\)
+
+Query — topK \(int, optional, default 5\)
+
+Query — sourceTypeFilter \(string, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "context": "\.\.\.",
+  "chunks": [ "The system shall\.\.\." ],
+  "sources": [ "DOCUMENT/SRS" ],
+  "scores": [ 0\.83 ],
+  "metadata": [ \{ "sourceType": "DOCUMENT", "sourceId": "uuid", "snapshotId": "uuid" \} ]
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__FR Covered__
+
+FR\-35
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+__DELETE__
+
+__/api/v1/rag/{projectId}/source/{sourceId}__
+
+__API\-RAG\-06__
+
+__Description__
+
+Used when an artifact is deleted, or to drop stale text without clearing the whole project index\. Reports how many chunks were removed\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+Path — sourceId \(UUID, required\)
+
+Query — sourceType \(string, optional\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "sourceId": "uuid",
+  "chunksRemoved": 7
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
 
 __FR Covered__
 
@@ -4350,13 +4972,111 @@ FR\-36
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
 Yes
 
-## <a id="_Toc232406780"></a>__RAG Vector Store / Context__
+
+__DELETE__
+
+__/api/v1/rag/{projectId}__
+
+__API\-RAG\-07__
+
+__Description__
+
+The cascade hook called by the Project Service on project deletion\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+204 No Content \(empty body\)
+
+__Status Codes__
+
+204 No Content
+
+400 Bad Request
+
+__FR Covered__
+
+FR\-09
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+Yes
+
+
+__POST__
+
+__/api/v1/rag/{projectId}/rebuild__
+
+__API\-RAG\-08__
+
+__Description__
+
+Recovery for an indexing failure that was swallowed at approval time\. This endpoint only clears: re\-indexing is re\-triggered by the owning service, for example by re\-approving the specification\.
+
+__Parameters__
+
+Path — projectId \(UUID, required\)
+
+__Required Headers__
+
+Authorization: Bearer <token>
+
+__Request Schema \(example\)__
+
+No request body
+
+__Response Schema \(example\)__
+
+\{
+  "status": "INDEX_CLEARED",
+  "message": "Index cleared for project uuid\. Re\-trigger via POST /api/v1/requirements/uuid/approve"
+\}
+
+__Status Codes__
+
+200 OK
+
+400 Bad Request
+
+__FR Covered__
+
+FR\-36
+
+__Security__
+
+JWT required \(internal caller\)
+
+__Idempotent__
+
+No
+
+
+## <a id="_Toc232406902"></a>__AI Orchestrator__
+
+AI Orchestrator \(:8089\) — afb\.astyann\.aiorchestrator
+
+The single point of contact with model providers\. This module is stateless: it owns no database, no knowledge index and no prompt library, and it makes no outbound calls to other platform services\. Callers retrieve their own context and build their own prompts before invoking it\. Responses are returned bare, without the platform envelope\.
 
 __API Code__
 
@@ -4366,49 +5086,47 @@ __Path__
 
 __Description__
 
-API\-RAG\-01
+API\-AI\-01
 
 POST
 
-/api/v1/projects/\{projectId\}/context/documents
+/api/v1/ai/projects/{projectId}/analyze
 
-Adds a reference document to the ChromaDB vector store to enrich the project's RAG cont\.\.\.
+Parses an uploaded specification document and judges whether it is sufficient\.
 
-API\-RAG\-02
+API\-AI\-02
 
-GET
+POST
 
-/api/v1/projects/\{projectId\}/context/documents
+/api/v1/ai/projects/{projectId}/merge
 
-Lists the documents indexed in the vector store for a project\.
+Merges guided\-question answers back into the extracted document context\.
 
-API\-RAG\-03
+API\-AI\-03
 
-DELETE
+POST
 
-/api/v1/projects/\{projectId\}/context/documents/\{contextDocId\}
+/api/v1/ai/infer
 
-Removes a document from the ChromaDB vector store\.
+Runs a single inference with an explicit model, system prompt and user prompt\.
 
-### <a id="_Toc232406781"></a>__Endpoint Detail — RAG Vector Store / Context__
+### <a id="_Toc232406903"></a>__Endpoint Detail — AI Orchestrator__
 
 __POST__
 
-__/api/v1/projects/\{projectId\}/context/documents__
+__/api/v1/ai/projects/{projectId}/analyze__
 
-__API\-RAG\-01__
+__API\-AI\-01__
 
-__Path Parameters__
+__Description__
 
-projectId \(uuid, required\)
+Accepts multipart/form\-data\. Extracts the text \(PDFBox for PDF, Apache POI for DOCX\), summarises it, and decides whether enough information is present to build a specification\. When it is not, guided questions are returned for the user to answer\.
 
-__Body Parameters__
+__Parameters__
 
-file \(multipart/form\-data, required — PDF|DOCX|TXT, max 10 MB\)
+Path — projectId \(UUID, required\)
 
-documentType \(enum: REQUIREMENTS|DOCUMENT|DIAGRAM|REFERENCE, required\)
-
-title \(string, required\)
+Part — document \(file, required, PDF or DOCX\)
 
 __Required Headers__
 
@@ -4418,203 +5136,226 @@ Content\-Type: multipart/form\-data
 
 __Request Schema \(example\)__
 
-Multipart form with file
+document: <binary PDF or DOCX>
 
 __Response Schema \(example\)__
 
 \{
-
-  "status": 201,
-
-  "message": "Document indexed in the vector store\.",
-
-  "data": \{
-
-    "contextDocId": "uuid",
-
-    "chunksIndexed": 47,
-
-    "title": "\.\.\."
-
-  \}
-
+  "projectId": "uuid",
+  "sufficient": false,
+  "extractedContext": "A library needs to track books, members and loans\.\.\.",
+  "guidedQuestions": [
+    "Who are the actors of the system?",
+    "Should members be able to reserve a book that is on loan?"
+  ],
+  "documentText": "<full extracted text>"
 \}
 
 __Status Codes__
 
-201 Created
+200 OK
 
-400 Bad Request \(unsupported format\)
+400 Bad Request \(unreadable or unsupported document\)
 
-401 Unauthorized
-
-404 Not Found
-
-413 Payload Too Large \(>10 MB\)
+500 Internal Server Error
 
 __FR Covered__
 
-FR\-09 / FR\-19
+FR\-05
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
 No
 
-__GET__
 
-__/api/v1/projects/\{projectId\}/context/documents__
+__POST__
 
-__API\-RAG\-02__
+__/api/v1/ai/projects/{projectId}/merge__
 
-__Path Parameters__
+__API\-AI\-02__
 
-projectId \(uuid, required\)
+__Description__
 
-__Query Parameters__
+Re\-runs the sufficiency assessment with the user's answers folded in, producing the consolidated project context the specification pipeline starts from\.
 
-page \(int, default 0\)
+__Parameters__
 
-size \(int, default 20\)
+Path — projectId \(UUID, required\)
+
+Body — documentContext \(string, required\)
+
+Body — answers \(array of { question, answer }\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "projectId": "uuid",
+  "documentContext": "A library needs to track books, members and loans\.\.\.",
+  "answers": [
+    \{ "question": "Who are the actors of the system?", "answer": "Librarian and Member" \}
+  ]
+\}
+
 __Response Schema \(example\)__
 
 \{
-
-  "status": 200,
-
-  "message": "OK",
-
-  "data": \{
-
-    "content": \[
-
-      \{ "contextDocId": "uuid", "title": "\.\.\.", "chunksIndexed": 47, "indexedAt": "\.\.\." \}
-
-    \]
-
-  \}
-
+  "projectId": "uuid",
+  "sufficient": true,
+  "extractedContext": "A library system with two actors, Librarian and Member\.\.\.",
+  "guidedQuestions": [],
+  "documentText": "<full extracted text>"
 \}
 
 __Status Codes__
 
 200 OK
 
-401 Unauthorized
+400 Bad Request \(validation failure\)
 
-404 Not Found
+500 Internal Server Error
 
 __FR Covered__
 
-FR\-09 / FR\-19
+FR\-05
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
-Yes
+No
 
-__DELETE__
 
-__/api/v1/projects/\{projectId\}/context/documents/\{contextDocId\}__
+__POST__
 
-__API\-RAG\-03__
+__/api/v1/ai/infer__
 
-__Path Parameters__
+__API\-AI\-03__
 
-projectId \(uuid, required\)
+__Description__
 
-contextDocId \(uuid, required\)
+The operation every generating stage relies on: the specification inference passes, PlantUML generation and its syntax repair, document content generation, and business logic injection with its compile repair\. The response content is returned raw for the caller to parse\.
+
+__Parameters__
+
+Body — model \(string, required\)
+
+Body — systemPrompt \(string, optional\)
+
+Body — userPrompt \(string, required\)
 
 __Required Headers__
 
 Authorization: Bearer <token>
 
+Content\-Type: application/json
+
+__Request Schema \(example\)__
+
+\{
+  "model": "minimax\-m3:cloud",
+  "systemPrompt": "You are a UML expert\. Reply with PlantUML only\.",
+  "userPrompt": "Produce a use case diagram for the following specification: \.\.\."
+\}
+
 __Response Schema \(example\)__
 
 \{
-
-  "status": 200,
-
-  "message": "Document removed from the vector store\.",
-
-  "data": null
-
+  "model": "minimax\-m3:cloud",
+  "content": "@startuml\n\.\.\.\n@enduml"
 \}
 
 __Status Codes__
 
 200 OK
 
-401 Unauthorized
+400 Bad Request \(validation failure\)
 
-403 Forbidden
+500 Internal Server Error
 
-404 Not Found
+503 Service Unavailable \(provider unreachable\)
 
 __FR Covered__
 
-FR\-09 / FR\-19
+FR\-34
 
 __Security__
 
-JWT required
+JWT required \(internal caller\)
 
 __Idempotent__
 
-Yes
+No
+
+__Note__
+
+*Long\-running: a code logic\-injection call routinely takes minutes\. The gateway declares no global response timeout, and the code generation client uses an extended read timeout\.*
+
 
 # <a id="_Toc232406782"></a>__V\. Outgoing Webhook Events__
 
-Webhooks allow the platform to notify third\-party systems \(ITSM, email, messaging\) of important state transitions\. Configuration is performed via the administration portal\.
+Webhooks would allow the platform to notify third\-party systems of important state transitions\.
 
-*No webhooks are defined in the current version of the contract\. Webhook specifications will be incorporated into API version 2\.0 based on identified integration needs\.*
+*No webhooks are implemented in the current version, and no webhook configuration exists\. Because generation is asynchronous, clients discover state transitions by polling the list endpoints described in section 2\.3\. Webhook specifications will be incorporated into a future API version based on identified integration needs\.*
 
 # <a id="_Toc232406783"></a>__VI\. API Security__
 
-The security of the platform's API rests on a defence\-in\-depth architecture:
+The security of the platform's API rests on a defence\-in\-depth architecture\. The subsections below distinguish what is implemented from what remains outstanding, so that this contract is not read as a statement of assurance it does not yet support\.
 
 ## <a id="_Toc232406784"></a>__Authentication__
 
-All endpoints \(except /auth/register and /auth/login\) require a JWT signed with HS512 using a secret key of at least 512 bits\. Expired tokens must be renewed via /auth/refresh\-token\.
+All endpoints except the public authentication routes require a JWT signed with an HMAC\-SHA key derived from a secret of at least 512 bits\. The secret is shared between the Auth Service and the API Gateway and is supplied through the JWT\_SECRET environment variable\.
+
+Validation is performed once, by the gateway, which then strips the Authorization header and forwards X\-User\-Id, X\-User\-Email and X\-User\-Role\. Downstream services are not publicly reachable and trust those headers, which makes network isolation of the internal services a security requirement rather than a deployment preference\.
+
+There is no refresh\-token endpoint\. A single access token is issued; when it expires the user authenticates again\.
 
 ## <a id="_Toc232406785"></a>__Authorization__
 
-Role\-Based Access Control \(RBAC\)\. Defined roles: USER \(read and generation access\), REVIEWER \(validation and approval\), ADMIN \(restoration, deletion, administration\)\. Approval and restoration endpoints require the REVIEWER or ADMIN role\.
+The gateway distinguishes public routes, authenticated routes and an admin\-only prefix, and enforces the role claim on the last of these\.
+
+*Currently the platform issues one role, and no /api/v1/admin routes exist\. Finer\-grained authorization — distinct USER and REVIEWER roles, and ownership checks binding a project to the caller who created it — is specified but not implemented: the artifact endpoints authorise any authenticated caller\. This is the most significant outstanding security gap in the current version\.*
 
 ## <a id="_Toc232406786"></a>__Data Protection__
 
-All communications travel over TLS 1\.2\+ \(TLS 1\.3 recommended\)\. Passwords are hashed with BCrypt \(cost factor 12\)\. Password reset tokens are generated with SecureRandom and expire after 15 minutes\.
+All communications travel over TLS 1\.2 or above\. Passwords are hashed with BCrypt\. Verification codes are generated with SecureRandom and expire after 15 minutes; password reset tokens expire after 30 minutes and are cleared once used\. Database credentials, mail credentials, provider API keys and the JWT secret are supplied through environment variables and are never committed\.
 
 ## <a id="_Toc232406787"></a>__Rate Limiting__
 
-Limit of 1,000 requests per minute per user\. Authentication endpoints are subject to a stricter limit: 10 attempts per minute per IP address, to prevent brute\-force attacks\.
+*Not implemented\. No quota is enforced per user or per IP address and no endpoint returns 429\. A per\-IP limit on the authentication routes, to blunt credential stuffing, and a per\-user limit on the generation routes, because each call consumes model capacity, should both precede any public deployment\.*
 
 ## <a id="_Toc232406788"></a>__Input Validation__
 
-All inputs are validated server\-side using Jakarta Bean Validation\. SQL injection is prevented through the exclusive use of parameterised queries \(JPA/Hibernate\)\. File uploads are limited to 10 MB \(20 MB for specification documents\) with MIME type verification\.
+Request bodies are validated server\-side with Jakarta Bean Validation\. SQL injection is prevented by the exclusive use of parameterised queries through JPA and Hibernate\. Uploads are restricted to PDF and DOCX by content type and extension, and capped at 20 MB per file\.
+
+Two validations exist specifically because the content is model\-generated rather than user\-supplied\. Every AI\-written Java file is re\-parsed before it is committed to disk, so a malformed response cannot corrupt a generated project\. Every PlantUML source is stripped of surrounding prose and truncated to the diagram body before it is sent to the renderer\.
 
 ## <a id="_Toc232406789"></a>__Logging__
 
-All sensitive actions \(login, approval, restoration, download\) are recorded in an immutable audit log with timestamp, user identifier, and IP address\.
+The gateway logs every request\. Services log failures, downstream errors and the outcome of each generation stage\.
+
+*A dedicated immutable audit log of sensitive actions, with actor and source IP address, is specified but not implemented\.*
 
 ## <a id="_Toc232406790"></a>__Security Headers__
 
-The API systematically returns the following headers: X\-Content\-Type\-Options: nosniff, X\-Frame\-Options: DENY, Strict\-Transport\-Security: max\-age=31536000; includeSubDomains, and an appropriate Content\-Security\-Policy\.
+CORS is configured at the gateway and restricted to the configured frontend origin, with credentials allowed\.
+
+*The hardening headers named in the original contract — X\-Content\-Type\-Options, X\-Frame\-Options, Strict\-Transport\-Security and a Content\-Security\-Policy — are not currently set by the gateway and should be added\.*
 
 # <a id="_Toc232406791"></a>__VII\. API / FR / UC / US Traceability Matrix__
 
-The matrix below provides full traceability between each API endpoint, the functional/non\-functional requirements it covers, the related use cases, and the associated user stories\. It forms the formal link between this API contract and the functional analysis documents\.
+The matrix below provides full traceability between each API endpoint, the functional requirements it covers, the related use cases, and the associated user stories\. It forms the formal link between this API contract and the functional analysis documents\.
 
 __API Code__
 
@@ -4648,7 +5389,7 @@ US\-ACC\-01
 
 API\-AUTH\-03
 
-POST /api/v1/auth/resend\-verification
+POST /api/v1/auth/verify/resend
 
 FR\-01
 
@@ -4678,17 +5419,7 @@ US\-ACC\-03
 
 API\-AUTH\-06
 
-POST /api/v1/auth/refresh\-token
-
-FR\-02
-
-UC\-ACC\-02
-
-US\-ACC\-02
-
-API\-AUTH\-07
-
-POST /api/v1/auth/password\-reset/request
+POST /api/v1/auth/reset\-password
 
 FR\-03
 
@@ -4696,9 +5427,9 @@ UC\-ACC\-04
 
 US\-ACC\-04
 
-API\-AUTH\-08
+API\-AUTH\-07
 
-POST /api/v1/auth/password\-reset/confirm
+POST /api/v1/auth/reset\-password/confirm
 
 FR\-03
 
@@ -4718,9 +5449,9 @@ US\-PROJ\-01
 
 API\-PROJ\-02
 
-GET /api/v1/projects
+GET /api/v1/projects/{projectId}
 
-FR\-07
+FR\-06
 
 UC\-PROJ\-02
 
@@ -4728,7 +5459,7 @@ US\-PROJ\-02
 
 API\-PROJ\-03
 
-GET /api/v1/projects/\{projectId\}
+GET /api/v1/projects/search
 
 FR\-07
 
@@ -4738,9 +5469,9 @@ US\-PROJ\-02
 
 API\-PROJ\-04
 
-PUT /api/v1/projects/\{projectId\}
+PUT /api/v1/projects/{projectId}
 
-FR\-05
+FR\-08
 
 UC\-PROJ\-03
 
@@ -4748,9 +5479,9 @@ US\-PROJ\-03
 
 API\-PROJ\-05
 
-DELETE /api/v1/projects/\{projectId\}
+DELETE /api/v1/projects/{projectId}
 
-FR\-08
+FR\-09
 
 UC\-PROJ\-04
 
@@ -4758,17 +5489,7 @@ US\-PROJ\-04
 
 API\-PROJ\-06
 
-GET /api/v1/projects/search
-
-FR\-06
-
-UC\-PROJ\-02
-
-US\-PROJ\-02
-
-API\-PROJ\-07
-
-PUT /api/v1/projects/\{projectId\}/guided\-questions
+POST /api/v1/projects/{projectId}/retry\-analysis
 
 FR\-05
 
@@ -4778,9 +5499,39 @@ US\-PROJ\-01
 
 API\-REQ\-01
 
-POST /api/v1/requirements/\{projectId\}/initialize
+POST /api/v1/requirements/{projectId}/initialize
 
-FR\-09
+FR\-10
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-REQ\-02
+
+GET /api/v1/requirements/{projectId}/questions
+
+FR\-11
+
+UC\-CDC\-02
+
+US\-CDC\-02
+
+API\-REQ\-03
+
+POST /api/v1/requirements/{projectId}/questions/answers
+
+FR\-11
+
+UC\-CDC\-02
+
+US\-CDC\-02
+
+API\-REQ\-04
+
+GET /api/v1/requirements/{projectId}/pcsf
+
+FR\-12
 
 UC\-CDC\-01
 
@@ -4788,51 +5539,99 @@ US\-CDC\-01
 
 API\-REQ\-05
 
-GET /api/v1/requirements/\{projectId\}/pcsf
+PATCH /api/v1/requirements/{projectId}/pcsf/fields
 
-FR\-10
-
-UC\-CDC\-02
-
-US\-CDC\-02
-
-API\-REQ\-08
-
-POST /api/v1/requirements/\{projectId\}/approve
-
-FR\-11
+FR\-13
 
 UC\-CDC\-04
 
 US\-CDC\-04
 
-API\-REQ\-09
+API\-REQ\-06
 
-POST /api/v1/requirements/\{projectId\}/change\-request
+GET /api/v1/requirements/{projectId}/pcsf/status
 
 FR\-12
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-REQ\-07
+
+POST /api/v1/requirements/{projectId}/pcsf/validate
+
+FR\-14
 
 UC\-CDC\-05
 
 US\-CDC\-05
 
-API\-REQ\-10
+API\-REQ\-08
 
-POST /api/v1/requirements/\{projectId\}/regenerate
+POST /api/v1/requirements/{projectId}/approve
 
-FR\-13
+FR\-15
+
+UC\-CDC\-05
+
+US\-CDC\-05
+
+API\-REQ\-09
+
+POST /api/v1/requirements/{projectId}/change\-request
+
+FR\-16
 
 UC\-CDC\-06
 
 US\-CDC\-06
 
-__Note:__ API\-REQ\-02/03/04/06/07/11/12 \(status polling, clarification Q&A, inline field edit, validation, and inference retry\) are supporting endpoints for the same functional area \(FR\-09\.\.FR\-13\) introduced when the Requirements Engineering module was implemented around the PCSF; they are documented in §Functional Specifications \(Requirements\) above but not separately traced here for lack of dedicated UC/US identifiers\.
+API\-REQ\-10
+
+POST /api/v1/requirements/{projectId}/regenerate
+
+FR\-16
+
+UC\-CDC\-06
+
+US\-CDC\-06
+
+API\-REQ\-11
+
+POST /api/v1/requirements/{projectId}/retry
+
+FR\-16
+
+UC\-CDC\-06
+
+US\-CDC\-06
+
+API\-REQ\-12
+
+DELETE /api/v1/requirements/{projectId}
+
+FR\-09
+
+UC\-PROJ\-04
+
+US\-PROJ\-04
+
+API\-REQ\-13
+
+GET /api/v1/requirements/template
+
+FR\-05
+
+UC\-PROJ\-01
+
+US\-PROJ\-01
 
 API\-DIAG\-01
 
-POST /api/v1/projects/\{projectId\}/diagrams/generate
+POST /api/v1/uml/{projectId}/generate
 
-FR\-14
+FR\-17
 
 UC\-DIAG\-01
 
@@ -4840,9 +5639,9 @@ US\-DIAG\-01
 
 API\-DIAG\-02
 
-GET /api/v1/projects/\{projectId\}/diagrams
+GET /api/v1/uml/{projectId}
 
-FR\-15
+FR\-18
 
 UC\-DIAG\-01
 
@@ -4850,49 +5649,89 @@ US\-DIAG\-01
 
 API\-DIAG\-03
 
-POST /api/v1/projects/\{projectId\}/diagrams/approve
+POST /api/v1/uml/{projectId}/{diagramId}/regenerate
 
-FR\-16
-
-UC\-DIAG\-03
-
-US\-DIAG\-03
-
-API\-DIAG\-04
-
-POST /api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/change\-request
-
-FR\-17
+FR\-20
 
 UC\-DIAG\-04
 
 US\-DIAG\-04
 
+API\-DIAG\-04
+
+POST /api/v1/uml/{projectId}/approve
+
+FR\-19
+
+UC\-DIAG\-03
+
+US\-DIAG\-03
+
 API\-DIAG\-05
 
-POST /api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/regenerate
+POST /api/v1/uml/{projectId}/{diagramId}/approve
 
-FR\-18
+FR\-19
 
-UC\-DIAG\-05
+UC\-DIAG\-03
 
-US\-DIAG\-05
+US\-DIAG\-03
 
 API\-DIAG\-06
 
-GET /api/v1/projects/\{projectId\}/diagrams/\{diagramId\}/render
+POST /api/v1/uml/{projectId}/{diagramId}/change\-request
 
-FR\-14
+FR\-20
+
+UC\-DIAG\-04
+
+US\-DIAG\-04
+
+API\-DIAG\-07
+
+POST /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/activate
+
+FR\-30
+
+UC\-VER\-03
+
+US\-VER\-03
+
+API\-DIAG\-08
+
+GET /api/v1/uml/{projectId}/{diagramId}/render
+
+FR\-18
 
 UC\-DIAG\-01
 
 US\-DIAG\-01
 
+API\-DIAG\-09
+
+GET /api/v1/uml/{projectId}/{diagramId}/versions/{snapshotId}/render
+
+FR\-30
+
+UC\-VER\-02
+
+US\-VER\-02
+
+API\-DIAG\-10
+
+DELETE /api/v1/uml/{projectId}
+
+FR\-09
+
+UC\-PROJ\-04
+
+US\-PROJ\-04
+
 API\-DOC\-01
 
-POST /api/v1/projects/\{projectId\}/documents/generate
+POST /api/v1/documents/{projectId}/generate
 
-FR\-19
+FR\-21
 
 UC\-DOC\-01
 
@@ -4900,9 +5739,9 @@ US\-DOC\-01
 
 API\-DOC\-02
 
-GET /api/v1/projects/\{projectId\}/documents
+GET /api/v1/documents/{projectId}
 
-FR\-19
+FR\-22
 
 UC\-DOC\-01
 
@@ -4910,9 +5749,9 @@ US\-DOC\-01
 
 API\-DOC\-03
 
-POST /api/v1/projects/\{projectId\}/documents/\{documentId\}/approve
+GET /api/v1/documents/{projectId}/{documentId}/download
 
-FR\-20
+FR\-22
 
 UC\-DOC\-02
 
@@ -4920,39 +5759,89 @@ US\-DOC\-02
 
 API\-DOC\-04
 
-POST /api/v1/projects/\{projectId\}/documents/\{documentId\}/change\-request
+GET /api/v1/documents/{projectId}/{documentId}/content
 
-FR\-21
+FR\-22
+
+UC\-DOC\-02
+
+US\-DOC\-02
+
+API\-DOC\-05
+
+GET /api/v1/documents/{projectId}/content
+
+FR\-22
+
+UC\-DOC\-02
+
+US\-DOC\-02
+
+API\-DOC\-06
+
+POST /api/v1/documents/{projectId}/{documentId}/approve
+
+FR\-23
 
 UC\-DOC\-03
 
 US\-DOC\-03
 
-API\-DOC\-05
+API\-DOC\-07
 
-GET /api/v1/projects/\{projectId\}/documents/\{documentId\}/download
+POST /api/v1/documents/{projectId}/{documentId}/change\-request
 
-FR\-22
+FR\-24
 
 UC\-DOC\-04
 
 US\-DOC\-04
 
-API\-DOC\-06
+API\-DOC\-08
 
-POST /api/v1/projects/\{projectId\}/documents/\{documentId\}/regenerate
+POST /api/v1/documents/{projectId}/{documentId}/regenerate
 
-FR\-23
+FR\-24
 
-UC\-DOC\-05
+UC\-DOC\-04
 
-US\-DOC\-05
+US\-DOC\-04
+
+API\-DOC\-09
+
+POST /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/activate
+
+FR\-30
+
+UC\-VER\-03
+
+US\-VER\-03
+
+API\-DOC\-10
+
+GET /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/download
+
+FR\-30
+
+UC\-VER\-02
+
+US\-VER\-02
+
+API\-DOC\-11
+
+GET /api/v1/documents/{projectId}/{documentId}/versions/{snapshotId}/content
+
+FR\-30
+
+UC\-VER\-02
+
+US\-VER\-02
 
 API\-CODE\-01
 
-POST /api/v1/projects/\{projectId\}/code/generate
+POST /api/v1/code/{projectId}/generate
 
-FR\-24
+FR\-25
 
 UC\-CODE\-01
 
@@ -4960,9 +5849,9 @@ US\-CODE\-01
 
 API\-CODE\-02
 
-GET /api/v1/projects/\{projectId\}/code
+GET /api/v1/code/{projectId}
 
-FR\-24
+FR\-26
 
 UC\-CODE\-01
 
@@ -4970,9 +5859,9 @@ US\-CODE\-01
 
 API\-CODE\-03
 
-POST /api/v1/projects/\{projectId\}/code/validate
+GET /api/v1/code/{projectId}/download
 
-FR\-25
+FR\-26
 
 UC\-CODE\-02
 
@@ -4980,9 +5869,9 @@ US\-CODE\-02
 
 API\-CODE\-04
 
-POST /api/v1/projects/\{projectId\}/code/approve
+POST /api/v1/code/{projectId}/validate
 
-FR\-26
+FR\-27
 
 UC\-CODE\-03
 
@@ -4990,9 +5879,9 @@ US\-CODE\-03
 
 API\-CODE\-05
 
-POST /api/v1/projects/\{projectId\}/code/change\-request
+POST /api/v1/code/{projectId}/approve
 
-FR\-27
+FR\-28
 
 UC\-CODE\-04
 
@@ -5000,9 +5889,9 @@ US\-CODE\-04
 
 API\-CODE\-06
 
-POST /api/v1/projects/\{projectId\}/code/regenerate
+POST /api/v1/code/{projectId}/change\-request
 
-FR\-28
+FR\-29
 
 UC\-CODE\-05
 
@@ -5010,17 +5899,27 @@ US\-CODE\-05
 
 API\-CODE\-07
 
-GET /api/v1/projects/\{projectId\}/code/download
+POST /api/v1/code/{projectId}/regenerate
 
 FR\-29
 
-UC\-CODE\-06
+UC\-CODE\-05
 
-US\-CODE\-06
+US\-CODE\-05
+
+API\-CODE\-08
+
+POST /api/v1/code/{projectId}/versions/{snapshotId}/activate
+
+FR\-30
+
+UC\-VER\-03
+
+US\-VER\-03
 
 API\-VER\-01
 
-GET /api/v1/projects/\{projectId\}/versions
+POST /api/v1/versions/{projectId}/snapshots
 
 FR\-31
 
@@ -5030,7 +5929,27 @@ US\-VER\-01
 
 API\-VER\-02
 
-GET /api/v1/projects/\{projectId\}/versions/current/download
+GET /api/v1/versions/{projectId}
+
+FR\-32
+
+UC\-VER\-01
+
+US\-VER\-01
+
+API\-VER\-03
+
+GET /api/v1/versions/{projectId}/snapshots
+
+FR\-32
+
+UC\-VER\-01
+
+US\-VER\-01
+
+API\-VER\-04
+
+GET /api/v1/versions/snapshots/{snapId}
 
 FR\-32
 
@@ -5038,9 +5957,9 @@ UC\-VER\-02
 
 US\-VER\-02
 
-API\-VER\-03
+API\-VER\-05
 
-GET /api/v1/projects/\{projectId\}/versions/\{versionId\}/download
+POST /api/v1/versions/snapshots/{snapId}/activate
 
 FR\-33
 
@@ -5048,51 +5967,21 @@ UC\-VER\-03
 
 US\-VER\-03
 
-API\-VER\-04
+API\-VER\-06
 
-POST /api/v1/projects/\{projectId\}/versions/\{versionId\}/restore
+DELETE /api/v1/versions/{projectId}
 
-FR\-34
+FR\-09
 
-UC\-VER\-04
+UC\-PROJ\-04
 
-US\-VER\-04
-
-API\-DEPLOY\-01
-
-POST /api/v1/projects/\{projectId\}/deployment/generate
-
-FR\-35
-
-UC\-DEPLOY\-01
-
-US\-DEPLOY\-01
-
-API\-DEPLOY\-02
-
-GET /api/v1/projects/\{projectId\}/deployment
-
-FR\-35
-
-UC\-DEPLOY\-01
-
-US\-DEPLOY\-01
-
-API\-DEPLOY\-03
-
-GET /api/v1/projects/\{projectId\}/deployment/download
-
-FR\-36
-
-UC\-DEPLOY\-02
-
-US\-DEPLOY\-02
+US\-PROJ\-04
 
 API\-RAG\-01
 
-POST /api/v1/projects/\{projectId\}/context/documents
+POST /api/v1/rag/index
 
-FR\-09 / FR\-19
+FR\-34
 
 UC\-CDC\-01
 
@@ -5100,9 +5989,9 @@ US\-CDC\-01
 
 API\-RAG\-02
 
-GET /api/v1/projects/\{projectId\}/context/documents
+POST /api/v1/rag/index/batch
 
-FR\-09 / FR\-19
+FR\-34
 
 UC\-CDC\-01
 
@@ -5110,43 +5999,159 @@ US\-CDC\-01
 
 API\-RAG\-03
 
-DELETE /api/v1/projects/\{projectId\}/context/documents/\{contextDocId\}
+GET /api/v1/rag/context
 
-FR\-09 / FR\-19
+FR\-35
 
 UC\-CDC\-01
 
 US\-CDC\-01
 
-## <a id="_Toc232406792"></a>
+API\-RAG\-04
 
-## __7\.1  Coverage Statistics__
+GET /api/v1/rag/sources
+
+FR\-35
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-RAG\-05
+
+GET /api/v1/rag/retrieve
+
+FR\-35
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-RAG\-06
+
+DELETE /api/v1/rag/{projectId}/source/{sourceId}
+
+FR\-36
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-RAG\-07
+
+DELETE /api/v1/rag/{projectId}
+
+FR\-09
+
+UC\-PROJ\-04
+
+US\-PROJ\-04
+
+API\-RAG\-08
+
+POST /api/v1/rag/{projectId}/rebuild
+
+FR\-36
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+API\-AI\-01
+
+POST /api/v1/ai/projects/{projectId}/analyze
+
+FR\-05
+
+UC\-PROJ\-01
+
+US\-PROJ\-01
+
+API\-AI\-02
+
+POST /api/v1/ai/projects/{projectId}/merge
+
+FR\-05
+
+UC\-PROJ\-01
+
+US\-PROJ\-01
+
+API\-AI\-03
+
+POST /api/v1/ai/infer
+
+FR\-34
+
+UC\-CDC\-01
+
+US\-CDC\-01
+
+## <a id="_Toc232406792"></a>__7\.1  Coverage Statistics__
 
 __Indicator__
 
 __Value__
 
-__Total number of endpoints__
+Total number of endpoints
 
-49
+72
 
-__Number of modules__
-
-9
-
-__Distinct functional/non\-functional requirements covered__
-
-35 distinct FR/NFR codes
-
-__Public endpoints \(no JWT\)__
-
-7
-
-__Idempotent endpoints__
-
-20
-
-__Endpoints with Idempotency\-Key__
+Number of modules
 
 9
+
+Endpoints by method
+
+DELETE 6, GET 23, PATCH 1, POST 41, PUT 1
+
+Distinct functional requirements covered
+
+36 distinct FR codes
+
+Distinct use cases covered
+
+28
+
+Distinct user stories covered
+
+28
+
+Public endpoints \(no JWT\)
+
+6
+
+Endpoints intended for internal service\-to\-service callers
+
+17
+
+Idempotent endpoints
+
+45
+
+Asynchronous endpoints \(202 Accepted\)
+
+13
+
+Endpoints returning a binary payload
+
+6
+
+Endpoints with Idempotency\-Key support
+
+0 \(not implemented\)
+
+Paginated endpoints
+
+0 \(not implemented\)
+
+Rate\-limited endpoints
+
+0 \(not implemented\)
+
+Webhook events defined
+
+0 \(not implemented\)
+
+Coverage is counted against the implemented surface only\. The endpoints of the deployment module described in earlier revisions of this contract are excluded, since that module was not built; its functional requirements are discharged by the INFRASTRUCTURE layer of source code generation\.
 
